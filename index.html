@@ -45,10 +45,11 @@
             transition: all 0.2s;
         }
         .btn:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,255,136,0.3); }
-        .btn:active { transform: translateY(0); }
         .btn-secondary { background: #2a2a2a; color: #fff; }
         .btn-secondary:hover { background: #333; }
-        .btn-warning { background: #ff9500; color: #000; }
+        .btn-danger { background: #ff3b30; color: #fff; }
+        .btn-danger:hover { background: #ff5555; }
+        .btn-small { padding: 6px 12px; font-size: 12px; width: auto; }
         .status { 
             padding: 10px; 
             border-radius: 8px; 
@@ -84,9 +85,20 @@
             align-items: center;
             transition: all 0.2s;
             border: 1px solid transparent;
+            position: relative;
         }
         .contacto-item:hover { background: #2a2a2a; border-color: #00ff88; transform: translateX(4px); }
         .contacto-pin { font-family: 'Courier New', monospace; font-weight: bold; color: #00ff88; font-size: 16px; }
+        .badge {
+            background: #ff3b30;
+            color: white;
+            border-radius: 10px;
+            padding: 2px 8px;
+            font-size: 11px;
+            font-weight: bold;
+            min-width: 20px;
+            text-align: center;
+        }
         
         .mensaje {
             background: #222;
@@ -97,6 +109,11 @@
             word-wrap: break-word;
             animation: slideIn 0.3s ease-out;
             position: relative;
+            user-select: none;
+        }
+        .mensaje.seleccionado {
+            border: 2px solid #007aff;
+            background: rgba(0, 122, 255, 0.1);
         }
         @keyframes slideIn {
             from { opacity: 0; transform: translateY(10px); }
@@ -266,6 +283,60 @@
             white-space: nowrap;
         }
         
+        /* Menú contextual */
+        .menu-contextual {
+            position: fixed;
+            background: #2a2a2a;
+            border: 1px solid #444;
+            border-radius: 8px;
+            padding: 8px 0;
+            z-index: 1000;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+            min-width: 180px;
+        }
+        .menu-contextual button {
+            background: none;
+            border: none;
+            color: #fff;
+            padding: 10px 16px;
+            width: 100%;
+            text-align: left;
+            cursor: pointer;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .menu-contextual button:hover { background: #333; }
+        .menu-contextual button.danger { color: #ff3b30; }
+        .menu-contextual button.danger:hover { background: rgba(255, 59, 48, 0.1); }
+        
+        /* Barra de selección */
+        .barra-seleccion {
+            background: #007aff;
+            padding: 10px 16px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        .barra-seleccion button {
+            background: rgba(255,255,255,0.2);
+            border: none;
+            color: white;
+            padding: 6px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            margin-left: 6px;
+        }
+        .barra-seleccion button:hover { background: rgba(255,255,255,0.3); }
+        .barra-seleccion button.danger { background: #ff3b30; }
+        
         h2 { margin: 0 0 8px 0; font-size: 22px; }
         h3 { margin: 12px 0 8px 0; color: #888; font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
         
@@ -298,7 +369,7 @@
             </div>
             
             <div id="panelChat" class="hidden">
-                <button class="btn" onclick="mostrarContactos()">💬 Ir al Chat</button>
+                <button class="btn" onclick="mostrarContactos()"> Ir al Chat</button>
                 <p style="font-size: 12px; color: #888; margin-top: 10px; text-align: center;">
                     Vence: <span id="fechaVencimiento" style="color: #fff;"></span>
                 </p>
@@ -307,7 +378,7 @@
                 </div>
                 
                 <div id="notifBanner" class="notif-banner hidden">
-                    <span>🔔 Activa notificaciones</span>
+                    <span> Activa notificaciones</span>
                     <button onclick="pedirPermisoNotificaciones()">Activar</button>
                 </div>
             </div>
@@ -330,6 +401,12 @@
         <div id="listaContactos">
             <p style="color: #888; text-align: center; padding: 20px;">No tienes contactos aún</p>
         </div>
+        
+        <!-- Sección de mensajes de PINs no guardados -->
+        <div id="mensajesPendientes" class="hidden">
+            <h3>📨 Mensajes nuevos (sin guardar)</h3>
+            <div id="listaPendientes"></div>
+        </div>
     </div>
 
     <!-- PANTALLA 3: CHAT -->
@@ -339,6 +416,16 @@
             <div style="flex: 1;">
                 <h2 style="margin: 0; font-size: 18px;">Chat con <span id="chatContactoPin" style="color: #00ff88;"></span></h2>
                 <div id="escribiendoTexto" style="font-size: 11px; color: #00ff88; height: 14px; margin-top: 2px;"></div>
+            </div>
+            <button class="btn btn-danger btn-small" onclick="mostrarMenuChat()" title="Opciones"></button>
+        </div>
+
+        <!-- Barra de selección múltiple -->
+        <div id="barraSeleccion" class="barra-seleccion hidden">
+            <span id="contadorSeleccion">0 seleccionados</span>
+            <div>
+                <button onclick="cancelarSeleccion()">Cancelar</button>
+                <button class="danger" onclick="borrarSeleccionados()">️ Borrar</button>
             </div>
         </div>
 
@@ -376,6 +463,16 @@
     </div>
 </div>
 
+<!-- Menú contextual (oculto por defecto) -->
+<div id="menuContextual" class="menu-contextual hidden"></div>
+
+<!-- Menú de opciones del chat -->
+<div id="menuChat" class="menu-contextual hidden">
+    <button onclick="seleccionarModo()">☑️ Seleccionar mensajes</button>
+    <button onclick="limpiarChatCompleto()" class="danger">🗑️ Limpiar todo el chat</button>
+    <button onclick="cerrarMenus()">✕ Cerrar</button>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
     // ============================================
@@ -395,6 +492,13 @@
     
     var timeoutEscribiendo = null;
     var estoyEscribiendo = false;
+    
+    // Modo selección
+    var modoSeleccion = false;
+    var mensajesSeleccionados = [];
+    
+    // Contador de mensajes no leídos por PIN
+    var mensajesNoLeidos = {};
 
     // ============================================
     // NAVEGACIÓN
@@ -412,6 +516,7 @@
         document.getElementById('pantallaContactos').classList.remove('hidden');
         document.getElementById('pantallaChat').classList.add('hidden');
         cargarContactos();
+        cargarMensajesPendientes();
     }
 
     function mostrarChat(pinContacto) {
@@ -420,6 +525,11 @@
         document.getElementById('pantallaInicio').classList.add('hidden');
         document.getElementById('pantallaContactos').classList.add('hidden');
         document.getElementById('pantallaChat').classList.remove('hidden');
+        
+        // Resetear modo selección
+        modoSeleccion = false;
+        mensajesSeleccionados = [];
+        document.getElementById('barraSeleccion').classList.add('hidden');
         
         cargarMensajes();
         suscribirseAMensajes();
@@ -527,20 +637,13 @@
     // CIFRADO HÍBRIDO (AES-GCM + RSA-OAEP)
     // ============================================
     async function generarClaveAES() {
-        return await crypto.subtle.generateKey(
-            { name: "AES-GCM", length: 256 },
-            true, ["encrypt", "decrypt"]
-        );
+        return await crypto.subtle.generateKey({ name: "AES-GCM", length: 256 }, true, ["encrypt", "decrypt"]);
     }
 
     async function cifrarConAES(texto, claveAES) {
         var encoder = new TextEncoder();
         var iv = crypto.getRandomValues(new Uint8Array(12));
-        var cifrado = await crypto.subtle.encrypt(
-            { name: "AES-GCM", iv: iv },
-            claveAES,
-            encoder.encode(texto)
-        );
+        var cifrado = await crypto.subtle.encrypt({ name: "AES-GCM", iv: iv }, claveAES, encoder.encode(texto));
         return {
             iv: btoa(String.fromCharCode.apply(null, iv)),
             datos: btoa(String.fromCharCode.apply(null, new Uint8Array(cifrado)))
@@ -550,11 +653,7 @@
     async function descifrarConAES(ivBase64, datosBase64, claveAES) {
         var iv = Uint8Array.from(atob(ivBase64), c => c.charCodeAt(0));
         var datos = Uint8Array.from(atob(datosBase64), c => c.charCodeAt(0));
-        var descifrado = await crypto.subtle.decrypt(
-            { name: "AES-GCM", iv: iv },
-            claveAES,
-            datos
-        );
+        var descifrado = await crypto.subtle.decrypt({ name: "AES-GCM", iv: iv }, claveAES, datos);
         return new TextDecoder().decode(descifrado);
     }
 
@@ -565,32 +664,21 @@
 
     async function importarClaveAES(base64) {
         var raw = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
-        return await crypto.subtle.importKey(
-            "raw", raw, { name: "AES-GCM" }, true, ["encrypt", "decrypt"]
-        );
+        return await crypto.subtle.importKey("raw", raw, { name: "AES-GCM" }, true, ["encrypt", "decrypt"]);
     }
 
     async function cifrarClaveConRSA(claveAESBase64, clavePublicaRSA) {
         var encoder = new TextEncoder();
-        var cifrado = await crypto.subtle.encrypt(
-            { name: "RSA-OAEP" },
-            clavePublicaRSA,
-            encoder.encode(claveAESBase64)
-        );
+        var cifrado = await crypto.subtle.encrypt({ name: "RSA-OAEP" }, clavePublicaRSA, encoder.encode(claveAESBase64));
         return btoa(String.fromCharCode.apply(null, new Uint8Array(cifrado)));
     }
 
     async function descifrarClaveConRSA(claveCifradaBase64, clavePrivadaRSA) {
         var cifrado = Uint8Array.from(atob(claveCifradaBase64), c => c.charCodeAt(0));
-        var descifrado = await crypto.subtle.decrypt(
-            { name: "RSA-OAEP" },
-            clavePrivadaRSA,
-            cifrado
-        );
+        var descifrado = await crypto.subtle.decrypt({ name: "RSA-OAEP" }, clavePrivadaRSA, cifrado);
         return new TextDecoder().decode(descifrado);
     }
 
-    // CIFRAR MENSAJE (híbrido: para destinatario + para mí)
     async function cifrarMensaje(texto, clavePublicaDestinatario) {
         var claveAES = await generarClaveAES();
         var claveAESBase64 = await exportarClaveAES(claveAES);
@@ -600,11 +688,8 @@
         return iv + '|' + datos + '|' + claveParaDestinatario + '|' + claveParaMi;
     }
 
-    // DESCIFRAR MENSAJE (híbrido)
     async function descifrarMensaje(cifradoBase64) {
         if (!cifradoBase64 || cifradoBase64.length === 0) return '';
-        
-        // Si no tiene el formato híbrido, es texto plano antiguo
         if (!cifradoBase64.includes('|')) {
             var esBase64 = /^[A-Za-z0-9+/]*={0,2}$/.test(cifradoBase64) && (cifradoBase64.length % 4 === 0);
             if (!esBase64) return cifradoBase64;
@@ -614,29 +699,13 @@
                 return new TextDecoder().decode(desc);
             } catch (e) { return cifradoBase64; }
         }
-        
         try {
             var partes = cifradoBase64.split('|');
             if (partes.length !== 4) return '[Formato inválido]';
-            
-            var iv = partes[0];
-            var datos = partes[1];
-            var claveParaDestinatario = partes[2];
-            var claveParaMi = partes[3];
-            
-            // Intentar descifrar con MI clave privada primero
+            var iv = partes[0], datos = partes[1], claveParaDestinatario = partes[2], claveParaMi = partes[3];
             var claveAESBase64 = null;
-            try {
-                claveAESBase64 = await descifrarClaveConRSA(claveParaMi, miClavePrivada);
-            } catch (e) {
-                // Si falla, intentar con la otra clave
-                try {
-                    claveAESBase64 = await descifrarClaveConRSA(claveParaDestinatario, miClavePrivada);
-                } catch (e2) {
-                    return '[No se puede descifrar]';
-                }
-            }
-            
+            try { claveAESBase64 = await descifrarClaveConRSA(claveParaMi, miClavePrivada); }
+            catch (e) { try { claveAESBase64 = await descifrarClaveConRSA(claveParaDestinatario, miClavePrivada); } catch (e2) { return '[No se puede descifrar]'; } }
             var claveAES = await importarClaveAES(claveAESBase64);
             return await descifrarConAES(iv, datos, claveAES);
         } catch (error) {
@@ -652,13 +721,7 @@
         var estadoDiv = document.getElementById('estadoTexto');
         var form = document.getElementById('formActivacion');
         var chat = document.getElementById('panelChat');
-        
-        if (!clienteSupabase) {
-            estadoDiv.innerText = '️ Sin conexión';
-            form.classList.remove('hidden');
-            return;
-        }
-        
+        if (!clienteSupabase) { estadoDiv.innerText = '⚠️ Sin conexión'; form.classList.remove('hidden'); return; }
         try {
             var { data } = await clienteSupabase.from('usuarios').select('fecha_expiracion').eq('pin', miPIN).maybeSingle();
             if (data && data.fecha_expiracion && new Date(data.fecha_expiracion) > new Date()) {
@@ -667,14 +730,13 @@
                 form.classList.add('hidden');
                 chat.classList.remove('hidden');
                 document.getElementById('fechaVencimiento').innerText = new Date(data.fecha_expiracion).toLocaleDateString('es-ES');
-                
                 if ('Notification' in window && Notification.permission === 'default') {
                     document.getElementById('notifBanner').classList.remove('hidden');
                 }
                 return;
             }
             estadoDiv.className = 'status expired';
-            estadoDiv.innerText = '⚠️ Servicio Inactivo';
+            estadoDiv.innerText = '️ Servicio Inactivo';
             form.classList.remove('hidden');
             chat.classList.add('hidden');
         } catch (error) {
@@ -705,7 +767,7 @@
     }
 
     // ============================================
-    // NOTIFICACIONES
+    // NOTIFICACIONES (MEJORADO)
     // ============================================
     async function pedirPermisoNotificaciones() {
         if (!('Notification' in window)) { alert('Tu navegador no soporta notificaciones'); return; }
@@ -721,10 +783,33 @@
     function mostrarNotificacion(titulo, cuerpo) {
         if (!('Notification' in window)) return;
         if (Notification.permission !== 'granted') return;
-        if (!document.hidden) return;
+        // Mostrar siempre que llegue un mensaje nuevo, incluso si está en la misma pestaña
         try {
-            new Notification(titulo, { body: cuerpo, tag: 'chat-' + Date.now(), requireInteraction: false });
+            new Notification(titulo, { 
+                body: cuerpo, 
+                tag: 'chat-' + Date.now(), 
+                requireInteraction: false,
+                silent: false
+            });
+            // Sonido de notificación
+            reproducirSonido();
         } catch (e) { console.error('Error notificación:', e); }
+    }
+
+    function reproducirSonido() {
+        try {
+            var audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            var oscillator = audioCtx.createOscillator();
+            var gainNode = audioCtx.createGain();
+            oscillator.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+            oscillator.frequency.value = 800;
+            oscillator.type = 'sine';
+            gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+            oscillator.start(audioCtx.currentTime);
+            oscillator.stop(audioCtx.currentTime + 0.3);
+        } catch (e) { console.log('No se pudo reproducir sonido'); }
     }
 
     // ============================================
@@ -756,11 +841,64 @@
             return;
         }
         cont.innerHTML = contactos.map(function(pin) {
+            var badge = mensajesNoLeidos[pin] ? '<span class="badge">' + mensajesNoLeidos[pin] + '</span>' : '';
             return '<div class="contacto-item" onclick="mostrarChat(\'' + pin + '\')">' +
                    '<span class="contacto-pin">' + pin + '</span>' +
-                   '<span style="color: #888;">💬 →</span>' +
+                   '<div style="display: flex; align-items: center; gap: 8px;">' + badge + '<span style="color: #888;">💬 →</span></div>' +
                    '</div>';
         }).join('');
+    }
+
+    // ============================================
+    // MENSAJES PENDIENTES (de PINs no guardados)
+    // ============================================
+    async function cargarMensajesPendientes() {
+        var contactos = getContactos();
+        try {
+            // Buscar mensajes de remitentes que NO están en mis contactos
+            var { data, error } = await clienteSupabase
+                .from('mensajes')
+                .select('pin_remitente, leido')
+                .eq('pin_destinatario', miPIN)
+                .eq('leido', false);
+            
+            if (error || !data) return;
+            
+            // Filtrar solo los de PINs no guardados
+            var pendientes = {};
+            data.forEach(function(msg) {
+                if (!contactos.includes(msg.pin_remitente)) {
+                    pendientes[msg.pin_remitente] = (pendientes[msg.pin_remitente] || 0) + 1;
+                }
+            });
+            
+            var cont = document.getElementById('listaPendientes');
+            var div = document.getElementById('mensajesPendientes');
+            
+            if (Object.keys(pendientes).length === 0) {
+                div.classList.add('hidden');
+                return;
+            }
+            
+            div.classList.remove('hidden');
+            cont.innerHTML = Object.keys(pendientes).map(function(pin) {
+                return '<div class="contacto-item" onclick="agregarYAbrir(\'' + pin + '\')">' +
+                       '<span class="contacto-pin">' + pin + '</span>' +
+                       '<span class="badge">' + pendientes[pin] + ' nuevo' + (pendientes[pin] > 1 ? 's' : '') + '</span>' +
+                       '</div>';
+            }).join('');
+        } catch (error) { console.error('Error cargando pendientes:', error); }
+    }
+
+    function agregarYAbrir(pin) {
+        if (confirm('¿Agregar ' + pin + ' a tus contactos y abrir el chat?')) {
+            var contactos = getContactos();
+            if (!contactos.includes(pin)) {
+                contactos.push(pin);
+                guardarContactos(contactos);
+            }
+            mostrarChat(pin);
+        }
     }
 
     // ============================================
@@ -821,24 +959,16 @@
     // ============================================
     function onEscribiendo() {
         if (!contactoActual || !clienteSupabase) return;
-        if (!estoyEscribiendo) {
-            estoyEscribiendo = true;
-            actualizarEstadoEscribiendo(true);
-        }
+        if (!estoyEscribiendo) { estoyEscribiendo = true; actualizarEstadoEscribiendo(true); }
         clearTimeout(timeoutEscribiendo);
-        timeoutEscribiendo = setTimeout(function() {
-            estoyEscribiendo = false;
-            actualizarEstadoEscribiendo(false);
-        }, 2000);
+        timeoutEscribiendo = setTimeout(function() { estoyEscribiendo = false; actualizarEstadoEscribiendo(false); }, 2000);
     }
 
     async function actualizarEstadoEscribiendo(escribiendo) {
         try {
             await clienteSupabase.from('escribiendo').upsert({
-                pin_remitente: miPIN,
-                pin_destinatario: contactoActual,
-                escribiendo: escribiendo,
-                actualizado_en: new Date().toISOString()
+                pin_remitente: miPIN, pin_destinatario: contactoActual,
+                escribiendo: escribiendo, actualizado_en: new Date().toISOString()
             });
         } catch (error) { console.error('Error escribiendo:', error); }
     }
@@ -846,21 +976,10 @@
     function suscribirseAEscribiendo() {
         if (!clienteSupabase) return;
         if (canalEscribiendo) clienteSupabase.removeChannel(canalEscribiendo);
-        
         canalEscribiendo = clienteSupabase.channel('escribiendo_' + miPIN)
-            .on('postgres_changes', {
-                event: '*',
-                schema: 'public',
-                table: 'escribiendo',
-                filter: 'pin_destinatario=eq.' + miPIN
-            }, function(payload) {
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'escribiendo', filter: 'pin_destinatario=eq.' + miPIN }, function(payload) {
                 if (payload.new && payload.new.pin_remitente === contactoActual) {
-                    var div = document.getElementById('escribiendoTexto');
-                    if (payload.new.escribiendo) {
-                        div.innerText = '✍️ Escribiendo...';
-                    } else {
-                        div.innerText = '';
-                    }
+                    document.getElementById('escribiendoTexto').innerText = payload.new.escribiendo ? '✍️ Escribiendo...' : '';
                 }
             })
             .subscribe();
@@ -872,18 +991,15 @@
     async function enviarMensaje() {
         var texto = document.getElementById('nuevoMensaje').value.trim();
         if (!texto && !archivoSeleccionado) { alert('Escribe un mensaje o selecciona un archivo'); return; }
-
         var contenedor = document.getElementById('chatMensajes');
         var tipoMensaje = 'texto';
         var archivoInfo = null;
         var mensajeCifrado = '';
-
         if (texto) {
             var clavePub = await obtenerClavePublica(contactoActual);
             if (!clavePub) { alert('⚠️ Este contacto no tiene cifrado configurado.'); return; }
             try { mensajeCifrado = await cifrarMensaje(texto, clavePub); } catch (error) { alert('Error al cifrar'); return; }
         }
-
         if (archivoSeleccionado) {
             try {
                 document.getElementById('archivoProgressBar').style.width = '50%';
@@ -893,34 +1009,17 @@
                 if (tipo === 'image') tipoMensaje = 'imagen';
                 else if (tipo === 'video') tipoMensaje = 'video';
                 else tipoMensaje = 'documento';
-                
                 var div = document.createElement('div');
                 div.className = 'mensaje mensaje-enviado';
-                var html = construirHTMLMensaje({ 
-                    tipo_mensaje: tipoMensaje, 
-                    archivo_url: archivoInfo.url, 
-                    archivo_nombre: archivoInfo.nombre, 
-                    texto_descifrado: texto, 
-                    enviado_en: new Date().toISOString(), 
-                    leido: false 
-                });
-                div.innerHTML = html;
+                div.innerHTML = construirHTMLMensaje({ tipo_mensaje: tipoMensaje, archivo_url: archivoInfo.url, archivo_nombre: archivoInfo.nombre, texto_descifrado: texto, enviado_en: new Date().toISOString(), leido: false });
                 contenedor.appendChild(div);
                 contenedor.scrollTop = contenedor.scrollHeight;
-            } catch (error) {
-                alert('Error al subir archivo: ' + error.message);
-                document.getElementById('archivoProgressBar').style.width = '0%';
-                return;
-            }
+            } catch (error) { alert('Error al subir archivo: ' + error.message); document.getElementById('archivoProgressBar').style.width = '0%'; return; }
         }
-
         try {
             var { error } = await clienteSupabase.from('mensajes').insert({
-                pin_remitente: miPIN,
-                pin_destinatario: contactoActual,
-                mensaje_cifrado: mensajeCifrado,
-                nonce: 'e2ee',
-                tipo_mensaje: tipoMensaje,
+                pin_remitente: miPIN, pin_destinatario: contactoActual,
+                mensaje_cifrado: mensajeCifrado, nonce: 'e2ee', tipo_mensaje: tipoMensaje,
                 archivo_url: archivoInfo ? archivoInfo.url : null,
                 archivo_nombre: archivoInfo ? archivoInfo.nombre : null,
                 archivo_tamaño: archivoInfo ? archivoInfo.tamaño : null,
@@ -945,6 +1044,8 @@
                 .eq('pin_remitente', contactoActual)
                 .eq('pin_destinatario', miPIN)
                 .eq('leido', false);
+            // Limpiar badge
+            delete mensajesNoLeidos[contactoActual];
         } catch (error) { console.error('Error marcando leídos:', error); }
     }
 
@@ -958,14 +1059,12 @@
                 .or('and(pin_remitente.eq.' + miPIN + ',pin_destinatario.eq.' + contactoActual + '),' +
                     'and(pin_remitente.eq.' + contactoActual + ',pin_destinatario.eq.' + miPIN + ')')
                 .order('enviado_en', { ascending: true });
-
             if (error) throw error;
             var contenedor = document.getElementById('chatMensajes');
             if (!data || data.length === 0) {
                 contenedor.innerHTML = '<p style="color: #888; text-align: center; padding: 20px;">No hay mensajes aún</p>';
                 return;
             }
-
             var mensajes = [];
             for (var msg of data) {
                 var texto = '';
@@ -974,7 +1073,6 @@
                 }
                 mensajes.push({ ...msg, texto_descifrado: texto });
             }
-
             renderizarMensajes(mensajes);
             contenedor.scrollTop = contenedor.scrollHeight;
         } catch (error) { console.error('Error:', error); }
@@ -984,19 +1082,15 @@
         var contenedor = document.getElementById('chatMensajes');
         var html = '';
         var ultimaFecha = '';
-        
         mensajes.forEach(function(msg) {
             var fechaMsg = new Date(msg.enviado_en);
             var fechaStr = formatearFecha(fechaMsg);
-            
             if (fechaStr !== ultimaFecha) {
                 html += '<div class="fecha-separador"><span>' + fechaStr + '</span></div>';
                 ultimaFecha = fechaStr;
             }
-            
             html += construirHTMLMensaje(msg);
         });
-        
         contenedor.innerHTML = html;
     }
 
@@ -1005,7 +1099,6 @@
         var hoy = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate());
         var msgDia = new Date(fecha.getFullYear(), fecha.getMonth(), fecha.getDate());
         var diff = (hoy - msgDia) / (1000 * 60 * 60 * 24);
-        
         if (diff === 0) return 'Hoy';
         if (diff === 1) return 'Ayer';
         if (diff < 7) return fecha.toLocaleDateString('es-ES', { weekday: 'long' });
@@ -1019,41 +1112,150 @@
     function construirHTMLMensaje(msg) {
         var esMio = msg.pin_remitente === miPIN;
         var clase = esMio ? 'mensaje-enviado' : 'mensaje-recibido';
+        if (mensajesSeleccionados.includes(msg.id)) clase += ' seleccionado';
         var contenido = '';
-
         if (msg.archivo_url) {
             if (msg.tipo_mensaje === 'imagen') contenido = '<img src="' + msg.archivo_url + '" onclick="window.open(this.src)" style="cursor: pointer;">';
             else if (msg.tipo_mensaje === 'video') contenido = '<video controls><source src="' + msg.archivo_url + '"></video>';
-            else if (msg.tipo_mensaje === 'documento') contenido = '<a href="' + msg.archivo_url + '" target="_blank"> ' + (msg.archivo_nombre || 'Archivo') + '</a>';
-            else contenido = '<a href="' + msg.archivo_url + '" target="_blank">📎 Archivo</a>';
+            else if (msg.tipo_mensaje === 'documento') contenido = '<a href="' + msg.archivo_url + '" target="_blank">📎 ' + (msg.archivo_nombre || 'Archivo') + '</a>';
+            else contenido = '<a href="' + msg.archivo_url + '" target="_blank"> Archivo</a>';
         }
-        
         if (msg.texto_descifrado && msg.texto_descifrado.length > 0) {
             if (contenido) contenido = '<div style="margin-bottom: 4px;">' + msg.texto_descifrado + '</div>' + contenido;
             else contenido = msg.texto_descifrado;
         }
-        
         if (!contenido) contenido = '<em style="color: #888;">[Archivo]</em>';
-        
-        var fechaHora = '';
-        if (msg.enviado_en) {
-            var fecha = new Date(msg.enviado_en);
-            fechaHora = formatearHora(fecha);
-        }
-        
+        var fechaHora = msg.enviado_en ? formatearHora(new Date(msg.enviado_en)) : '';
         var checks = '';
         if (esMio) {
             if (msg.leido) checks = '<span class="check-leido">✓✓</span>';
             else checks = '<span style="color: #888; font-weight: bold;">✓</span>';
         }
-        
-        return '<div class="mensaje ' + clase + '">' + contenido + 
+        var onclickAttr = modoSeleccion ? 'onclick="toggleSeleccion(\'' + msg.id + '\')"' : 'oncontextmenu="mostrarMenuMensaje(event, \'' + msg.id + '\')"';
+        return '<div class="mensaje ' + clase + '" data-id="' + msg.id + '" ' + onclickAttr + '>' + contenido + 
                '<div class="mensaje-meta">' + fechaHora + (checks ? ' ' + checks : '') + '</div>' +
                '</div>';
     }
 
     // ============================================
-    // TIEMPO REAL
+    // SELECCIÓN Y BORRADO DE MENSAJES
+    // ============================================
+    function seleccionarModo() {
+        modoSeleccion = true;
+        mensajesSeleccionados = [];
+        document.getElementById('barraSeleccion').classList.remove('hidden');
+        document.getElementById('menuChat').classList.add('hidden');
+        actualizarVistaMensajes();
+    }
+
+    function cancelarSeleccion() {
+        modoSeleccion = false;
+        mensajesSeleccionados = [];
+        document.getElementById('barraSeleccion').classList.add('hidden');
+        actualizarVistaMensajes();
+    }
+
+    function toggleSeleccion(id) {
+        var idx = mensajesSeleccionados.indexOf(id);
+        if (idx > -1) mensajesSeleccionados.splice(idx, 1);
+        else mensajesSeleccionados.push(id);
+        document.getElementById('contadorSeleccion').innerText = mensajesSeleccionados.length + ' seleccionado' + (mensajesSeleccionados.length !== 1 ? 's' : '');
+        actualizarVistaMensajes();
+    }
+
+    function actualizarVistaMensajes() {
+        // Re-renderizar para mostrar selección
+        var contenedor = document.getElementById('chatMensajes');
+        var mensajesDivs = contenedor.querySelectorAll('.mensaje');
+        mensajesDivs.forEach(function(div) {
+            var id = div.getAttribute('data-id');
+            if (mensajesSeleccionados.includes(id)) div.classList.add('seleccionado');
+            else div.classList.remove('seleccionado');
+        });
+    }
+
+    async function borrarSeleccionados() {
+        if (mensajesSeleccionados.length === 0) { alert('No hay mensajes seleccionados'); return; }
+        if (!confirm('¿Borrar ' + mensajesSeleccionados.length + ' mensaje(s)?')) return;
+        try {
+            var { error } = await clienteSupabase.from('mensajes').delete().in('id', mensajesSeleccionados);
+            if (error) throw error;
+            alert('✅ Mensajes borrados');
+            cancelarSeleccion();
+            cargarMensajes();
+        } catch (error) { alert('Error al borrar: ' + error.message); }
+    }
+
+    async function borrarMensajeIndividual(id) {
+        if (!confirm('¿Borrar este mensaje?')) return;
+        try {
+            var { error } = await clienteSupabase.from('mensajes').delete().eq('id', id);
+            if (error) throw error;
+            cerrarMenus();
+            cargarMensajes();
+        } catch (error) { alert('Error al borrar: ' + error.message); }
+    }
+
+    async function limpiarChatCompleto() {
+        if (!confirm('⚠️ ¿Borrar TODOS los mensajes de este chat?\n\nEsta acción no se puede deshacer.')) return;
+        try {
+            var { error } = await clienteSupabase.from('mensajes').delete()
+                .or('and(pin_remitente.eq.' + miPIN + ',pin_destinatario.eq.' + contactoActual + '),' +
+                    'and(pin_remitente.eq.' + contactoActual + ',pin_destinatario.eq.' + miPIN + ')');
+            if (error) throw error;
+            alert('✅ Chat limpiado');
+            cerrarMenus();
+            cargarMensajes();
+        } catch (error) { alert('Error al limpiar: ' + error.message); }
+    }
+
+    // ============================================
+    // MENÚS CONTEXTUALES
+    // ============================================
+    function mostrarMenuMensaje(event, id) {
+        event.preventDefault();
+        var menu = document.getElementById('menuContextual');
+        menu.innerHTML = '<button onclick="copiarMensaje(\'' + id + '\')">📋 Copiar texto</button>' +
+                         '<button onclick="borrarMensajeIndividual(\'' + id + '\')" class="danger">️ Borrar mensaje</button>' +
+                         '<button onclick="cerrarMenus()">✕ Cerrar</button>';
+        menu.style.left = event.clientX + 'px';
+        menu.style.top = event.clientY + 'px';
+        menu.classList.remove('hidden');
+    }
+
+    function copiarMensaje(id) {
+        var div = document.querySelector('.mensaje[data-id="' + id + '"]');
+        if (div) {
+            var texto = div.innerText.replace(/✓✓|✓|\d{2}:\d{2}/g, '').trim();
+            navigator.clipboard.writeText(texto).then(() => alert('📋 Copiado'));
+        }
+        cerrarMenus();
+    }
+
+    function mostrarMenuChat() {
+        var menu = document.getElementById('menuChat');
+        var btn = event.target;
+        var rect = btn.getBoundingClientRect();
+        menu.style.right = '16px';
+        menu.style.top = (rect.bottom + 8) + 'px';
+        menu.style.left = 'auto';
+        menu.classList.remove('hidden');
+    }
+
+    function cerrarMenus() {
+        document.getElementById('menuContextual').classList.add('hidden');
+        document.getElementById('menuChat').classList.add('hidden');
+    }
+
+    // Cerrar menús al hacer clic fuera
+    document.addEventListener('click', function(e) {
+        if (!e.target.closest('.menu-contextual') && !e.target.closest('[onclick*="mostrarMenuChat"]')) {
+            cerrarMenus();
+        }
+    });
+
+    // ============================================
+    // TIEMPO REAL (MEJORADO)
     // ============================================
     function suscribirseAMensajes() {
         if (!clienteSupabase) return;
@@ -1067,16 +1269,24 @@
                 console.log('🔔 Nuevo mensaje recibido');
                 var nuevo = payload.new;
                 var texto = '';
-                
                 if (nuevo.mensaje_cifrado && nuevo.mensaje_cifrado.length > 0) {
                     texto = await descifrarMensaje(nuevo.mensaje_cifrado);
                 }
                 
-                var cuerpo = nuevo.tipo_mensaje !== 'texto' ? '📎 Archivo' : (texto.substring(0, 50) || 'Mensaje');
+                // Incrementar contador de no leídos
+                mensajesNoLeidos[nuevo.pin_remitente] = (mensajesNoLeidos[nuevo.pin_remitente] || 0) + 1;
+                
+                // Notificación SIEMPRE (no solo si está en el chat)
+                var cuerpo = nuevo.tipo_mensaje !== 'texto' ? '📎 Archivo adjunto' : (texto.substring(0, 50) || 'Mensaje');
                 mostrarNotificacion('Mensaje de ' + nuevo.pin_remitente, cuerpo);
                 
-                nuevo.texto_descifrado = texto;
-                agregarMensajeAPantalla(nuevo);
+                // Si estamos en el chat con ese remitente, mostrar en pantalla
+                if (contactoActual === nuevo.pin_remitente) {
+                    nuevo.texto_descifrado = texto;
+                    agregarMensajeAPantalla(nuevo);
+                    // Marcar como leído automáticamente
+                    marcarComoLeidos();
+                }
             })
             .on('postgres_changes', {
                 event: 'UPDATE', schema: 'public', table: 'mensajes',
@@ -1093,6 +1303,13 @@
                     });
                 }
             })
+            .on('postgres_changes', {
+                event: 'DELETE', schema: 'public', table: 'mensajes',
+                filter: 'pin_destinatario=eq.' + miPIN
+            }, function(payload) {
+                // Si se borró un mensaje, recargar
+                if (contactoActual) cargarMensajes();
+            })
             .subscribe();
     }
 
@@ -1100,7 +1317,6 @@
         var contenedor = document.getElementById('chatMensajes');
         var sinMensajes = contenedor.querySelector('p');
         if (sinMensajes) contenedor.innerHTML = '';
-        
         var div = document.createElement('div');
         div.innerHTML = construirHTMLMensaje(mensaje);
         contenedor.appendChild(div.firstChild);
