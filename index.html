@@ -1,0 +1,1134 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat PIN Seguro</title>
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#000000">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; 
+            background: #0a0a0a; 
+            color: #fff; 
+            min-height: 100vh; 
+        }
+        .container { max-width: 480px; margin: 0 auto; padding: 16px; }
+        .card { 
+            background: #1a1a1a; 
+            padding: 16px; 
+            border-radius: 12px; 
+            border: 1px solid #2a2a2a; 
+            margin-bottom: 12px; 
+        }
+        .pin-display { 
+            font-size: 1.8em; 
+            font-weight: 800; 
+            color: #00ff88; 
+            letter-spacing: 2px; 
+            margin: 8px 0; 
+            font-family: 'Courier New', monospace; 
+            text-align: center;
+        }
+        .btn { 
+            background: #00ff88; 
+            color: #000; 
+            border: none; 
+            padding: 12px; 
+            border-radius: 8px; 
+            font-size: 14px; 
+            font-weight: 700; 
+            cursor: pointer; 
+            width: 100%; 
+            margin: 6px 0; 
+            transition: all 0.2s;
+        }
+        .btn:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,255,136,0.3); }
+        .btn:active { transform: translateY(0); }
+        .btn-secondary { background: #2a2a2a; color: #fff; }
+        .btn-secondary:hover { background: #333; }
+        .btn-warning { background: #ff9500; color: #000; }
+        .status { 
+            padding: 10px; 
+            border-radius: 8px; 
+            font-size: 13px; 
+            font-weight: 600; 
+            margin: 10px 0; 
+            text-align: center;
+        }
+        .active { background: rgba(0, 255, 136, 0.15); color: #00ff88; }
+        .expired { background: rgba(255, 59, 48, 0.15); color: #ff3b30; }
+        input, textarea { 
+            width: 100%; 
+            padding: 12px; 
+            margin: 6px 0; 
+            border-radius: 8px; 
+            border: 1px solid #333; 
+            background: #222; 
+            color: #fff; 
+            font-size: 14px; 
+            font-family: inherit;
+        }
+        input:focus, textarea:focus { outline: none; border-color: #00ff88; }
+        .hidden { display: none !important; }
+        
+        .contacto-item {
+            background: #222;
+            padding: 14px;
+            border-radius: 10px;
+            margin: 8px 0;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: all 0.2s;
+            border: 1px solid transparent;
+        }
+        .contacto-item:hover { background: #2a2a2a; border-color: #00ff88; transform: translateX(4px); }
+        .contacto-pin { font-family: 'Courier New', monospace; font-weight: bold; color: #00ff88; font-size: 16px; }
+        
+        .mensaje {
+            background: #222;
+            padding: 10px 14px;
+            border-radius: 16px;
+            margin: 6px 0;
+            max-width: 85%;
+            word-wrap: break-word;
+            animation: slideIn 0.3s ease-out;
+            position: relative;
+        }
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .mensaje-enviado {
+            background: #00ff88;
+            color: #000;
+            margin-left: auto;
+            border-bottom-right-radius: 4px;
+        }
+        .mensaje-recibido {
+            background: #2a2a2a;
+            color: #fff;
+            border-bottom-left-radius: 4px;
+        }
+        .mensaje-meta {
+            font-size: 10px;
+            margin-top: 4px;
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
+            gap: 4px;
+        }
+        .mensaje-enviado .mensaje-meta { color: rgba(0,0,0,0.7); }
+        .mensaje-recibido .mensaje-meta { color: #888; }
+        .check-leido { color: #007aff !important; font-weight: bold; }
+        
+        .chat-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 12px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #2a2a2a;
+        }
+        .chat-messages {
+            max-height: 420px;
+            overflow-y: auto;
+            padding: 10px 4px;
+            scroll-behavior: smooth;
+        }
+        .mensaje img, .mensaje video {
+            max-width: 220px;
+            border-radius: 8px;
+            margin-top: 4px;
+            display: block;
+        }
+        .mensaje a {
+            color: inherit;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            margin-top: 4px;
+            padding: 6px 10px;
+            background: rgba(0,0,0,0.2);
+            border-radius: 6px;
+        }
+        .archivo-preview {
+            background: #222;
+            padding: 10px;
+            border-radius: 8px;
+            margin-top: 10px;
+            border: 1px solid #333;
+        }
+        .archivo-preview img {
+            max-width: 100%;
+            max-height: 150px;
+            border-radius: 8px;
+            margin-top: 8px;
+        }
+        .progress-bar {
+            background: #333;
+            height: 4px;
+            margin-top: 10px;
+            border-radius: 2px;
+            overflow: hidden;
+        }
+        .progress-bar-fill {
+            background: #00ff88;
+            height: 100%;
+            width: 0%;
+            transition: width 0.3s;
+        }
+        .encryption-badge {
+            background: rgba(0, 255, 136, 0.1);
+            border: 1px solid rgba(0,255,136,0.3);
+            padding: 6px 10px;
+            border-radius: 20px;
+            font-size: 11px;
+            color: #00ff88;
+            margin-top: 10px;
+            text-align: center;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+        
+        .typing-indicator {
+            padding: 8px 14px;
+            background: #2a2a2a;
+            border-radius: 16px;
+            display: inline-flex;
+            gap: 4px;
+            margin: 6px 0;
+            animation: slideIn 0.3s ease-out;
+        }
+        .typing-indicator span {
+            width: 6px;
+            height: 6px;
+            background: #888;
+            border-radius: 50%;
+            animation: bounce 1.4s infinite ease-in-out;
+        }
+        .typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
+        .typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes bounce {
+            0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+            40% { transform: scale(1); opacity: 1; }
+        }
+        
+        .fecha-separador {
+            text-align: center;
+            color: #666;
+            font-size: 11px;
+            margin: 16px 0 8px 0;
+            position: relative;
+        }
+        .fecha-separador span {
+            background: #1a1a1a;
+            padding: 0 12px;
+            position: relative;
+            z-index: 1;
+        }
+        .fecha-separador::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: #333;
+            z-index: 0;
+        }
+        
+        .notif-banner {
+            background: rgba(0, 122, 255, 0.15);
+            border: 1px solid rgba(0, 122, 255, 0.4);
+            padding: 10px;
+            border-radius: 8px;
+            margin: 10px 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+            font-size: 12px;
+        }
+        .notif-banner button {
+            background: #007aff;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+        
+        h2 { margin: 0 0 8px 0; font-size: 22px; }
+        h3 { margin: 12px 0 8px 0; color: #888; font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+        
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <!-- PANTALLA 1: INICIO -->
+    <div id="pantallaInicio">
+        <h2>🔒 Chat Anónimo</h2>
+        <p style="color: #888; font-size: 13px; margin-bottom: 12px;">Tu PIN es tu identidad</p>
+        
+        <div class="card">
+            <p style="color: #888; margin: 0; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px;">Tu PIN</p>
+            <div class="pin-display" id="miPin">...</div>
+            <button class="btn btn-secondary" onclick="copiarPIN()">📋 Copiar mi PIN</button>
+        </div>
+
+        <div class="card">
+            <div id="estadoTexto" class="status expired">Cargando...</div>
+            
+            <div id="formActivacion" class="hidden">
+                <p style="color: #ccc; margin: 10px 0; font-size: 13px;">Código de Activación:</p>
+                <input type="text" id="codigoInput" placeholder="Ej: ACT-45D-XXXX" maxlength="20">
+                <button class="btn" onclick="activar()" id="btnActivar">Activar</button>
+            </div>
+            
+            <div id="panelChat" class="hidden">
+                <button class="btn" onclick="mostrarContactos()">💬 Ir al Chat</button>
+                <p style="font-size: 12px; color: #888; margin-top: 10px; text-align: center;">
+                    Vence: <span id="fechaVencimiento" style="color: #fff;"></span>
+                </p>
+                <div style="text-align: center;">
+                    <span class="encryption-badge">🔐 Cifrado Híbrido AES+RSA</span>
+                </div>
+                
+                <div id="notifBanner" class="notif-banner hidden">
+                    <span>🔔 Activa notificaciones</span>
+                    <button onclick="pedirPermisoNotificaciones()">Activar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- PANTALLA 2: CONTACTOS -->
+    <div id="pantallaContactos" class="hidden">
+        <div class="chat-header">
+            <button class="btn btn-secondary" onclick="mostrarInicio()" style="width: auto; padding: 8px 14px; margin: 0;">← Volver</button>
+            <h2 style="margin: 0; flex: 1; font-size: 20px;">Mis Contactos</h2>
+        </div>
+
+        <div class="card">
+            <h3>Agregar nuevo contacto</h3>
+            <input type="text" id="nuevoContactoPin" placeholder="PIN del contacto (8 caracteres)" maxlength="8">
+            <button class="btn" onclick="agregarContacto()">➕ Agregar</button>
+        </div>
+
+        <div id="listaContactos">
+            <p style="color: #888; text-align: center; padding: 20px;">No tienes contactos aún</p>
+        </div>
+    </div>
+
+    <!-- PANTALLA 3: CHAT -->
+    <div id="pantallaChat" class="hidden">
+        <div class="chat-header">
+            <button class="btn btn-secondary" onclick="mostrarContactos()" style="width: auto; padding: 8px 14px; margin: 0;">← Volver</button>
+            <div style="flex: 1;">
+                <h2 style="margin: 0; font-size: 18px;">Chat con <span id="chatContactoPin" style="color: #00ff88;"></span></h2>
+                <div id="escribiendoTexto" style="font-size: 11px; color: #00ff88; height: 14px; margin-top: 2px;"></div>
+            </div>
+        </div>
+
+        <div class="card" style="padding: 12px;">
+            <div id="chatMensajes" class="chat-messages">
+                <p style="color: #888; text-align: center; padding: 20px;">No hay mensajes aún</p>
+            </div>
+        </div>
+
+        <div class="card">
+            <textarea id="nuevoMensaje" placeholder="Escribe tu mensaje..." rows="2" oninput="onEscribiendo()"></textarea>
+            
+            <input type="file" id="archivoInput" style="display: none;" accept="image/*,video/*,.pdf,.doc,.docx,.txt,.zip">
+            
+            <div style="display: flex; gap: 8px; margin-top: 8px;">
+                <button class="btn btn-secondary" onclick="document.getElementById('archivoInput').click()" style="flex: 1; margin: 0;">
+                    📎 Adjuntar
+                </button>
+                <button class="btn" onclick="enviarMensaje()" style="flex: 2; margin: 0;">
+                    📤 Enviar
+                </button>
+            </div>
+
+            <div id="archivoPreview" class="archivo-preview hidden">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span id="archivoNombre" style="font-size: 12px; color: #ccc;"></span>
+                    <button onclick="cancelarArchivo()" style="background: #ff3b30; border: none; color: white; padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 12px;">✕</button>
+                </div>
+                <div id="archivoContenido"></div>
+                <div class="progress-bar">
+                    <div id="archivoProgressBar" class="progress-bar-fill"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+    // ============================================
+    // CONFIGURACIÓN
+    // ============================================
+    var SUPABASE_URL = 'https://dksmoteiidjpymextrgj.supabase.co';
+    var SUPABASE_ANON_KEY = 'sb_publishable_HuXshjcD1Je934lVgBcJtw_5kFSuGzE';
+    
+    var miPIN = '';
+    var clienteSupabase = null;
+    var contactoActual = '';
+    var canalRealtime = null;
+    var canalEscribiendo = null;
+    var archivoSeleccionado = null;
+    var miClavePrivada = null;
+    var miClavePublica = null;
+    
+    var timeoutEscribiendo = null;
+    var estoyEscribiendo = false;
+
+    // ============================================
+    // NAVEGACIÓN
+    // ============================================
+    function mostrarInicio() {
+        cancelarSuscripciones();
+        document.getElementById('pantallaInicio').classList.remove('hidden');
+        document.getElementById('pantallaContactos').classList.add('hidden');
+        document.getElementById('pantallaChat').classList.add('hidden');
+    }
+
+    function mostrarContactos() {
+        cancelarSuscripciones();
+        document.getElementById('pantallaInicio').classList.add('hidden');
+        document.getElementById('pantallaContactos').classList.remove('hidden');
+        document.getElementById('pantallaChat').classList.add('hidden');
+        cargarContactos();
+    }
+
+    function mostrarChat(pinContacto) {
+        contactoActual = pinContacto;
+        document.getElementById('chatContactoPin').innerText = pinContacto;
+        document.getElementById('pantallaInicio').classList.add('hidden');
+        document.getElementById('pantallaContactos').classList.add('hidden');
+        document.getElementById('pantallaChat').classList.remove('hidden');
+        
+        cargarMensajes();
+        suscribirseAMensajes();
+        suscribirseAEscribiendo();
+        marcarComoLeidos();
+    }
+
+    // ============================================
+    // GENERAR PIN
+    // ============================================
+    function generarPIN() {
+        var pinGuardado = localStorage.getItem('chat_pin');
+        if (pinGuardado) {
+            miPIN = pinGuardado;
+        } else {
+            var bytes = new Uint8Array(4);
+            crypto.getRandomValues(bytes);
+            miPIN = Array.from(bytes, function(b) { 
+                return b.toString(16).padStart(2, '0'); 
+            }).join('').toUpperCase();
+            localStorage.setItem('chat_pin', miPIN);
+        }
+        document.getElementById('miPin').innerText = miPIN;
+    }
+
+    // ============================================
+    // INICIALIZAR TODO
+    // ============================================
+    async function inicializarTodo() {
+        try {
+            if (typeof supabase === 'undefined') return false;
+            clienteSupabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+            await inicializarClaves();
+            return true;
+        } catch (error) {
+            console.error('Error:', error);
+            return false;
+        }
+    }
+
+    async function inicializarClaves() {
+        var claveGuardada = localStorage.getItem('clave_privada_' + miPIN);
+        if (claveGuardada) await cargarClaves();
+        else await generarClaves();
+    }
+
+    async function generarClaves() {
+        try {
+            var parClaves = await crypto.subtle.generateKey(
+                { name: "RSA-OAEP", modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: "SHA-256" },
+                true, ["encrypt", "decrypt"]
+            );
+            miClavePrivada = parClaves.privateKey;
+            miClavePublica = parClaves.publicKey;
+            
+            var pubExp = await crypto.subtle.exportKey("spki", miClavePublica);
+            var pubBase64 = btoa(String.fromCharCode.apply(null, new Uint8Array(pubExp)));
+            var privExp = await crypto.subtle.exportKey("pkcs8", miClavePrivada);
+            var privBase64 = btoa(String.fromCharCode.apply(null, new Uint8Array(privExp)));
+            localStorage.setItem('clave_privada_' + miPIN, privBase64);
+            await subirClavePublica(pubBase64);
+            console.log('✅ Claves generadas');
+        } catch (error) {
+            console.error('Error generando claves:', error);
+        }
+    }
+
+    async function cargarClaves() {
+        var privBase64 = localStorage.getItem('clave_privada_' + miPIN);
+        if (!privBase64) { await generarClaves(); return; }
+        try {
+            var privBuf = Uint8Array.from(atob(privBase64), c => c.charCodeAt(0));
+            miClavePrivada = await crypto.subtle.importKey("pkcs8", privBuf, { name: "RSA-OAEP", hash: "SHA-256" }, true, ["decrypt"]);
+            
+            var { data } = await clienteSupabase.from('usuarios').select('clave_publica').eq('pin', miPIN).single();
+            if (data && data.clave_publica) {
+                var pubBuf = Uint8Array.from(atob(data.clave_publica), c => c.charCodeAt(0));
+                miClavePublica = await crypto.subtle.importKey("spki", pubBuf, { name: "RSA-OAEP", hash: "SHA-256" }, true, ["encrypt"]);
+                console.log('✅ Claves cargadas');
+            } else {
+                await generarClaves();
+            }
+        } catch (error) {
+            console.error('Error cargando claves:', error);
+            await generarClaves();
+        }
+    }
+
+    async function subirClavePublica(pubBase64) {
+        if (!clienteSupabase) return;
+        var { error } = await clienteSupabase.from('usuarios').upsert({ pin: miPIN, clave_publica: pubBase64 });
+        if (error) console.error('Error subiendo clave:', error);
+    }
+
+    async function obtenerClavePublica(pin) {
+        try {
+            var { data, error } = await clienteSupabase.from('usuarios').select('clave_publica').eq('pin', pin).single();
+            if (error || !data || !data.clave_publica) return null;
+            var buf = Uint8Array.from(atob(data.clave_publica), c => c.charCodeAt(0));
+            return await crypto.subtle.importKey("spki", buf, { name: "RSA-OAEP", hash: "SHA-256" }, true, ["encrypt"]);
+        } catch (error) { return null; }
+    }
+
+    // ============================================
+    // CIFRADO HÍBRIDO (AES-GCM + RSA-OAEP)
+    // ============================================
+    async function generarClaveAES() {
+        return await crypto.subtle.generateKey(
+            { name: "AES-GCM", length: 256 },
+            true, ["encrypt", "decrypt"]
+        );
+    }
+
+    async function cifrarConAES(texto, claveAES) {
+        var encoder = new TextEncoder();
+        var iv = crypto.getRandomValues(new Uint8Array(12));
+        var cifrado = await crypto.subtle.encrypt(
+            { name: "AES-GCM", iv: iv },
+            claveAES,
+            encoder.encode(texto)
+        );
+        return {
+            iv: btoa(String.fromCharCode.apply(null, iv)),
+            datos: btoa(String.fromCharCode.apply(null, new Uint8Array(cifrado)))
+        };
+    }
+
+    async function descifrarConAES(ivBase64, datosBase64, claveAES) {
+        var iv = Uint8Array.from(atob(ivBase64), c => c.charCodeAt(0));
+        var datos = Uint8Array.from(atob(datosBase64), c => c.charCodeAt(0));
+        var descifrado = await crypto.subtle.decrypt(
+            { name: "AES-GCM", iv: iv },
+            claveAES,
+            datos
+        );
+        return new TextDecoder().decode(descifrado);
+    }
+
+    async function exportarClaveAES(clave) {
+        var raw = await crypto.subtle.exportKey("raw", clave);
+        return btoa(String.fromCharCode.apply(null, new Uint8Array(raw)));
+    }
+
+    async function importarClaveAES(base64) {
+        var raw = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
+        return await crypto.subtle.importKey(
+            "raw", raw, { name: "AES-GCM" }, true, ["encrypt", "decrypt"]
+        );
+    }
+
+    async function cifrarClaveConRSA(claveAESBase64, clavePublicaRSA) {
+        var encoder = new TextEncoder();
+        var cifrado = await crypto.subtle.encrypt(
+            { name: "RSA-OAEP" },
+            clavePublicaRSA,
+            encoder.encode(claveAESBase64)
+        );
+        return btoa(String.fromCharCode.apply(null, new Uint8Array(cifrado)));
+    }
+
+    async function descifrarClaveConRSA(claveCifradaBase64, clavePrivadaRSA) {
+        var cifrado = Uint8Array.from(atob(claveCifradaBase64), c => c.charCodeAt(0));
+        var descifrado = await crypto.subtle.decrypt(
+            { name: "RSA-OAEP" },
+            clavePrivadaRSA,
+            cifrado
+        );
+        return new TextDecoder().decode(descifrado);
+    }
+
+    // CIFRAR MENSAJE (híbrido: para destinatario + para mí)
+    async function cifrarMensaje(texto, clavePublicaDestinatario) {
+        var claveAES = await generarClaveAES();
+        var claveAESBase64 = await exportarClaveAES(claveAES);
+        var { iv, datos } = await cifrarConAES(texto, claveAES);
+        var claveParaDestinatario = await cifrarClaveConRSA(claveAESBase64, clavePublicaDestinatario);
+        var claveParaMi = await cifrarClaveConRSA(claveAESBase64, miClavePublica);
+        return iv + '|' + datos + '|' + claveParaDestinatario + '|' + claveParaMi;
+    }
+
+    // DESCIFRAR MENSAJE (híbrido)
+    async function descifrarMensaje(cifradoBase64) {
+        if (!cifradoBase64 || cifradoBase64.length === 0) return '';
+        
+        // Si no tiene el formato híbrido, es texto plano antiguo
+        if (!cifradoBase64.includes('|')) {
+            var esBase64 = /^[A-Za-z0-9+/]*={0,2}$/.test(cifradoBase64) && (cifradoBase64.length % 4 === 0);
+            if (!esBase64) return cifradoBase64;
+            try {
+                var buf = Uint8Array.from(atob(cifradoBase64), c => c.charCodeAt(0));
+                var desc = await crypto.subtle.decrypt({ name: "RSA-OAEP" }, miClavePrivada, buf);
+                return new TextDecoder().decode(desc);
+            } catch (e) { return cifradoBase64; }
+        }
+        
+        try {
+            var partes = cifradoBase64.split('|');
+            if (partes.length !== 4) return '[Formato inválido]';
+            
+            var iv = partes[0];
+            var datos = partes[1];
+            var claveParaDestinatario = partes[2];
+            var claveParaMi = partes[3];
+            
+            // Intentar descifrar con MI clave privada primero
+            var claveAESBase64 = null;
+            try {
+                claveAESBase64 = await descifrarClaveConRSA(claveParaMi, miClavePrivada);
+            } catch (e) {
+                // Si falla, intentar con la otra clave
+                try {
+                    claveAESBase64 = await descifrarClaveConRSA(claveParaDestinatario, miClavePrivada);
+                } catch (e2) {
+                    return '[No se puede descifrar]';
+                }
+            }
+            
+            var claveAES = await importarClaveAES(claveAESBase64);
+            return await descifrarConAES(iv, datos, claveAES);
+        } catch (error) {
+            console.error('Error descifrando:', error);
+            return '[Error al descifrar]';
+        }
+    }
+
+    // ============================================
+    // VERIFICAR ESTADO
+    // ============================================
+    async function verificarEstado() {
+        var estadoDiv = document.getElementById('estadoTexto');
+        var form = document.getElementById('formActivacion');
+        var chat = document.getElementById('panelChat');
+        
+        if (!clienteSupabase) {
+            estadoDiv.innerText = '️ Sin conexión';
+            form.classList.remove('hidden');
+            return;
+        }
+        
+        try {
+            var { data } = await clienteSupabase.from('usuarios').select('fecha_expiracion').eq('pin', miPIN).maybeSingle();
+            if (data && data.fecha_expiracion && new Date(data.fecha_expiracion) > new Date()) {
+                estadoDiv.className = 'status active';
+                estadoDiv.innerText = '✅ Servicio Activo';
+                form.classList.add('hidden');
+                chat.classList.remove('hidden');
+                document.getElementById('fechaVencimiento').innerText = new Date(data.fecha_expiracion).toLocaleDateString('es-ES');
+                
+                if ('Notification' in window && Notification.permission === 'default') {
+                    document.getElementById('notifBanner').classList.remove('hidden');
+                }
+                return;
+            }
+            estadoDiv.className = 'status expired';
+            estadoDiv.innerText = '⚠️ Servicio Inactivo';
+            form.classList.remove('hidden');
+            chat.classList.add('hidden');
+        } catch (error) {
+            estadoDiv.innerText = '❌ Error';
+            form.classList.remove('hidden');
+        }
+    }
+
+    async function activar() {
+        var codigo = document.getElementById('codigoInput').value.trim().toUpperCase();
+        if (codigo.length < 5) { alert('Código inválido'); return; }
+        var btn = document.getElementById('btnActivar');
+        btn.disabled = true; btn.innerText = 'Procesando...';
+        try {
+            var resultado = await clienteSupabase.functions.invoke('activar-servicio', { body: { pin: miPIN, codigo: codigo } });
+            if (resultado.error) alert('Error: ' + resultado.error.message);
+            else if (resultado.data && resultado.data.exito) {
+                alert('¡Éxito! Activo hasta: ' + resultado.data.nueva_fecha);
+                document.getElementById('codigoInput').value = '';
+                verificarEstado();
+            } else alert('Error: ' + (resultado.data ? resultado.data.mensaje : 'Desconocido'));
+        } catch (error) { alert('Error: ' + error.message); }
+        finally { btn.disabled = false; btn.innerText = 'Activar'; }
+    }
+
+    function copiarPIN() {
+        navigator.clipboard.writeText(miPIN).then(() => alert('PIN copiado: ' + miPIN));
+    }
+
+    // ============================================
+    // NOTIFICACIONES
+    // ============================================
+    async function pedirPermisoNotificaciones() {
+        if (!('Notification' in window)) { alert('Tu navegador no soporta notificaciones'); return; }
+        var permiso = await Notification.requestPermission();
+        if (permiso === 'granted') {
+            document.getElementById('notifBanner').classList.add('hidden');
+            new Notification('✅ Notificaciones activadas', { body: 'Recibirás alertas de nuevos mensajes' });
+        } else {
+            alert('Permiso denegado');
+        }
+    }
+
+    function mostrarNotificacion(titulo, cuerpo) {
+        if (!('Notification' in window)) return;
+        if (Notification.permission !== 'granted') return;
+        if (!document.hidden) return;
+        try {
+            new Notification(titulo, { body: cuerpo, tag: 'chat-' + Date.now(), requireInteraction: false });
+        } catch (e) { console.error('Error notificación:', e); }
+    }
+
+    // ============================================
+    // CONTACTOS
+    // ============================================
+    function getContactos() {
+        var c = localStorage.getItem('contactos_' + miPIN);
+        return c ? JSON.parse(c) : [];
+    }
+    function guardarContactos(c) { localStorage.setItem('contactos_' + miPIN, JSON.stringify(c)); }
+    
+    function agregarContacto() {
+        var pin = document.getElementById('nuevoContactoPin').value.trim().toUpperCase();
+        if (pin.length !== 8) { alert('El PIN debe tener 8 caracteres'); return; }
+        if (pin === miPIN) { alert('No puedes agregarte a ti mismo'); return; }
+        var contactos = getContactos();
+        if (contactos.includes(pin)) { alert('Este contacto ya existe'); return; }
+        contactos.push(pin);
+        guardarContactos(contactos);
+        document.getElementById('nuevoContactoPin').value = '';
+        cargarContactos();
+    }
+
+    function cargarContactos() {
+        var contactos = getContactos();
+        var cont = document.getElementById('listaContactos');
+        if (contactos.length === 0) {
+            cont.innerHTML = '<p style="color: #888; text-align: center; padding: 20px;">No tienes contactos aún</p>';
+            return;
+        }
+        cont.innerHTML = contactos.map(function(pin) {
+            return '<div class="contacto-item" onclick="mostrarChat(\'' + pin + '\')">' +
+                   '<span class="contacto-pin">' + pin + '</span>' +
+                   '<span style="color: #888;">💬 →</span>' +
+                   '</div>';
+        }).join('');
+    }
+
+    // ============================================
+    // ARCHIVOS
+    // ============================================
+    document.getElementById('archivoInput').addEventListener('change', function(e) {
+        var file = e.target.files[0];
+        if (!file) return;
+        if (file.size > 50 * 1024 * 1024) { alert('Máximo 50 MB'); return; }
+        archivoSeleccionado = file;
+        mostrarPreviewArchivo(file);
+    });
+
+    function mostrarPreviewArchivo(file) {
+        document.getElementById('archivoNombre').innerText = file.name + ' (' + formatBytes(file.size) + ')';
+        document.getElementById('archivoContenido').innerHTML = '';
+        var tipo = file.type.split('/')[0];
+        if (tipo === 'image') {
+            var reader = new FileReader();
+            reader.onload = function(e) {
+                var img = document.createElement('img');
+                img.src = e.target.result;
+                document.getElementById('archivoContenido').appendChild(img);
+            };
+            reader.readAsDataURL(file);
+        }
+        document.getElementById('archivoPreview').classList.remove('hidden');
+    }
+
+    function cancelarArchivo() {
+        archivoSeleccionado = null;
+        document.getElementById('archivoInput').value = '';
+        document.getElementById('archivoPreview').classList.add('hidden');
+        document.getElementById('archivoContenido').innerHTML = '';
+        document.getElementById('archivoProgressBar').style.width = '0%';
+    }
+
+    function formatBytes(bytes) {
+        if (bytes === 0) return '0 Bytes';
+        var k = 1024, sizes = ['Bytes', 'KB', 'MB', 'GB'];
+        var i = Math.floor(Math.log(bytes) / Math.log(k));
+        return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+    }
+
+    async function subirArchivo(file, pinDest) {
+        var ts = Date.now();
+        var ext = file.name.split('.').pop();
+        var fileName = miPIN + '_' + pinDest + '_' + ts + '.' + ext;
+        var { data, error } = await clienteSupabase.storage.from('chat-files').upload(fileName, file, { cacheControl: '3600', upsert: false, contentType: file.type });
+        if (error) throw error;
+        var { data: urlData } = await clienteSupabase.storage.from('chat-files').createSignedUrl(fileName, 60 * 60 * 24 * 30);
+        if (!urlData || !urlData.signedUrl) throw new Error('URL no generada');
+        return { url: urlData.signedUrl, path: data.path, nombre: file.name, tamaño: file.size, tipo: file.type };
+    }
+
+    // ============================================
+    // INDICADOR "ESCRIBIENDO..."
+    // ============================================
+    function onEscribiendo() {
+        if (!contactoActual || !clienteSupabase) return;
+        if (!estoyEscribiendo) {
+            estoyEscribiendo = true;
+            actualizarEstadoEscribiendo(true);
+        }
+        clearTimeout(timeoutEscribiendo);
+        timeoutEscribiendo = setTimeout(function() {
+            estoyEscribiendo = false;
+            actualizarEstadoEscribiendo(false);
+        }, 2000);
+    }
+
+    async function actualizarEstadoEscribiendo(escribiendo) {
+        try {
+            await clienteSupabase.from('escribiendo').upsert({
+                pin_remitente: miPIN,
+                pin_destinatario: contactoActual,
+                escribiendo: escribiendo,
+                actualizado_en: new Date().toISOString()
+            });
+        } catch (error) { console.error('Error escribiendo:', error); }
+    }
+
+    function suscribirseAEscribiendo() {
+        if (!clienteSupabase) return;
+        if (canalEscribiendo) clienteSupabase.removeChannel(canalEscribiendo);
+        
+        canalEscribiendo = clienteSupabase.channel('escribiendo_' + miPIN)
+            .on('postgres_changes', {
+                event: '*',
+                schema: 'public',
+                table: 'escribiendo',
+                filter: 'pin_destinatario=eq.' + miPIN
+            }, function(payload) {
+                if (payload.new && payload.new.pin_remitente === contactoActual) {
+                    var div = document.getElementById('escribiendoTexto');
+                    if (payload.new.escribiendo) {
+                        div.innerText = '✍️ Escribiendo...';
+                    } else {
+                        div.innerText = '';
+                    }
+                }
+            })
+            .subscribe();
+    }
+
+    // ============================================
+    // ENVIAR MENSAJE
+    // ============================================
+    async function enviarMensaje() {
+        var texto = document.getElementById('nuevoMensaje').value.trim();
+        if (!texto && !archivoSeleccionado) { alert('Escribe un mensaje o selecciona un archivo'); return; }
+
+        var contenedor = document.getElementById('chatMensajes');
+        var tipoMensaje = 'texto';
+        var archivoInfo = null;
+        var mensajeCifrado = '';
+
+        if (texto) {
+            var clavePub = await obtenerClavePublica(contactoActual);
+            if (!clavePub) { alert('⚠️ Este contacto no tiene cifrado configurado.'); return; }
+            try { mensajeCifrado = await cifrarMensaje(texto, clavePub); } catch (error) { alert('Error al cifrar'); return; }
+        }
+
+        if (archivoSeleccionado) {
+            try {
+                document.getElementById('archivoProgressBar').style.width = '50%';
+                archivoInfo = await subirArchivo(archivoSeleccionado, contactoActual);
+                document.getElementById('archivoProgressBar').style.width = '100%';
+                var tipo = archivoInfo.tipo.split('/')[0];
+                if (tipo === 'image') tipoMensaje = 'imagen';
+                else if (tipo === 'video') tipoMensaje = 'video';
+                else tipoMensaje = 'documento';
+                
+                var div = document.createElement('div');
+                div.className = 'mensaje mensaje-enviado';
+                var html = construirHTMLMensaje({ 
+                    tipo_mensaje: tipoMensaje, 
+                    archivo_url: archivoInfo.url, 
+                    archivo_nombre: archivoInfo.nombre, 
+                    texto_descifrado: texto, 
+                    enviado_en: new Date().toISOString(), 
+                    leido: false 
+                });
+                div.innerHTML = html;
+                contenedor.appendChild(div);
+                contenedor.scrollTop = contenedor.scrollHeight;
+            } catch (error) {
+                alert('Error al subir archivo: ' + error.message);
+                document.getElementById('archivoProgressBar').style.width = '0%';
+                return;
+            }
+        }
+
+        try {
+            var { error } = await clienteSupabase.from('mensajes').insert({
+                pin_remitente: miPIN,
+                pin_destinatario: contactoActual,
+                mensaje_cifrado: mensajeCifrado,
+                nonce: 'e2ee',
+                tipo_mensaje: tipoMensaje,
+                archivo_url: archivoInfo ? archivoInfo.url : null,
+                archivo_nombre: archivoInfo ? archivoInfo.nombre : null,
+                archivo_tamaño: archivoInfo ? archivoInfo.tamaño : null,
+                leido: false
+            });
+            if (error) throw error;
+            document.getElementById('nuevoMensaje').value = '';
+            cancelarArchivo();
+            estoyEscribiendo = false;
+            actualizarEstadoEscribiendo(false);
+        } catch (error) { alert('Error al enviar: ' + error.message); }
+    }
+
+    // ============================================
+    // MARCAR COMO LEÍDOS
+    // ============================================
+    async function marcarComoLeidos() {
+        if (!contactoActual || !clienteSupabase) return;
+        try {
+            await clienteSupabase.from('mensajes')
+                .update({ leido: true, leido_en: new Date().toISOString() })
+                .eq('pin_remitente', contactoActual)
+                .eq('pin_destinatario', miPIN)
+                .eq('leido', false);
+        } catch (error) { console.error('Error marcando leídos:', error); }
+    }
+
+    // ============================================
+    // CARGAR MENSAJES
+    // ============================================
+    async function cargarMensajes() {
+        try {
+            var { data, error } = await clienteSupabase.from('mensajes')
+                .select('*')
+                .or('and(pin_remitente.eq.' + miPIN + ',pin_destinatario.eq.' + contactoActual + '),' +
+                    'and(pin_remitente.eq.' + contactoActual + ',pin_destinatario.eq.' + miPIN + ')')
+                .order('enviado_en', { ascending: true });
+
+            if (error) throw error;
+            var contenedor = document.getElementById('chatMensajes');
+            if (!data || data.length === 0) {
+                contenedor.innerHTML = '<p style="color: #888; text-align: center; padding: 20px;">No hay mensajes aún</p>';
+                return;
+            }
+
+            var mensajes = [];
+            for (var msg of data) {
+                var texto = '';
+                if (msg.mensaje_cifrado && msg.mensaje_cifrado.length > 0) {
+                    texto = await descifrarMensaje(msg.mensaje_cifrado);
+                }
+                mensajes.push({ ...msg, texto_descifrado: texto });
+            }
+
+            renderizarMensajes(mensajes);
+            contenedor.scrollTop = contenedor.scrollHeight;
+        } catch (error) { console.error('Error:', error); }
+    }
+
+    function renderizarMensajes(mensajes) {
+        var contenedor = document.getElementById('chatMensajes');
+        var html = '';
+        var ultimaFecha = '';
+        
+        mensajes.forEach(function(msg) {
+            var fechaMsg = new Date(msg.enviado_en);
+            var fechaStr = formatearFecha(fechaMsg);
+            
+            if (fechaStr !== ultimaFecha) {
+                html += '<div class="fecha-separador"><span>' + fechaStr + '</span></div>';
+                ultimaFecha = fechaStr;
+            }
+            
+            html += construirHTMLMensaje(msg);
+        });
+        
+        contenedor.innerHTML = html;
+    }
+
+    function formatearFecha(fecha) {
+        var ahora = new Date();
+        var hoy = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate());
+        var msgDia = new Date(fecha.getFullYear(), fecha.getMonth(), fecha.getDate());
+        var diff = (hoy - msgDia) / (1000 * 60 * 60 * 24);
+        
+        if (diff === 0) return 'Hoy';
+        if (diff === 1) return 'Ayer';
+        if (diff < 7) return fecha.toLocaleDateString('es-ES', { weekday: 'long' });
+        return fecha.toLocaleDateString('es-ES', { day: 'numeric', month: 'long' });
+    }
+
+    function formatearHora(fecha) {
+        return fecha.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+    }
+
+    function construirHTMLMensaje(msg) {
+        var esMio = msg.pin_remitente === miPIN;
+        var clase = esMio ? 'mensaje-enviado' : 'mensaje-recibido';
+        var contenido = '';
+
+        if (msg.archivo_url) {
+            if (msg.tipo_mensaje === 'imagen') contenido = '<img src="' + msg.archivo_url + '" onclick="window.open(this.src)" style="cursor: pointer;">';
+            else if (msg.tipo_mensaje === 'video') contenido = '<video controls><source src="' + msg.archivo_url + '"></video>';
+            else if (msg.tipo_mensaje === 'documento') contenido = '<a href="' + msg.archivo_url + '" target="_blank"> ' + (msg.archivo_nombre || 'Archivo') + '</a>';
+            else contenido = '<a href="' + msg.archivo_url + '" target="_blank">📎 Archivo</a>';
+        }
+        
+        if (msg.texto_descifrado && msg.texto_descifrado.length > 0) {
+            if (contenido) contenido = '<div style="margin-bottom: 4px;">' + msg.texto_descifrado + '</div>' + contenido;
+            else contenido = msg.texto_descifrado;
+        }
+        
+        if (!contenido) contenido = '<em style="color: #888;">[Archivo]</em>';
+        
+        var fechaHora = '';
+        if (msg.enviado_en) {
+            var fecha = new Date(msg.enviado_en);
+            fechaHora = formatearHora(fecha);
+        }
+        
+        var checks = '';
+        if (esMio) {
+            if (msg.leido) checks = '<span class="check-leido">✓✓</span>';
+            else checks = '<span style="color: #888; font-weight: bold;">✓</span>';
+        }
+        
+        return '<div class="mensaje ' + clase + '">' + contenido + 
+               '<div class="mensaje-meta">' + fechaHora + (checks ? ' ' + checks : '') + '</div>' +
+               '</div>';
+    }
+
+    // ============================================
+    // TIEMPO REAL
+    // ============================================
+    function suscribirseAMensajes() {
+        if (!clienteSupabase) return;
+        cancelarSuscripcionMensajes();
+
+        canalRealtime = clienteSupabase.channel('mensajes_' + miPIN + '_' + Date.now())
+            .on('postgres_changes', {
+                event: 'INSERT', schema: 'public', table: 'mensajes',
+                filter: 'pin_destinatario=eq.' + miPIN
+            }, async function(payload) {
+                console.log('🔔 Nuevo mensaje recibido');
+                var nuevo = payload.new;
+                var texto = '';
+                
+                if (nuevo.mensaje_cifrado && nuevo.mensaje_cifrado.length > 0) {
+                    texto = await descifrarMensaje(nuevo.mensaje_cifrado);
+                }
+                
+                var cuerpo = nuevo.tipo_mensaje !== 'texto' ? '📎 Archivo' : (texto.substring(0, 50) || 'Mensaje');
+                mostrarNotificacion('Mensaje de ' + nuevo.pin_remitente, cuerpo);
+                
+                nuevo.texto_descifrado = texto;
+                agregarMensajeAPantalla(nuevo);
+            })
+            .on('postgres_changes', {
+                event: 'UPDATE', schema: 'public', table: 'mensajes',
+                filter: 'pin_remitente=eq.' + miPIN
+            }, function(payload) {
+                if (payload.new.leido) {
+                    var elementos = document.querySelectorAll('.mensaje-enviado .mensaje-meta');
+                    elementos.forEach(function(meta) {
+                        var check = meta.querySelector('span:not(.check-leido)');
+                        if (check && check.innerText === '✓') {
+                            check.className = 'check-leido';
+                            check.innerText = '✓✓';
+                        }
+                    });
+                }
+            })
+            .subscribe();
+    }
+
+    function agregarMensajeAPantalla(mensaje) {
+        var contenedor = document.getElementById('chatMensajes');
+        var sinMensajes = contenedor.querySelector('p');
+        if (sinMensajes) contenedor.innerHTML = '';
+        
+        var div = document.createElement('div');
+        div.innerHTML = construirHTMLMensaje(mensaje);
+        contenedor.appendChild(div.firstChild);
+        contenedor.scrollTop = contenedor.scrollHeight;
+    }
+
+    function cancelarSuscripcionMensajes() {
+        if (canalRealtime) { clienteSupabase.removeChannel(canalRealtime); canalRealtime = null; }
+    }
+    function cancelarSuscripcionEscribiendo() {
+        if (canalEscribiendo) { clienteSupabase.removeChannel(canalEscribiendo); canalEscribiendo = null; }
+    }
+    function cancelarSuscripciones() {
+        cancelarSuscripcionMensajes();
+        cancelarSuscripcionEscribiendo();
+        var div = document.getElementById('escribiendoTexto');
+        if (div) div.innerText = '';
+    }
+
+    // ============================================
+    // INICIO
+    // ============================================
+    window.addEventListener('DOMContentLoaded', async function() {
+        generarPIN();
+        await inicializarTodo();
+        await verificarEstado();
+    });
+</script>
+
+</body>
+</html>
