@@ -1022,17 +1022,189 @@ function formatBytes(bytes) {
     return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
 }
 
-async function subirArchivo(file, pinDest) {
-    var ts = Date.now();
-    var ext = file.name.split('.').pop();
-    var fileName = miPIN + '_' + pinDest + '_' + ts + '.' + ext;
-    var { data, error } = await clienteSupabase.storage.from('chat-files').upload(fileName, file, { cacheControl: '3600', upsert: false, contentType: file.type });
-    if (error) throw error;
-    var { data: urlData } = await clienteSupabase.storage.from('chat-files').createSignedUrl(fileName, 60 * 60 * 24 * 30);
-    if (!urlData || !urlData.signedUrl) throw new Error('URL no generada');
-    return { url: urlData.signedUrl, path: data.path, nombre: file.name, tamaño: file.size, tipo: file.type };
+// ============================================
+// CIFRADO DE ARCHIVOS (AES-GCM 256)
+// ============================================
+
+// Cifrar archivo antes de subir
+async function cifrarArchivo(file, clavePublicaDestinatario) {
+    console.log('🔐 Cifrando archivo:', file.name);
+    
+    // 1. Generar clave AES única para este archivo
+    var claveAES = await crypto.subtle.generateKey(
+        { name: "AES-GCM", length: 256 },
+        true,
+        ["encrypt", "decrypt"]
+    );
+    
+    // 2. Leer el archivo como ArrayBuffer
+    var arrayBuffer = await file.arrayBuffer();
+    
+    // 3. Generar IV (vector de inicialización)
+    var iv = crypto.getRandomValues(new Uint8Array(12));
+    
+    // 4. Cifrar el archivo
+    var cifrado = await crypto.subtle.encrypt(
+        { name: "AES-GCM", iv: iv },
+        claveAES,
+        arrayBuffer
+    );
+    
+    // 5. Exportar clave AES
+    var claveAESExportada = await crypto.subtle.exportKey("raw", claveAES);
+    var claveAESBase64 = btoa(String.fromCharCode.apply(null, new Uint8Array(claveAESExportada)));
+    
+    // 6. Cifrar la clave AES con RSA (para el destinatario)
+    var claveCifradaRSA = await cifrarClaveConRSA(claveAESBase64, clavePublicaDestinatario);
+    
+    // 7. Cifrar la clave AES con MI clave pública (para que yo también pueda leerlo)
+    var claveCifradaRSAMia = await cifrarClaveConRSA(claveAESBase64, miClavePublica);
+    
+    // 8. Crear blob cifrado
+    var blobCifrado = new Blob([cifrado], { type: 'application/octet-stream' });
+    
+    console.log('✅ Archivo cifrado:', file.size, 'bytes →', cifrado.byteLength, 'bytes cifrados');
+    
+    return {
+        blob: blobCifrado,
+        iv: btoa(String.fromCharCode.apply(null, iv)),
+        claveParaDestinatario: claveCifradaRSA,
+        claveParaMi: claveCifradaRSAMia,
+        nombreOriginal: file.name,
+        tipoOriginal: file.type,
+        tamañoOriginal: file.size
+    };
 }
 
+// Descifrar archivo después de descargar
+async function descifrarArchivo(arrayBufferCifrado, ivBase64, claveCifradaBase64) {
+    console.log('🔓 Descifrando archivo...');
+    
+    try {
+        // 1. Descifrar la clave AES con mi clave privada RSA
+        var claveAESBase64 = await descifrarClaveConRSA(claveCifradaBase64, miClavePrivada);
+        
+        // 2. Importar la clave AES
+        var claveAESRaw = Uint8Array.from(atob(claveAESBase64), c => c.charCodeAt(0));
+        var claveAES = await crypto.subtle.importKey(
+            "raw",
+            claveAESRaw,
+            { name: "AES-GCM" },
+            true,
+            ["decrypt"]
+        );
+        
+        // 3. Convertir IV
+        var iv = Uint8Array.from(atob(ivBase64), c => c.charCodeAt(0));
+        
+        // 4. Descifrar el archivo
+        var descifrado = await crypto.subtle.decrypt(
+            { name: "AES-GCM", iv: iv },
+            claveAES,
+            arrayBufferCifrado
+        );
+        
+        console.log('✅ Archivo descifrado correctamente');
+        return descifrado;
+        
+    } catch (error) {
+        console.error('❌ Error descifrando archivo:', error);
+        throw new Error('No se pudo descifrar el archivo');
+    }
+}
+
+// Descargar y descifrar archivo
+async function descargarYDescifrarArchivo(url, claveCifradaBase64, ivBase64, nombreOriginal, tipoOriginal) {
+    try {
+        // 1. Descargar archivo cifrado
+        var response = await fetch(url);
+        var arrayBufferCifrado = await response.arrayBuffer();
+        
+        // 2. Descifrar
+        var arrayBufferDescifrado = await descifrarArchivo(arrayBufferCifrado, ivBase64, claveCifradaBase64);
+        
+        // 3. Crear blob descifrado
+        var blob = new Blob([arrayBufferDescifrado], { type: tipoOriginal || 'application/octet-stream' });
+        
+        // 4. Crear URL temporal
+        var urlDescifrado = URL.createObjectURL(blob);
+        
+        // 5. Abrir/descargar
+        var a = document.createElement('a');
+        a.href = urlDescifrado;
+        a.download = nombreOriginal || 'archivo_descifrado';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        
+        // 6. Limpiar URL temporal después de un momento
+        setTimeout(function() {
+            URL.revokeObjectURL(urlDescifrado);
+        }, 100);
+        
+    } catch (error) {
+        alert('Error al descifrar archivo: ' + error.message);
+        console.error('Error:', error);
+    }
+}
+
+async function subirArchivo(file, pinDestinatario) {
+    try {
+        // 1. Obtener clave pública del destinatario
+        var clavePublicaDest = await obtenerClavePublica(pinDestinatario);
+        if (!clavePublicaDest) {
+            throw new Error('No se encontró la clave pública del destinatario');
+        }
+        
+        // 2. Cifrar archivo
+        var archivoCifrado = await cifrarArchivo(file, clavePublicaDest);
+        
+        // 3. Subir archivo CIFRADO a Supabase
+        var ts = Date.now();
+        var ext = file.name.split('.').pop();
+        var fileName = miPIN + '_' + pinDestinatario + '_' + ts + '_ENC.' + ext + '.enc';
+        
+        var { data, error } = await clienteSupabase.storage
+            .from('chat-files')
+            .upload(fileName, archivoCifrado.blob, { 
+                cacheControl: '3600', 
+                upsert: false, 
+                contentType: 'application/octet-stream' 
+            });
+        
+        if (error) {
+            console.error('❌ Error subiendo archivo cifrado:', error);
+            throw error;
+        }
+        
+        console.log('✅ Archivo cifrado subido:', fileName);
+        
+        // 4. Crear URL firmada (solo para descargar, pero el archivo sigue cifrado)
+        var { data: urlData } = await clienteSupabase.storage
+            .from('chat-files')
+            .createSignedUrl(fileName, 60 * 60 * 24 * 30);
+        
+        if (!urlData || !urlData.signedUrl) {
+            throw new Error('No se pudo generar la URL del archivo');
+        }
+        
+        return {
+            url: urlData.signedUrl,
+            path: data.path,
+            nombre: archivoCifrado.nombreOriginal,
+            tipo: archivoCifrado.tipoOriginal,
+            tamaño: archivoCifrado.tamañoOriginal,
+            iv: archivoCifrado.iv,
+            claveParaDestinatario: archivoCifrado.claveParaDestinatario,
+            claveParaMi: archivoCifrado.claveParaMi,
+            cifrado: true // Marcador para saber que está cifrado
+        };
+        
+    } catch (error) {
+        console.error('❌ Error en subirArchivo:', error);
+        throw error;
+    }
+}
 // ============================================
 // INDICADOR "ESCRIBIENDO..."
 // ============================================
@@ -1070,38 +1242,68 @@ function suscribirseAEscribiendo() {
 async function enviarMensaje() {
     var texto = document.getElementById('nuevoMensaje').value.trim();
     if (!texto && !archivoSeleccionado) { alert('Escribe un mensaje o selecciona un archivo'); return; }
+    
     var contenedor = document.getElementById('chatMensajes');
     var tipoMensaje = 'texto';
     var archivoInfo = null;
     var mensajeCifrado = '';
+    
+    // Cifrar texto si existe
     if (texto) {
         var clavePub = await obtenerClavePublica(contactoActual);
         if (!clavePub) { alert('⚠️ Este contacto no tiene cifrado configurado.'); return; }
         try { mensajeCifrado = await cifrarMensaje(texto, clavePub); } catch (error) { alert('Error al cifrar'); return; }
     }
+    
+    // Subir archivo si existe
     if (archivoSeleccionado) {
         try {
             document.getElementById('archivoProgressBar').style.width = '50%';
             archivoInfo = await subirArchivo(archivoSeleccionado, contactoActual);
             document.getElementById('archivoProgressBar').style.width = '100%';
+            
             var tipo = archivoInfo.tipo.split('/')[0];
             if (tipo === 'image') tipoMensaje = 'imagen';
             else if (tipo === 'video') tipoMensaje = 'video';
             else tipoMensaje = 'documento';
+            
             var div = document.createElement('div');
             div.className = 'mensaje mensaje-enviado';
-            div.innerHTML = construirHTMLMensaje({ tipo_mensaje: tipoMensaje, archivo_url: archivoInfo.url, archivo_nombre: archivoInfo.nombre, texto_descifrado: texto, enviado_en: new Date().toISOString(), leido: false });
+            div.innerHTML = construirHTMLMensaje({ 
+                tipo_mensaje: tipoMensaje, 
+                archivo_url: archivoInfo.url, 
+                archivo_nombre: archivoInfo.nombre,
+                archivo_tamaño: archivoInfo.tamaño,
+                archivo_iv: archivoInfo.iv,
+                archivo_clave: archivoInfo.claveParaMi,
+                archivo_cifrado: archivoInfo.cifrado,
+                texto_descifrado: texto, 
+                enviado_en: new Date().toISOString(), 
+                leido: false 
+            });
             contenedor.appendChild(div);
             contenedor.scrollTop = contenedor.scrollHeight;
-        } catch (error) { alert('Error al subir archivo: ' + error.message); document.getElementById('archivoProgressBar').style.width = '0%'; return; }
+        } catch (error) { 
+            alert('Error al subir archivo: ' + error.message); 
+            document.getElementById('archivoProgressBar').style.width = '0%'; 
+            return; 
+        }
     }
+    
+    // Guardar en base de datos
     try {
         var { error } = await clienteSupabase.from('mensajes').insert({
-            pin_remitente: miPIN, pin_destinatario: contactoActual,
-            mensaje_cifrado: mensajeCifrado, nonce: 'e2ee', tipo_mensaje: tipoMensaje,
+            pin_remitente: miPIN, 
+            pin_destinatario: contactoActual,
+            mensaje_cifrado: mensajeCifrado, 
+            nonce: 'e2ee', 
+            tipo_mensaje: tipoMensaje,
             archivo_url: archivoInfo ? archivoInfo.url : null,
             archivo_nombre: archivoInfo ? archivoInfo.nombre : null,
             archivo_tamaño: archivoInfo ? archivoInfo.tamaño : null,
+            archivo_iv: archivoInfo ? archivoInfo.iv : null,
+            archivo_clave: archivoInfo ? archivoInfo.claveParaMi : null,
+            archivo_cifrado: archivoInfo ? archivoInfo.cifrado : false,
             leido: false
         });
         if (error) throw error;
@@ -1109,9 +1311,10 @@ async function enviarMensaje() {
         cancelarArchivo();
         estoyEscribiendo = false;
         actualizarEstadoEscribiendo(false);
-    } catch (error) { alert('Error al enviar: ' + error.message); }
+    } catch (error) { 
+        alert('Error al enviar: ' + error.message); 
+    }
 }
-
 // ============================================
 // MARCAR COMO LEÍDOS
 // ============================================
@@ -1191,30 +1394,92 @@ function construirHTMLMensaje(msg) {
     var esMio = msg.pin_remitente === miPIN;
     var clase = esMio ? 'mensaje-enviado' : 'mensaje-recibido';
     if (mensajesSeleccionados.includes(msg.id)) clase += ' seleccionado';
+    
     var contenido = '';
+    
+    // ARCHIVOS (cifrado o sin cifrar)
     if (msg.archivo_url) {
-        if (msg.tipo_mensaje === 'imagen') contenido = '<img src="' + msg.archivo_url + '" onclick="window.open(this.src)" style="cursor: pointer;">';
-        else if (msg.tipo_mensaje === 'video') contenido = '<video controls><source src="' + msg.archivo_url + '"></video>';
-        else if (msg.tipo_mensaje === 'documento') contenido = '<a href="' + msg.archivo_url + '" target="_blank">📎 ' + (msg.archivo_nombre || 'Archivo') + '</a>';
-        else contenido = '<a href="' + msg.archivo_url + '" target="_blank">📎 Archivo</a>';
+        if (msg.tipo_mensaje === 'imagen') {
+            if (msg.archivo_cifrado) {
+                // Imagen cifrada - necesita descifrado al hacer clic
+                contenido = '<img src="' + msg.archivo_url + '" onclick="descifrarYMostrarImagen(\'' + msg.id + '\', this)" style="cursor: pointer; max-width: 220px; border-radius: 8px;" data-iv="' + (msg.archivo_iv || '') + '" data-clave="' + (msg.archivo_clave || '') + '" alt="Imagen cifrada - clic para descifrar">';
+            } else {
+                // Imagen sin cifrar
+                contenido = '<img src="' + msg.archivo_url + '" onclick="window.open(this.src)" style="cursor: pointer; max-width: 220px; border-radius: 8px;">';
+            }
+        } else if (msg.tipo_mensaje === 'video') {
+            if (msg.archivo_cifrado) {
+                // Video cifrado
+                contenido = '<video controls data-src="' + msg.archivo_url + '" data-iv="' + (msg.archivo_iv || '') + '" data-clave="' + (msg.archivo_clave || '') + '" onclick="descifrarYReproducirVideo(this)" style="max-width: 220px; border-radius: 8px;"><source src=""></video>';
+            } else {
+                // Video sin cifrar
+                contenido = '<video controls style="max-width: 220px; border-radius: 8px;"><source src="' + msg.archivo_url + '"></video>';
+            }
+        } else if (msg.tipo_mensaje === 'documento') {
+            if (msg.archivo_cifrado) {
+                // Documento cifrado - botón para descifrar y descargar
+                contenido = '<button onclick="descifrarYDescargarArchivo(\'' + msg.archivo_url + '\', \'' + (msg.archivo_clave || '') + '\', \'' + (msg.archivo_iv || '') + '\', \'' + (msg.archivo_nombre || 'archivo') + '\')" style="background: rgba(0,0,0,0.3); border: none; color: inherit; padding: 10px 14px; border-radius: 8px; cursor: pointer; font-size: 13px; display: inline-flex; align-items: center; gap: 6px;"><span>🔐</span> <span>' + (msg.archivo_nombre || 'Archivo') + '</span></button>';
+            } else {
+                // Documento sin cifrar
+                contenido = '<a href="' + msg.archivo_url + '" target="_blank" style="color: inherit; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; background: rgba(0,0,0,0.2); border-radius: 6px; margin-top: 4px;">📎 ' + (msg.archivo_nombre || 'Archivo') + '</a>';
+            }
+        } else {
+            // Otro tipo de archivo
+            if (msg.archivo_cifrado) {
+                contenido = '<button onclick="descifrarYDescargarArchivo(\'' + msg.archivo_url + '\', \'' + (msg.archivo_clave || '') + '\', \'' + (msg.archivo_iv || '') + '\', \'archivo\')" style="background: rgba(0,0,0,0.3); border: none; color: inherit; padding: 10px 14px; border-radius: 8px; cursor: pointer; font-size: 13px;">🔐 Archivo cifrado</button>';
+            } else {
+                contenido = '<a href="' + msg.archivo_url + '" target="_blank" style="color: inherit; text-decoration: none;">📎 Archivo</a>';
+            }
+        }
     }
+    
+    // TEXTO del mensaje
     if (msg.texto_descifrado && msg.texto_descifrado.length > 0) {
-        if (contenido) contenido = '<div style="margin-bottom: 4px;">' + msg.texto_descifrado + '</div>' + contenido;
-        else contenido = msg.texto_descifrado;
+        if (contenido) {
+            contenido = '<div style="margin-bottom: 4px;">' + msg.texto_descifrado + '</div>' + contenido;
+        } else {
+            contenido = msg.texto_descifrado;
+        }
     }
-    if (!contenido) contenido = '<em style="color: #888;">[Archivo]</em>';
-    var fechaHora = msg.enviado_en ? formatearHora(new Date(msg.enviado_en)) : '';
+    
+    // Si no hay contenido
+    if (!contenido) {
+        contenido = '<em style="color: #888;">[Archivo]</em>';
+    }
+    
+    // FECHA y HORA
+    var fechaHora = '';
+    if (msg.enviado_en) {
+        var fecha = new Date(msg.enviado_en);
+        fechaHora = fecha.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+    }
+    
+    // CHECKS de lectura
     var checks = '';
     if (esMio) {
-        if (msg.leido) checks = '<span class="check-leido">✓✓</span>';
-        else checks = '<span style="color: #888; font-weight: bold;">✓</span>';
+        if (msg.leido) {
+            checks = '<span class="check-leido">✓✓</span>';
+        } else {
+            checks = '<span style="color: #888; font-weight: bold;">✓</span>';
+        }
     }
-    var onclickAttr = modoSeleccion ? 'onclick="toggleSeleccion(\'' + msg.id + '\')"' : 'oncontextmenu="mostrarMenuMensaje(event, \'' + msg.id + '\')"';
-    return '<div class="mensaje ' + clase + '" data-id="' + msg.id + '" ' + onclickAttr + '>' + contenido + 
-           '<div class="mensaje-meta">' + fechaHora + (checks ? ' ' + checks : '') + '</div>' +
+    
+    // Atributo onclick según modo
+    var onclickAttr = '';
+    if (modoSeleccion) {
+        onclickAttr = 'onclick="toggleSeleccion(\'' + msg.id + '\')"';
+    } else if (!msg.archivo_cifrado) {
+        onclickAttr = 'oncontextmenu="mostrarMenuMensaje(event, \'' + msg.id + '\')"';
+    }
+    
+    return '<div class="mensaje ' + clase + '" data-id="' + msg.id + '" ' + onclickAttr + '>' + 
+           contenido + 
+           '<div class="mensaje-meta">' + 
+           fechaHora + 
+           (checks ? ' ' + checks : '') + 
+           '</div>' +
            '</div>';
 }
-
 // ============================================
 // SELECCIÓN Y BORRADO DE MENSAJES
 // ============================================
@@ -1284,6 +1549,81 @@ async function limpiarChatCompleto() {
         cerrarMenus();
         cargarMensajes();
     } catch (error) { alert('Error al limpiar: ' + error.message); }
+}
+
+// ============================================
+// DESCIFRADO VISUAL DE ARCHIVOS
+// ============================================
+
+// Para imágenes
+async function descifrarYMostrarImagen(msgId, imgElement) {
+    try {
+        var iv = imgElement.getAttribute('data-iv');
+        var clave = imgElement.getAttribute('data-clave');
+        var url = imgElement.src;
+        
+        // Mostrar loading
+        imgElement.style.opacity = '0.5';
+        imgElement.alt = 'Descifrando...';
+        
+        // Descargar y descifrar
+        var response = await fetch(url);
+        var arrayBufferCifrado = await response.arrayBuffer();
+        var arrayBufferDescifrado = await descifrarArchivo(arrayBufferCifrado, iv, clave);
+        
+        // Crear blob y URL
+        var blob = new Blob([arrayBufferDescifrado], { type: 'image/*' });
+        var urlDescifrado = URL.createObjectURL(blob);
+        
+        // Mostrar
+        imgElement.src = urlDescifrado;
+        imgElement.style.opacity = '1';
+        imgElement.onclick = function() { window.open(urlDescifrado); };
+        
+        console.log('✅ Imagen descifrada y mostrada');
+    } catch (error) {
+        console.error('❌ Error descifrando imagen:', error);
+        imgElement.alt = 'Error al descifrar';
+        imgElement.style.opacity = '1';
+        alert('Error al descifrar imagen');
+    }
+}
+
+// Para videos
+async function descifrarYReproducirVideo(videoElement) {
+    try {
+        var iv = videoElement.getAttribute('data-iv');
+        var clave = videoElement.getAttribute('data-clave');
+        var url = videoElement.getAttribute('data-src');
+        
+        // Mostrar loading
+        videoElement.querySelector('source').src = '';
+        videoElement.controls = false;
+        
+        // Descargar y descifrar
+        var response = await fetch(url);
+        var arrayBufferCifrado = await response.arrayBuffer();
+        var arrayBufferDescifrado = await descifrarArchivo(arrayBufferCifrado, iv, clave);
+        
+        // Crear blob y URL
+        var blob = new Blob([arrayBufferDescifrado], { type: 'video/*' });
+        var urlDescifrado = URL.createObjectURL(blob);
+        
+        // Reproducir
+        videoElement.querySelector('source').src = urlDescifrado;
+        videoElement.controls = true;
+        videoElement.play();
+        
+        console.log('✅ Video descifrado y reproduciendo');
+    } catch (error) {
+        console.error('❌ Error descifrando video:', error);
+        alert('Error al descifrar video');
+    }
+}
+
+// Para documentos/archivos
+async function descifrarYDescargarArchivo(url, claveCifradaBase64, ivBase64, nombreOriginal) {
+    await descargarYDescifrarArchivo(url, claveCifradaBase64, ivBase64, nombreOriginal, '');
 }
 
 // ============================================
