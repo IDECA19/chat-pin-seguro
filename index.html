@@ -1093,60 +1093,97 @@ function formatBytes(bytes) {
 // Cifrar archivo antes de subir
 async function cifrarArchivo(file, clavePublicaDestinatario) {
     console.log('🔐 Cifrando archivo:', file.name);
+    console.log('Tipo:', file.type, 'Tamaño:', file.size, 'bytes');
+    console.log('Clave pública destinatario:', clavePublicaDestinatario ? 'OK' : 'NULL');
+    console.log('Mi clave pública:', miClavePublica ? 'OK' : 'NULL');
     
-    // 1. Generar clave AES única para este archivo
-    var claveAES = await crypto.subtle.generateKey(
-        { name: "AES-GCM", length: 256 },
-        true,
-        ["encrypt", "decrypt"]
-    );
-    
-    // 2. Leer el archivo como ArrayBuffer
-    var arrayBuffer = await file.arrayBuffer();
-    
-    // 3. Generar IV (vector de inicialización)
-    var iv = crypto.getRandomValues(new Uint8Array(12));
-    
-    // 4. Cifrar el archivo
-    var cifrado = await crypto.subtle.encrypt(
-        { name: "AES-GCM", iv: iv },
-        claveAES,
-        arrayBuffer
-    );
-    
-    // 5. Exportar clave AES
-    var claveAESExportada = await crypto.subtle.exportKey("raw", claveAES);
-    var claveAESBase64 = btoa(String.fromCharCode.apply(null, new Uint8Array(claveAESExportada)));
-    
-    // 6. Cifrar la clave AES con RSA (para el destinatario)
-    var claveCifradaRSA = await cifrarClaveConRSA(claveAESBase64, clavePublicaDestinatario);
-    
-    // 7. Cifrar la clave AES con MI clave pública (para que yo también pueda leerlo)
-    var claveCifradaRSAMia = await cifrarClaveConRSA(claveAESBase64, miClavePublica);
-    
-    // 8. Crear blob cifrado
-    var blobCifrado = new Blob([cifrado], { type: 'application/octet-stream' });
-    
-    console.log('✅ Archivo cifrado:', file.size, 'bytes →', cifrado.byteLength, 'bytes cifrados');
-    
-    return {
-        blob: blobCifrado,
-        iv: btoa(String.fromCharCode.apply(null, iv)),
-        claveParaDestinatario: claveCifradaRSA,
-        claveParaMi: claveCifradaRSAMia,
-        nombreOriginal: file.name,
-        tipoOriginal: file.type,
-        tamañoOriginal: file.size
-    };
+    try {
+        // 1. Generar clave AES única para este archivo
+        console.log('1. Generando clave AES-256...');
+        var claveAES = await crypto.subtle.generateKey(
+            { name: "AES-GCM", length: 256 },
+            true,
+            ["encrypt", "decrypt"]
+        );
+        console.log('✅ Clave AES generada');
+        
+        // 2. Leer el archivo como ArrayBuffer
+        console.log('2. Leyendo archivo...');
+        var arrayBuffer = await file.arrayBuffer();
+        console.log('✅ Archivo leído:', arrayBuffer.byteLength, 'bytes');
+        
+        // 3. Generar IV (vector de inicialización)
+        console.log('3. Generando IV...');
+        var iv = crypto.getRandomValues(new Uint8Array(12));
+        console.log('✅ IV generado:', iv.length, 'bytes');
+        
+        // 4. Cifrar el archivo
+        console.log('4. Cifrando archivo con AES-GCM...');
+        var cifrado = await crypto.subtle.encrypt(
+            { name: "AES-GCM", iv: iv },
+            claveAES,
+            arrayBuffer
+        );
+        console.log('✅ Archivo cifrado:', cifrado.byteLength, 'bytes');
+        
+        // 5. Exportar clave AES
+        console.log('5. Exportando clave AES...');
+        var claveAESExportada = await crypto.subtle.exportKey("raw", claveAES);
+        var claveAESBase64 = btoa(String.fromCharCode.apply(null, new Uint8Array(claveAESExportada)));
+        console.log('✅ Clave AES exportada (Base64):', claveAESBase64.substring(0, 50) + '...');
+        
+        // 6. Cifrar la clave AES con RSA (para el destinatario)
+        console.log('6. Cifrando clave AES con clave pública del destinatario (RSA-OAEP)...');
+        var claveCifradaRSA = await cifrarClaveConRSA(claveAESBase64, clavePublicaDestinatario);
+        console.log('✅ Clave cifrada para destinatario:', claveCifradaRSA ? claveCifradaRSA.substring(0, 50) + '...' : 'NULL');
+        
+        // 7. Cifrar la clave AES con MI clave pública (para que yo también pueda leerlo)
+        console.log('7. Cifrando clave AES con MI clave pública (RSA-OAEP)...');
+        var claveCifradaRSAMia = await cifrarClaveConRSA(claveAESBase64, miClavePublica);
+        console.log('✅ Clave cifrada para mí:', claveCifradaRSAMia ? claveCifradaRSAMia.substring(0, 50) + '...' : 'NULL');
+        
+        // 8. Crear blob cifrado
+        console.log('8. Creando blob cifrado...');
+        var blobCifrado = new Blob([cifrado], { type: 'application/octet-stream' });
+        console.log('✅ Blob cifrado creado:', blobCifrado.size, 'bytes');
+        
+        console.log('');
+        console.log('========================================');
+        console.log('✅ ARCHIVO CIFRADO EXITOSAMENTE');
+        console.log('Original:', file.size, 'bytes');
+        console.log('Cifrado:', cifrado.byteLength, 'bytes');
+        console.log('IV Base64:', btoa(String.fromCharCode.apply(null, iv)));
+        console.log('========================================');
+        console.log('');
+        
+        return {
+            blob: blobCifrado,
+            iv: btoa(String.fromCharCode.apply(null, iv)),
+            claveParaDestinatario: claveCifradaRSA,
+            claveParaMi: claveCifradaRSAMia,
+            nombreOriginal: file.name,
+            tipoOriginal: file.type,
+            tamañoOriginal: file.size
+        };
+        
+    } catch (error) {
+        console.error('❌ ERROR AL CIFRAR ARCHIVO:', error);
+        console.error('Stack:', error.stack);
+        throw error;
+    }
 }
 
 // Descifrar archivo después de descargar
 async function descifrarArchivo(arrayBufferCifrado, ivBase64, claveCifradaBase64) {
-    console.log('🔓 Descifrando archivo...');
+    console.log(' Descifrando archivo...');
+    console.log('IV Base64:', ivBase64);
+    console.log('Clave cifrada Base64:', claveCifradaBase64 ? claveCifradaBase64.substring(0, 50) + '...' : 'NULL');
     
     try {
         // 1. Descifrar la clave AES con mi clave privada RSA
+        console.log('Intentando descifrar clave AES con clave privada...');
         var claveAESBase64 = await descifrarClaveConRSA(claveCifradaBase64, miClavePrivada);
+        console.log('✅ Clave AES descifrada:', claveAESBase64 ? 'OK' : 'NULL');
         
         // 2. Importar la clave AES
         var claveAESRaw = Uint8Array.from(atob(claveAESBase64), c => c.charCodeAt(0));
@@ -1173,7 +1210,16 @@ async function descifrarArchivo(arrayBufferCifrado, ivBase64, claveCifradaBase64
         
     } catch (error) {
         console.error('❌ Error descifrando archivo:', error);
-        throw new Error('No se pudo descifrar el archivo');
+        console.error('Stack:', error.stack);
+        
+        // Intentar con la otra clave (por si acaso)
+        try {
+            console.log('Intentando con clave alternativa...');
+            // Aquí podrías intentar con otra clave si la tienes
+            throw error;
+        } catch (e) {
+            throw new Error('No se pudo descifrar el archivo: ' + error.message);
+        }
     }
 }
 
