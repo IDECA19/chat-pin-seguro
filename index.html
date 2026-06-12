@@ -50,6 +50,7 @@
         .btn-secondary:hover { background: #333; }
         .btn-danger { background: #ff3b30; color: #fff; }
         .btn-danger:hover { background: #ff5555; }
+        .btn-warning { background: #ff9500; color: #000; }
         .btn-small { padding: 6px 12px; font-size: 12px; width: auto; }
         .status { 
             padding: 10px; 
@@ -99,6 +100,22 @@
             font-weight: bold;
             min-width: 20px;
             text-align: center;
+        }
+        .badge-verificado {
+            background: #00ff88;
+            color: #000;
+            border-radius: 10px;
+            padding: 2px 8px;
+            font-size: 10px;
+            font-weight: bold;
+        }
+        .badge-no-verificado {
+            background: #ff9500;
+            color: #000;
+            border-radius: 10px;
+            padding: 2px 8px;
+            font-size: 10px;
+            font-weight: bold;
         }
         
         .mensaje {
@@ -313,6 +330,18 @@
         .barra-seleccion button:hover { background: rgba(255,255,255,0.3); }
         .barra-seleccion button.danger { background: #ff3b30; }
         
+        .huella-display {
+            background: #222;
+            padding: 12px;
+            border-radius: 8px;
+            margin: 10px 0;
+            font-family: 'Courier New', monospace;
+            font-size: 11px;
+            word-break: break-all;
+            color: #00ff88;
+            border: 1px solid #333;
+        }
+        
         h2 { margin: 0 0 8px 0; font-size: 22px; }
         h3 { margin: 12px 0 8px 0; color: #888; font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
         
@@ -332,6 +361,7 @@
             <p style="color: #888; margin: 0; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px;">Tu PIN</p>
             <div class="pin-display" id="miPin">...</div>
             <button class="btn btn-secondary" onclick="copiarPIN()">📋 Copiar mi PIN</button>
+            <button class="btn btn-warning" onclick="mostrarMiHuella()" style="margin-top: 8px;">🔐 Ver mi Huella Digital</button>
         </div>
 
         <div class="card">
@@ -353,7 +383,7 @@
                 </div>
                 
                 <div id="notifBanner" class="notif-banner hidden">
-                    <span> Activa notificaciones</span>
+                    <span>🔔 Activa notificaciones</span>
                     <button onclick="pedirPermisoNotificaciones()">Activar</button>
                 </div>
             </div>
@@ -389,14 +419,15 @@
                 <h2 style="margin: 0; font-size: 18px;">Chat con <span id="chatContactoPin" style="color: #00ff88;"></span></h2>
                 <div id="escribiendoTexto" style="font-size: 11px; color: #00ff88; height: 14px; margin-top: 2px;"></div>
             </div>
-            <button class="btn btn-danger btn-small" onclick="mostrarMenuChat()" title="Opciones">⋮</button>
+            <button class="btn btn-warning btn-small" onclick="verificarHuellaContacto()" title="Verificar identidad" style="margin: 0;">🔐</button>
+            <button class="btn btn-danger btn-small" onclick="mostrarMenuChat()" title="Opciones" style="margin: 0;">⋮</button>
         </div>
 
         <div id="barraSeleccion" class="barra-seleccion hidden">
             <span id="contadorSeleccion">0 seleccionados</span>
             <div>
                 <button onclick="cancelarSeleccion()">Cancelar</button>
-                <button class="danger" onclick="borrarSeleccionados()">️ Borrar</button>
+                <button class="danger" onclick="borrarSeleccionados()">🗑️ Borrar</button>
             </div>
         </div>
 
@@ -444,9 +475,6 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
-    // ============================================
-    // CONFIGURACIÓN
-    // ============================================
     var SUPABASE_URL = 'https://dksmoteiidjpymextrgj.supabase.co';
     var SUPABASE_ANON_KEY = 'sb_publishable_HuXshjcD1Je934lVgBcJtw_5kFSuGzE';
     
@@ -465,9 +493,6 @@
     var mensajesSeleccionados = [];
     var mensajesNoLeidos = {};
 
-    // ============================================
-    // NAVEGACIÓN
-    // ============================================
     function mostrarInicio() {
         cancelarSuscripciones();
         document.getElementById('pantallaInicio').classList.remove('hidden');
@@ -499,9 +524,6 @@
         marcarComoLeidos();
     }
 
-    // ============================================
-    // PIN Y CLAVES
-    // ============================================
     function generarPIN() {
         var pinGuardado = localStorage.getItem('chat_pin');
         if (pinGuardado) {
@@ -591,8 +613,73 @@
     }
 
     // ============================================
-    // CIFRADO DE MENSAJES (AES+RSA)
+    // HUELLAS DIGITALES (NUEVO)
     // ============================================
+    async function calcularHuellaDigital(clavePublica) {
+        var exported = await crypto.subtle.exportKey("spki", clavePublica);
+        var hashBuffer = await crypto.subtle.digest('SHA-256', exported);
+        var hashArray = Array.from(new Uint8Array(hashBuffer));
+        var hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+        return hashHex;
+    }
+
+    async function mostrarMiHuella() {
+        var huella = await calcularHuellaDigital(miClavePublica);
+        var huellaFormateada = huella.match(/.{1,4}/g).join(' ');
+        
+        alert('🔐 Tu Huella Digital:\n\n' + huellaFormateada + '\n\nComparte esta huella con tus contactos por otro canal (llamada, mensaje de voz, etc.) para verificar tu identidad.');
+    }
+
+    async function verificarHuellaContacto() {
+        var clavePub = await obtenerClavePublica(contactoActual);
+        if (!clavePub) {
+            alert('⚠️ No se pudo obtener la clave pública del contacto');
+            return;
+        }
+        
+        var huella = await calcularHuellaDigital(clavePub);
+        var huellaFormateada = huella.match(/.{1,4}/g).join(' ');
+        
+        var mensaje = '🔐 Huella Digital de ' + contactoActual + ':\n\n' + huellaFormateada + '\n\n';
+        mensaje += '¿Verificaste esta huella con tu contacto por otro canal seguro?\n\n';
+        mensaje += 'Si las huellas coinciden, marca como verificado para mayor seguridad.';
+        
+        if (confirm(mensaje)) {
+            await marcarComoVerificado(contactoActual);
+            alert('✅ Contacto verificado. La comunicación es segura.');
+        }
+    }
+
+    async function marcarComoVerificado(pin) {
+        try {
+            var { error } = await clienteSupabase.from('usuarios')
+                .update({ 
+                    huella_verificada: true, 
+                    huella_verificada_en: new Date().toISOString() 
+                })
+                .eq('pin', pin);
+            
+            if (error) throw error;
+            console.log('✅ Contacto marcado como verificado');
+        } catch (error) {
+            console.error('Error marcando como verificado:', error);
+        }
+    }
+
+    async function estaVerificado(pin) {
+        try {
+            var { data, error } = await clienteSupabase.from('usuarios')
+                .select('huella_verificada')
+                .eq('pin', pin)
+                .single();
+            
+            if (error || !data) return false;
+            return data.huella_verificada === true;
+        } catch (error) {
+            return false;
+        }
+    }
+
     async function generarClaveAES() {
         return await crypto.subtle.generateKey({ name: "AES-GCM", length: 256 }, true, ["encrypt", "decrypt"]);
     }
@@ -671,9 +758,6 @@
         }
     }
 
-    // ============================================
-    // CIFRADO DE ARCHIVOS (AES+RSA)
-    // ============================================
     async function cifrarArchivo(file, clavePublicaDestinatario) {
         console.log('🔐 Cifrando archivo:', file.name);
         try {
@@ -683,15 +767,10 @@
             var cifrado = await crypto.subtle.encrypt({ name: "AES-GCM", iv: iv }, claveAES, arrayBuffer);
             var claveAESExportada = await crypto.subtle.exportKey("raw", claveAES);
             var claveAESBase64 = btoa(String.fromCharCode.apply(null, new Uint8Array(claveAESExportada)));
-            
-            // Cifrar la clave AES con la clave pública del destinatario
             var claveCifradaParaDestinatario = await cifrarClaveConRSA(claveAESBase64, clavePublicaDestinatario);
-            // Cifrar la clave AES con MI clave pública (para que yo también pueda leerlo)
             var claveCifradaParaMi = await cifrarClaveConRSA(claveAESBase64, miClavePublica);
-            
             var blobCifrado = new Blob([cifrado], { type: 'application/octet-stream' });
             console.log('✅ Archivo cifrado:', file.size, 'bytes →', cifrado.byteLength, 'bytes');
-            
             return {
                 blob: blobCifrado,
                 iv: btoa(String.fromCharCode.apply(null, iv)),
@@ -707,46 +786,24 @@
         }
     }
 
-    // Descifrar archivo intentando con AMBAS claves
     async function descifrarArchivo(arrayBufferCifrado, ivBase64, claveCifradaBase64, claveCifradaDestinatario) {
         console.log('🔓 Descifrando archivo...');
-        console.log('Tengo claveParaMi:', !!claveCifradaBase64);
-        console.log('Tengo claveParaDestinatario:', !!claveCifradaDestinatario);
-        
         var claveAESBase64 = null;
-        
-        // Intento 1: Con claveParaMi (si soy el remitente)
         if (claveCifradaBase64) {
             try {
-                console.log('Intentando con claveParaMi...');
                 claveAESBase64 = await descifrarClaveConRSA(claveCifradaBase64, miClavePrivada);
-                console.log('✅ Clave descifrada con claveParaMi');
-            } catch (e1) {
-                console.log('❌ Falló con claveParaMi:', e1.message);
-            }
+            } catch (e1) {}
         }
-        
-        // Intento 2: Con claveParaDestinatario (si soy el destinatario)
         if (!claveAESBase64 && claveCifradaDestinatario) {
             try {
-                console.log('Intentando con claveParaDestinatario...');
                 claveAESBase64 = await descifrarClaveConRSA(claveCifradaDestinatario, miClavePrivada);
-                console.log('✅ Clave descifrada con claveParaDestinatario');
-            } catch (e2) {
-                console.log('❌ Falló con claveParaDestinatario:', e2.message);
-            }
+            } catch (e2) {}
         }
-        
-        if (!claveAESBase64) {
-            throw new Error('No se pudo descifrar la clave AES con ninguna de las dos claves');
-        }
-        
-        // Ahora descifrar el archivo con AES
+        if (!claveAESBase64) throw new Error('No se pudo descifrar la clave AES');
         var claveAESRaw = Uint8Array.from(atob(claveAESBase64), c => c.charCodeAt(0));
         var claveAES = await crypto.subtle.importKey("raw", claveAESRaw, { name: "AES-GCM" }, true, ["decrypt"]);
         var iv = Uint8Array.from(atob(ivBase64), c => c.charCodeAt(0));
         var descifrado = await crypto.subtle.decrypt({ name: "AES-GCM", iv: iv }, claveAES, arrayBufferCifrado);
-        
         console.log('✅ Archivo descifrado correctamente');
         return descifrado;
     }
@@ -782,9 +839,6 @@
         }
     }
 
-    // ============================================
-    // VERIFICAR ESTADO Y ACTIVAR
-    // ============================================
     async function verificarEstado() {
         var estadoDiv = document.getElementById('estadoTexto');
         var form = document.getElementById('formActivacion');
@@ -834,9 +888,6 @@
         navigator.clipboard.writeText(miPIN).then(() => alert('PIN copiado: ' + miPIN));
     }
 
-    // ============================================
-    // NOTIFICACIONES
-    // ============================================
     async function pedirPermisoNotificaciones() {
         if (!('Notification' in window)) { alert('Tu navegador no soporta notificaciones'); return; }
         var permiso = await Notification.requestPermission();
@@ -889,7 +940,7 @@
             oscillator.stop(audioCtx.currentTime + 0.5);
             console.log('🔊 Sonido reproducido');
         } catch (e) { 
-            console.log('️ No se pudo reproducir sonido');
+            console.log('⚠️ No se pudo reproducir sonido');
             if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
         }
     }
@@ -903,9 +954,6 @@
         } catch (e) {}
     }, { once: true });
 
-    // ============================================
-    // CONTACTOS
-    // ============================================
     function getContactos() {
         var c = localStorage.getItem('contactos_' + miPIN);
         return c ? JSON.parse(c) : [];
@@ -924,17 +972,23 @@
         cargarContactos();
     }
 
-    function cargarContactos() {
+    async function cargarContactos() {
         var contactos = getContactos();
         var cont = document.getElementById('listaContactos');
         if (contactos.length === 0) {
             cont.innerHTML = '<p style="color: #888; text-align: center; padding: 20px;">No tienes contactos aún</p>';
             return;
         }
-        cont.innerHTML = contactos.map(function(pin) {
+        
+        var html = '';
+        for (var pin of contactos) {
             var badge = mensajesNoLeidos[pin] ? '<span class="badge">' + mensajesNoLeidos[pin] + '</span>' : '';
-            return '<div class="contacto-item" onclick="mostrarChat(\'' + pin + '\')"><span class="contacto-pin">' + pin + '</span><div style="display: flex; align-items: center; gap: 8px;">' + badge + '<span style="color: #888;">💬 →</span></div></div>';
-        }).join('');
+            var verificado = await estaVerificado(pin);
+            var badgeVerificacion = verificado ? '<span class="badge-verificado">✓ Verificado</span>' : '<span class="badge-no-verificado">⚠️ No verificado</span>';
+            
+            html += '<div class="contacto-item" onclick="mostrarChat(\'' + pin + '\')"><span class="contacto-pin">' + pin + '</span><div style="display: flex; align-items: center; gap: 8px;">' + badgeVerificacion + badge + '<span style="color: #888;">💬 →</span></div></div>';
+        }
+        cont.innerHTML = html;
     }
 
     async function cargarMensajesPendientes() {
@@ -966,9 +1020,6 @@
         }
     }
 
-    // ============================================
-    // ARCHIVOS - UI
-    // ============================================
     document.getElementById('archivoInput').addEventListener('change', function(e) {
         var file = e.target.files[0];
         if (!file) return;
@@ -1008,9 +1059,6 @@
         return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
     }
 
-    // ============================================
-    // ESCRIBIENDO...
-    // ============================================
     function onEscribiendo() {
         if (!contactoActual || !clienteSupabase) return;
         if (!estoyEscribiendo) { estoyEscribiendo = true; actualizarEstadoEscribiendo(true); }
@@ -1039,9 +1087,6 @@
             .subscribe();
     }
 
-    // ============================================
-    // ENVIAR MENSAJE (CON AMBAS CLAVES DE ARCHIVO)
-    // ============================================
     async function enviarMensaje() {
         var texto = document.getElementById('nuevoMensaje').value.trim();
         if (!texto && !archivoSeleccionado) { alert('Escribe un mensaje o selecciona un archivo'); return; }
@@ -1049,13 +1094,11 @@
         var tipoMensaje = 'texto';
         var archivoInfo = null;
         var mensajeCifrado = '';
-        
         if (texto) {
             var clavePub = await obtenerClavePublica(contactoActual);
             if (!clavePub) { alert('⚠️ Este contacto no tiene cifrado configurado.'); return; }
             try { mensajeCifrado = await cifrarMensaje(texto, clavePub); } catch (error) { alert('Error al cifrar'); return; }
         }
-        
         if (archivoSeleccionado) {
             try {
                 document.getElementById('archivoProgressBar').style.width = '50%';
@@ -1068,17 +1111,10 @@
                 var div = document.createElement('div');
                 div.className = 'mensaje mensaje-enviado';
                 div.innerHTML = construirHTMLMensaje({ 
-                    tipo_mensaje: tipoMensaje, 
-                    archivo_url: archivoInfo.url, 
-                    archivo_nombre: archivoInfo.nombre,
-                    archivo_tamaño: archivoInfo.tamaño, 
-                    archivo_iv: archivoInfo.iv,
-                    archivo_clave: archivoInfo.claveParaMi,
-                    archivo_clave_destinatario: archivoInfo.claveParaDestinatario,
-                    archivo_cifrado: archivoInfo.cifrado,
-                    texto_descifrado: texto, 
-                    enviado_en: new Date().toISOString(), 
-                    leido: false 
+                    tipo_mensaje: tipoMensaje, archivo_url: archivoInfo.url, archivo_nombre: archivoInfo.nombre,
+                    archivo_tamaño: archivoInfo.tamaño, archivo_iv: archivoInfo.iv,
+                    archivo_clave: archivoInfo.claveParaMi, archivo_clave_destinatario: archivoInfo.claveParaDestinatario,
+                    archivo_cifrado: archivoInfo.cifrado, texto_descifrado: texto, enviado_en: new Date().toISOString(), leido: false 
                 });
                 contenedor.appendChild(div);
                 contenedor.scrollTop = contenedor.scrollHeight;
@@ -1088,15 +1124,10 @@
                 return; 
             }
         }
-        
         try {
-            console.log('Guardando mensaje en base de datos...');
             var insertData = {
-                pin_remitente: miPIN, 
-                pin_destinatario: contactoActual,
-                mensaje_cifrado: mensajeCifrado, 
-                nonce: 'e2ee', 
-                tipo_mensaje: tipoMensaje,
+                pin_remitente: miPIN, pin_destinatario: contactoActual,
+                mensaje_cifrado: mensajeCifrado, nonce: 'e2ee', tipo_mensaje: tipoMensaje,
                 archivo_url: archivoInfo ? archivoInfo.url : null,
                 archivo_nombre: archivoInfo ? archivoInfo.nombre : null,
                 archivo_tamaño: archivoInfo ? archivoInfo.tamaño : null,
@@ -1106,13 +1137,8 @@
                 archivo_cifrado: archivoInfo ? archivoInfo.cifrado : false,
                 leido: false
             };
-            console.log('Datos a guardar:', insertData);
             var { data, error } = await clienteSupabase.from('mensajes').insert(insertData);
-            if (error) {
-                console.error('❌ ERROR AL INSERTAR:', error);
-                throw error;
-            }
-            console.log('✅ Mensaje guardado correctamente');
+            if (error) throw error;
             document.getElementById('nuevoMensaje').value = '';
             cancelarArchivo();
             estoyEscribiendo = false;
@@ -1122,9 +1148,6 @@
         }
     }
 
-    // ============================================
-    // MARCAR COMO LEÍDOS
-    // ============================================
     async function marcarComoLeidos() {
         if (!contactoActual || !clienteSupabase) return;
         try {
@@ -1137,9 +1160,6 @@
         } catch (error) { console.error('Error marcando leídos:', error); }
     }
 
-    // ============================================
-    // CARGAR MENSAJES
-    // ============================================
     async function cargarMensajes() {
         try {
             var { data, error } = await clienteSupabase.from('mensajes')
@@ -1197,15 +1217,11 @@
         return fecha.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
     }
 
-    // ============================================
-    // CONSTRUIR HTML DE MENSAJE (CON AMBAS CLAVES)
-    // ============================================
     function construirHTMLMensaje(msg) {
         var esMio = msg.pin_remitente === miPIN;
         var clase = esMio ? 'mensaje-enviado' : 'mensaje-recibido';
         if (mensajesSeleccionados.includes(msg.id)) clase += ' seleccionado';
         var contenido = '';
-        
         if (msg.archivo_url) {
             if (msg.tipo_mensaje === 'imagen') {
                 if (msg.archivo_cifrado) {
@@ -1223,7 +1239,7 @@
                 if (msg.archivo_cifrado) {
                     contenido = '<button onclick="descifrarYDescargarArchivo(this)" data-url="' + msg.archivo_url + '" data-clave-mi="' + (msg.archivo_clave || '') + '" data-clave-dest="' + (msg.archivo_clave_destinatario || '') + '" data-iv="' + (msg.archivo_iv || '') + '" data-nombre="' + (msg.archivo_nombre || 'archivo') + '" style="background: rgba(0,0,0,0.3); border: none; color: inherit; padding: 10px 14px; border-radius: 8px; cursor: pointer; font-size: 13px; display: inline-flex; align-items: center; gap: 6px;"><span>🔐</span> <span>' + (msg.archivo_nombre || 'Archivo') + '</span></button>';
                 } else {
-                    contenido = '<a href="' + msg.archivo_url + '" target="_blank" style="color: inherit; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; background: rgba(0,0,0,0.2); border-radius: 6px; margin-top: 4px;"> ' + (msg.archivo_nombre || 'Archivo') + '</a>';
+                    contenido = '<a href="' + msg.archivo_url + '" target="_blank" style="color: inherit; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; background: rgba(0,0,0,0.2); border-radius: 6px; margin-top: 4px;">📎 ' + (msg.archivo_nombre || 'Archivo') + '</a>';
                 }
             } else {
                 if (msg.archivo_cifrado) {
@@ -1233,48 +1249,36 @@
                 }
             }
         }
-        
         if (msg.texto_descifrado && msg.texto_descifrado.length > 0) {
             if (contenido) contenido = '<div style="margin-bottom: 4px;">' + msg.texto_descifrado + '</div>' + contenido;
             else contenido = msg.texto_descifrado;
         }
-        
         if (!contenido) contenido = '<em style="color: #888;">[Archivo]</em>';
-        
         var fechaHora = msg.enviado_en ? formatearHora(new Date(msg.enviado_en)) : '';
         var checks = '';
         if (esMio) {
             if (msg.leido) checks = '<span class="check-leido">✓✓</span>';
             else checks = '<span style="color: #888; font-weight: bold;">✓</span>';
         }
-        
         var onclickAttr = '';
         if (modoSeleccion) onclickAttr = 'onclick="toggleSeleccion(\'' + msg.id + '\')"';
         else if (!msg.archivo_cifrado) onclickAttr = 'oncontextmenu="mostrarMenuMensaje(event, \'' + msg.id + '\')"';
-        
         return '<div class="mensaje ' + clase + '" data-id="' + msg.id + '" ' + onclickAttr + '>' + contenido + '<div class="mensaje-meta">' + fechaHora + (checks ? ' ' + checks : '') + '</div></div>';
     }
 
-    // ============================================
-    // DESCIFRADO VISUAL DE ARCHIVOS (CON AMBAS CLAVES)
-    // ============================================
     async function descifrarYMostrarImagen(imgElement) {
         try {
             var iv = imgElement.getAttribute('data-iv');
             var claveMi = imgElement.getAttribute('data-clave-mi');
             var claveDest = imgElement.getAttribute('data-clave-dest');
             var url = imgElement.src;
-            
             imgElement.style.opacity = '0.5';
             imgElement.alt = 'Descifrando...';
-            
             var response = await fetch(url);
             var arrayBufferCifrado = await response.arrayBuffer();
             var arrayBufferDescifrado = await descifrarArchivo(arrayBufferCifrado, iv, claveMi, claveDest);
-            
             var blob = new Blob([arrayBufferDescifrado], { type: 'image/*' });
             var urlDescifrado = URL.createObjectURL(blob);
-            
             imgElement.src = urlDescifrado;
             imgElement.style.opacity = '1';
             imgElement.onclick = function() { window.open(urlDescifrado); };
@@ -1293,16 +1297,12 @@
             var claveMi = buttonElement.getAttribute('data-clave-mi');
             var claveDest = buttonElement.getAttribute('data-clave-dest');
             var url = buttonElement.getAttribute('data-src');
-            
-            buttonElement.innerText = ' Descifrando...';
-            
+            buttonElement.innerText = '⏳ Descifrando...';
             var response = await fetch(url);
             var arrayBufferCifrado = await response.arrayBuffer();
             var arrayBufferDescifrado = await descifrarArchivo(arrayBufferCifrado, iv, claveMi, claveDest);
-            
             var blob = new Blob([arrayBufferDescifrado], { type: 'video/*' });
             var urlDescifrado = URL.createObjectURL(blob);
-            
             var video = document.createElement('video');
             video.controls = true;
             video.style.maxWidth = '220px';
@@ -1324,16 +1324,12 @@
             var claveDest = buttonElement.getAttribute('data-clave-dest');
             var iv = buttonElement.getAttribute('data-iv');
             var nombre = buttonElement.getAttribute('data-nombre');
-            
             buttonElement.innerText = '⏳ Descifrando...';
-            
             var response = await fetch(url);
             var arrayBufferCifrado = await response.arrayBuffer();
             var arrayBufferDescifrado = await descifrarArchivo(arrayBufferCifrado, iv, claveMi, claveDest);
-            
             var blob = new Blob([arrayBufferDescifrado], { type: 'application/octet-stream' });
             var urlDescifrado = URL.createObjectURL(blob);
-            
             var a = document.createElement('a');
             a.href = urlDescifrado;
             a.download = nombre || 'archivo_descifrado';
@@ -1341,7 +1337,6 @@
             a.click();
             document.body.removeChild(a);
             setTimeout(function() { URL.revokeObjectURL(urlDescifrado); }, 100);
-            
             buttonElement.innerText = '✅ Descargado';
             console.log('✅ Archivo descargado y descifrado');
         } catch (error) {
@@ -1351,9 +1346,6 @@
         }
     }
 
-    // ============================================
-    // SELECCIÓN Y BORRADO
-    // ============================================
     function seleccionarModo() {
         modoSeleccion = true;
         mensajesSeleccionados = [];
@@ -1413,13 +1405,10 @@
         } catch (error) { alert('Error al limpiar: ' + error.message); }
     }
 
-    // ============================================
-    // MENÚS CONTEXTUALES
-    // ============================================
     function mostrarMenuMensaje(event, id) {
         event.preventDefault();
         var menu = document.getElementById('menuContextual');
-        menu.innerHTML = '<button onclick="copiarMensaje(\'' + id + '\')">📋 Copiar texto</button><button onclick="borrarMensajeIndividual(\'' + id + '\')" class="danger">️ Borrar mensaje</button><button onclick="cerrarMenus()">✕ Cerrar</button>';
+        menu.innerHTML = '<button onclick="copiarMensaje(\'' + id + '\')">📋 Copiar texto</button><button onclick="borrarMensajeIndividual(\'' + id + '\')" class="danger">🗑️ Borrar mensaje</button><button onclick="cerrarMenus()">✕ Cerrar</button>';
         menu.style.left = event.clientX + 'px';
         menu.style.top = event.clientY + 'px';
         menu.classList.remove('hidden');
@@ -1455,9 +1444,6 @@
         }
     });
 
-    // ============================================
-    // TIEMPO REAL
-    // ============================================
     function suscribirseAMensajes() {
         if (!clienteSupabase) return;
         cancelarSuscripcionMensajes();
@@ -1527,9 +1513,6 @@
         if (div) div.innerText = '';
     }
 
-    // ============================================
-    // INICIO
-    // ============================================
     window.addEventListener('DOMContentLoaded', async function() {
         generarPIN();
         await inicializarTodo();
