@@ -556,6 +556,70 @@ function generarPIN() {
 }
 
 // ============================================
+// DESCIFRADO VISUAL DE ARCHIVOS
+// ============================================
+
+async function descifrarYMostrarImagen(msgId, imgElement) {
+    try {
+        var iv = imgElement.getAttribute('data-iv');
+        var clave = imgElement.getAttribute('data-clave');
+        var url = imgElement.src;
+        
+        imgElement.style.opacity = '0.5';
+        imgElement.alt = 'Descifrando...';
+        
+        var response = await fetch(url);
+        var arrayBufferCifrado = await response.arrayBuffer();
+        var arrayBufferDescifrado = await descifrarArchivo(arrayBufferCifrado, iv, clave);
+        
+        var blob = new Blob([arrayBufferDescifrado], { type: 'image/*' });
+        var urlDescifrado = URL.createObjectURL(blob);
+        
+        imgElement.src = urlDescifrado;
+        imgElement.style.opacity = '1';
+        imgElement.onclick = function() { window.open(urlDescifrado); };
+        
+        console.log('✅ Imagen descifrada');
+    } catch (error) {
+        console.error('❌ Error descifrando imagen:', error);
+        imgElement.alt = 'Error al descifrar';
+        imgElement.style.opacity = '1';
+        alert('Error al descifrar imagen');
+    }
+}
+
+async function descifrarYReproducirVideo(videoElement) {
+    try {
+        var iv = videoElement.getAttribute('data-iv');
+        var clave = videoElement.getAttribute('data-clave');
+        var url = videoElement.getAttribute('data-src');
+        
+        videoElement.querySelector('source').src = '';
+        videoElement.controls = false;
+        
+        var response = await fetch(url);
+        var arrayBufferCifrado = await response.arrayBuffer();
+        var arrayBufferDescifrado = await descifrarArchivo(arrayBufferCifrado, iv, clave);
+        
+        var blob = new Blob([arrayBufferDescifrado], { type: 'video/*' });
+        var urlDescifrado = URL.createObjectURL(blob);
+        
+        videoElement.querySelector('source').src = urlDescifrado;
+        videoElement.controls = true;
+        videoElement.play();
+        
+        console.log('✅ Video descifrado');
+    } catch (error) {
+        console.error('❌ Error descifrando video:', error);
+        alert('Error al descifrar video');
+    }
+}
+
+async function descifrarYDescargarArchivo(url, claveCifradaBase64, ivBase64, nombreOriginal) {
+    await descargarYDescifrarArchivo(url, claveCifradaBase64, ivBase64, nombreOriginal, '');
+}
+    
+// ============================================
 // INICIALIZAR TODO
 // ============================================
 async function inicializarTodo() {
