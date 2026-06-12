@@ -475,875 +475,957 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
-    // ============================================
-    // CONFIGURACIÓN
-    // ============================================
-    var SUPABASE_URL = 'https://dksmoteiidjpymextrgj.supabase.co';
-    var SUPABASE_ANON_KEY = 'sb_publishable_HuXshjcD1Je934lVgBcJtw_5kFSuGzE';
-    
-    var miPIN = '';
-    var clienteSupabase = null;
-    var contactoActual = '';
-    var canalRealtime = null;
-    var canalEscribiendo = null;
-    var archivoSeleccionado = null;
-    var miClavePrivada = null;
-    var miClavePublica = null;
-    
-    var timeoutEscribiendo = null;
-    var estoyEscribiendo = false;
-    
-    // Modo selección
-    var modoSeleccion = false;
-    var mensajesSeleccionados = [];
-    
-    // Contador de mensajes no leídos por PIN
-    var mensajesNoLeidos = {};
+   // ============================================
+// CONFIGURACIÓN
+// ============================================
+var SUPABASE_URL = 'https://dksmoteiidjpymextrgj.supabase.co';
+var SUPABASE_ANON_KEY = 'sb_publishable_HuXshjcD1Je934lVgBcJtw_5kFSuGzE';
 
-    // ============================================
-    // NAVEGACIÓN
-    // ============================================
-    function mostrarInicio() {
-        cancelarSuscripciones();
-        document.getElementById('pantallaInicio').classList.remove('hidden');
-        document.getElementById('pantallaContactos').classList.add('hidden');
-        document.getElementById('pantallaChat').classList.add('hidden');
+var miPIN = '';
+var clienteSupabase = null;
+var contactoActual = '';
+var canalRealtime = null;
+var canalEscribiendo = null;
+var archivoSeleccionado = null;
+var miClavePrivada = null;
+var miClavePublica = null;
+
+var timeoutEscribiendo = null;
+var estoyEscribiendo = false;
+
+// Modo selección
+var modoSeleccion = false;
+var mensajesSeleccionados = [];
+
+// Contador de mensajes no leídos por PIN
+var mensajesNoLeidos = {};
+
+// ============================================
+// NAVEGACIÓN
+// ============================================
+function mostrarInicio() {
+    cancelarSuscripciones();
+    document.getElementById('pantallaInicio').classList.remove('hidden');
+    document.getElementById('pantallaContactos').classList.add('hidden');
+    document.getElementById('pantallaChat').classList.add('hidden');
+}
+
+function mostrarContactos() {
+    cancelarSuscripciones();
+    document.getElementById('pantallaInicio').classList.add('hidden');
+    document.getElementById('pantallaContactos').classList.remove('hidden');
+    document.getElementById('pantallaChat').classList.add('hidden');
+    cargarContactos();
+    cargarMensajesPendientes();
+}
+
+function mostrarChat(pinContacto) {
+    contactoActual = pinContacto;
+    document.getElementById('chatContactoPin').innerText = pinContacto;
+    document.getElementById('pantallaInicio').classList.add('hidden');
+    document.getElementById('pantallaContactos').classList.add('hidden');
+    document.getElementById('pantallaChat').classList.remove('hidden');
+    
+    // Resetear modo selección
+    modoSeleccion = false;
+    mensajesSeleccionados = [];
+    document.getElementById('barraSeleccion').classList.add('hidden');
+    
+    cargarMensajes();
+    suscribirseAMensajes();
+    suscribirseAEscribiendo();
+    marcarComoLeidos();
+}
+
+// ============================================
+// GENERAR PIN
+// ============================================
+function generarPIN() {
+    var pinGuardado = localStorage.getItem('chat_pin');
+    if (pinGuardado) {
+        miPIN = pinGuardado;
+    } else {
+        var bytes = new Uint8Array(4);
+        crypto.getRandomValues(bytes);
+        miPIN = Array.from(bytes, function(b) { 
+            return b.toString(16).padStart(2, '0'); 
+        }).join('').toUpperCase();
+        localStorage.setItem('chat_pin', miPIN);
     }
+    document.getElementById('miPin').innerText = miPIN;
+}
 
-    function mostrarContactos() {
-        cancelarSuscripciones();
-        document.getElementById('pantallaInicio').classList.add('hidden');
-        document.getElementById('pantallaContactos').classList.remove('hidden');
-        document.getElementById('pantallaChat').classList.add('hidden');
-        cargarContactos();
-        cargarMensajesPendientes();
+// ============================================
+// INICIALIZAR TODO
+// ============================================
+async function inicializarTodo() {
+    try {
+        if (typeof supabase === 'undefined') return false;
+        clienteSupabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        await inicializarClaves();
+        return true;
+    } catch (error) {
+        console.error('Error:', error);
+        return false;
     }
+}
 
-    function mostrarChat(pinContacto) {
-        contactoActual = pinContacto;
-        document.getElementById('chatContactoPin').innerText = pinContacto;
-        document.getElementById('pantallaInicio').classList.add('hidden');
-        document.getElementById('pantallaContactos').classList.add('hidden');
-        document.getElementById('pantallaChat').classList.remove('hidden');
+async function inicializarClaves() {
+    var claveGuardada = localStorage.getItem('clave_privada_' + miPIN);
+    if (claveGuardada) await cargarClaves();
+    else await generarClaves();
+}
+
+async function generarClaves() {
+    try {
+        var parClaves = await crypto.subtle.generateKey(
+            { name: "RSA-OAEP", modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: "SHA-256" },
+            true, ["encrypt", "decrypt"]
+        );
+        miClavePrivada = parClaves.privateKey;
+        miClavePublica = parClaves.publicKey;
         
-        // Resetear modo selección
-        modoSeleccion = false;
-        mensajesSeleccionados = [];
-        document.getElementById('barraSeleccion').classList.add('hidden');
-        
-        cargarMensajes();
-        suscribirseAMensajes();
-        suscribirseAEscribiendo();
-        marcarComoLeidos();
+        var pubExp = await crypto.subtle.exportKey("spki", miClavePublica);
+        var pubBase64 = btoa(String.fromCharCode.apply(null, new Uint8Array(pubExp)));
+        var privExp = await crypto.subtle.exportKey("pkcs8", miClavePrivada);
+        var privBase64 = btoa(String.fromCharCode.apply(null, new Uint8Array(privExp)));
+        localStorage.setItem('clave_privada_' + miPIN, privBase64);
+        await subirClavePublica(pubBase64);
+        console.log('✅ Claves generadas');
+    } catch (error) {
+        console.error('Error generando claves:', error);
     }
+}
 
-    // ============================================
-    // GENERAR PIN
-    // ============================================
-    function generarPIN() {
-        var pinGuardado = localStorage.getItem('chat_pin');
-        if (pinGuardado) {
-            miPIN = pinGuardado;
+async function cargarClaves() {
+    var privBase64 = localStorage.getItem('clave_privada_' + miPIN);
+    if (!privBase64) { await generarClaves(); return; }
+    try {
+        var privBuf = Uint8Array.from(atob(privBase64), c => c.charCodeAt(0));
+        miClavePrivada = await crypto.subtle.importKey("pkcs8", privBuf, { name: "RSA-OAEP", hash: "SHA-256" }, true, ["decrypt"]);
+        
+        var { data } = await clienteSupabase.from('usuarios').select('clave_publica').eq('pin', miPIN).single();
+        if (data && data.clave_publica) {
+            var pubBuf = Uint8Array.from(atob(data.clave_publica), c => c.charCodeAt(0));
+            miClavePublica = await crypto.subtle.importKey("spki", pubBuf, { name: "RSA-OAEP", hash: "SHA-256" }, true, ["encrypt"]);
+            console.log('✅ Claves cargadas');
         } else {
-            var bytes = new Uint8Array(4);
-            crypto.getRandomValues(bytes);
-            miPIN = Array.from(bytes, function(b) { 
-                return b.toString(16).padStart(2, '0'); 
-            }).join('').toUpperCase();
-            localStorage.setItem('chat_pin', miPIN);
-        }
-        document.getElementById('miPin').innerText = miPIN;
-    }
-
-    // ============================================
-    // INICIALIZAR TODO
-    // ============================================
-    async function inicializarTodo() {
-        try {
-            if (typeof supabase === 'undefined') return false;
-            clienteSupabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-            await inicializarClaves();
-            return true;
-        } catch (error) {
-            console.error('Error:', error);
-            return false;
-        }
-    }
-
-    async function inicializarClaves() {
-        var claveGuardada = localStorage.getItem('clave_privada_' + miPIN);
-        if (claveGuardada) await cargarClaves();
-        else await generarClaves();
-    }
-
-    async function generarClaves() {
-        try {
-            var parClaves = await crypto.subtle.generateKey(
-                { name: "RSA-OAEP", modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: "SHA-256" },
-                true, ["encrypt", "decrypt"]
-            );
-            miClavePrivada = parClaves.privateKey;
-            miClavePublica = parClaves.publicKey;
-            
-            var pubExp = await crypto.subtle.exportKey("spki", miClavePublica);
-            var pubBase64 = btoa(String.fromCharCode.apply(null, new Uint8Array(pubExp)));
-            var privExp = await crypto.subtle.exportKey("pkcs8", miClavePrivada);
-            var privBase64 = btoa(String.fromCharCode.apply(null, new Uint8Array(privExp)));
-            localStorage.setItem('clave_privada_' + miPIN, privBase64);
-            await subirClavePublica(pubBase64);
-            console.log('✅ Claves generadas');
-        } catch (error) {
-            console.error('Error generando claves:', error);
-        }
-    }
-
-    async function cargarClaves() {
-        var privBase64 = localStorage.getItem('clave_privada_' + miPIN);
-        if (!privBase64) { await generarClaves(); return; }
-        try {
-            var privBuf = Uint8Array.from(atob(privBase64), c => c.charCodeAt(0));
-            miClavePrivada = await crypto.subtle.importKey("pkcs8", privBuf, { name: "RSA-OAEP", hash: "SHA-256" }, true, ["decrypt"]);
-            
-            var { data } = await clienteSupabase.from('usuarios').select('clave_publica').eq('pin', miPIN).single();
-            if (data && data.clave_publica) {
-                var pubBuf = Uint8Array.from(atob(data.clave_publica), c => c.charCodeAt(0));
-                miClavePublica = await crypto.subtle.importKey("spki", pubBuf, { name: "RSA-OAEP", hash: "SHA-256" }, true, ["encrypt"]);
-                console.log('✅ Claves cargadas');
-            } else {
-                await generarClaves();
-            }
-        } catch (error) {
-            console.error('Error cargando claves:', error);
             await generarClaves();
         }
+    } catch (error) {
+        console.error('Error cargando claves:', error);
+        await generarClaves();
     }
+}
 
-    async function subirClavePublica(pubBase64) {
-        if (!clienteSupabase) return;
-        var { error } = await clienteSupabase.from('usuarios').upsert({ pin: miPIN, clave_publica: pubBase64 });
-        if (error) console.error('Error subiendo clave:', error);
-    }
+async function subirClavePublica(pubBase64) {
+    if (!clienteSupabase) return;
+    var { error } = await clienteSupabase.from('usuarios').upsert({ pin: miPIN, clave_publica: pubBase64 });
+    if (error) console.error('Error subiendo clave:', error);
+}
 
-    async function obtenerClavePublica(pin) {
+async function obtenerClavePublica(pin) {
+    try {
+        var { data, error } = await clienteSupabase.from('usuarios').select('clave_publica').eq('pin', pin).single();
+        if (error || !data || !data.clave_publica) return null;
+        var buf = Uint8Array.from(atob(data.clave_publica), c => c.charCodeAt(0));
+        return await crypto.subtle.importKey("spki", buf, { name: "RSA-OAEP", hash: "SHA-256" }, true, ["encrypt"]);
+    } catch (error) { return null; }
+}
+
+// ============================================
+// CIFRADO HÍBRIDO (AES-GCM + RSA-OAEP)
+// ============================================
+async function generarClaveAES() {
+    return await crypto.subtle.generateKey({ name: "AES-GCM", length: 256 }, true, ["encrypt", "decrypt"]);
+}
+
+async function cifrarConAES(texto, claveAES) {
+    var encoder = new TextEncoder();
+    var iv = crypto.getRandomValues(new Uint8Array(12));
+    var cifrado = await crypto.subtle.encrypt({ name: "AES-GCM", iv: iv }, claveAES, encoder.encode(texto));
+    return {
+        iv: btoa(String.fromCharCode.apply(null, iv)),
+        datos: btoa(String.fromCharCode.apply(null, new Uint8Array(cifrado)))
+    };
+}
+
+async function descifrarConAES(ivBase64, datosBase64, claveAES) {
+    var iv = Uint8Array.from(atob(ivBase64), c => c.charCodeAt(0));
+    var datos = Uint8Array.from(atob(datosBase64), c => c.charCodeAt(0));
+    var descifrado = await crypto.subtle.decrypt({ name: "AES-GCM", iv: iv }, claveAES, datos);
+    return new TextDecoder().decode(descifrado);
+}
+
+async function exportarClaveAES(clave) {
+    var raw = await crypto.subtle.exportKey("raw", clave);
+    return btoa(String.fromCharCode.apply(null, new Uint8Array(raw)));
+}
+
+async function importarClaveAES(base64) {
+    var raw = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
+    return await crypto.subtle.importKey("raw", raw, { name: "AES-GCM" }, true, ["encrypt", "decrypt"]);
+}
+
+async function cifrarClaveConRSA(claveAESBase64, clavePublicaRSA) {
+    var encoder = new TextEncoder();
+    var cifrado = await crypto.subtle.encrypt({ name: "RSA-OAEP" }, clavePublicaRSA, encoder.encode(claveAESBase64));
+    return btoa(String.fromCharCode.apply(null, new Uint8Array(cifrado)));
+}
+
+async function descifrarClaveConRSA(claveCifradaBase64, clavePrivadaRSA) {
+    var cifrado = Uint8Array.from(atob(claveCifradaBase64), c => c.charCodeAt(0));
+    var descifrado = await crypto.subtle.decrypt({ name: "RSA-OAEP" }, clavePrivadaRSA, cifrado);
+    return new TextDecoder().decode(descifrado);
+}
+
+async function cifrarMensaje(texto, clavePublicaDestinatario) {
+    var claveAES = await generarClaveAES();
+    var claveAESBase64 = await exportarClaveAES(claveAES);
+    var { iv, datos } = await cifrarConAES(texto, claveAES);
+    var claveParaDestinatario = await cifrarClaveConRSA(claveAESBase64, clavePublicaDestinatario);
+    var claveParaMi = await cifrarClaveConRSA(claveAESBase64, miClavePublica);
+    return iv + '|' + datos + '|' + claveParaDestinatario + '|' + claveParaMi;
+}
+
+async function descifrarMensaje(cifradoBase64) {
+    if (!cifradoBase64 || cifradoBase64.length === 0) return '';
+    if (!cifradoBase64.includes('|')) {
+        var esBase64 = /^[A-Za-z0-9+/]*={0,2}$/.test(cifradoBase64) && (cifradoBase64.length % 4 === 0);
+        if (!esBase64) return cifradoBase64;
         try {
-            var { data, error } = await clienteSupabase.from('usuarios').select('clave_publica').eq('pin', pin).single();
-            if (error || !data || !data.clave_publica) return null;
-            var buf = Uint8Array.from(atob(data.clave_publica), c => c.charCodeAt(0));
-            return await crypto.subtle.importKey("spki", buf, { name: "RSA-OAEP", hash: "SHA-256" }, true, ["encrypt"]);
-        } catch (error) { return null; }
+            var buf = Uint8Array.from(atob(cifradoBase64), c => c.charCodeAt(0));
+            var desc = await crypto.subtle.decrypt({ name: "RSA-OAEP" }, miClavePrivada, buf);
+            return new TextDecoder().decode(desc);
+        } catch (e) { return cifradoBase64; }
     }
-
-    // ============================================
-    // CIFRADO HÍBRIDO (AES-GCM + RSA-OAEP)
-    // ============================================
-    async function generarClaveAES() {
-        return await crypto.subtle.generateKey({ name: "AES-GCM", length: 256 }, true, ["encrypt", "decrypt"]);
+    try {
+        var partes = cifradoBase64.split('|');
+        if (partes.length !== 4) return '[Formato inválido]';
+        var iv = partes[0], datos = partes[1], claveParaDestinatario = partes[2], claveParaMi = partes[3];
+        var claveAESBase64 = null;
+        try { claveAESBase64 = await descifrarClaveConRSA(claveParaMi, miClavePrivada); }
+        catch (e) { try { claveAESBase64 = await descifrarClaveConRSA(claveParaDestinatario, miClavePrivada); } catch (e2) { return '[No se puede descifrar]'; } }
+        var claveAES = await importarClaveAES(claveAESBase64);
+        return await descifrarConAES(iv, datos, claveAES);
+    } catch (error) {
+        console.error('Error descifrando:', error);
+        return '[Error al descifrar]';
     }
+}
 
-    async function cifrarConAES(texto, claveAES) {
-        var encoder = new TextEncoder();
-        var iv = crypto.getRandomValues(new Uint8Array(12));
-        var cifrado = await crypto.subtle.encrypt({ name: "AES-GCM", iv: iv }, claveAES, encoder.encode(texto));
-        return {
-            iv: btoa(String.fromCharCode.apply(null, iv)),
-            datos: btoa(String.fromCharCode.apply(null, new Uint8Array(cifrado)))
-        };
-    }
-
-    async function descifrarConAES(ivBase64, datosBase64, claveAES) {
-        var iv = Uint8Array.from(atob(ivBase64), c => c.charCodeAt(0));
-        var datos = Uint8Array.from(atob(datosBase64), c => c.charCodeAt(0));
-        var descifrado = await crypto.subtle.decrypt({ name: "AES-GCM", iv: iv }, claveAES, datos);
-        return new TextDecoder().decode(descifrado);
-    }
-
-    async function exportarClaveAES(clave) {
-        var raw = await crypto.subtle.exportKey("raw", clave);
-        return btoa(String.fromCharCode.apply(null, new Uint8Array(raw)));
-    }
-
-    async function importarClaveAES(base64) {
-        var raw = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
-        return await crypto.subtle.importKey("raw", raw, { name: "AES-GCM" }, true, ["encrypt", "decrypt"]);
-    }
-
-    async function cifrarClaveConRSA(claveAESBase64, clavePublicaRSA) {
-        var encoder = new TextEncoder();
-        var cifrado = await crypto.subtle.encrypt({ name: "RSA-OAEP" }, clavePublicaRSA, encoder.encode(claveAESBase64));
-        return btoa(String.fromCharCode.apply(null, new Uint8Array(cifrado)));
-    }
-
-    async function descifrarClaveConRSA(claveCifradaBase64, clavePrivadaRSA) {
-        var cifrado = Uint8Array.from(atob(claveCifradaBase64), c => c.charCodeAt(0));
-        var descifrado = await crypto.subtle.decrypt({ name: "RSA-OAEP" }, clavePrivadaRSA, cifrado);
-        return new TextDecoder().decode(descifrado);
-    }
-
-    async function cifrarMensaje(texto, clavePublicaDestinatario) {
-        var claveAES = await generarClaveAES();
-        var claveAESBase64 = await exportarClaveAES(claveAES);
-        var { iv, datos } = await cifrarConAES(texto, claveAES);
-        var claveParaDestinatario = await cifrarClaveConRSA(claveAESBase64, clavePublicaDestinatario);
-        var claveParaMi = await cifrarClaveConRSA(claveAESBase64, miClavePublica);
-        return iv + '|' + datos + '|' + claveParaDestinatario + '|' + claveParaMi;
-    }
-
-    async function descifrarMensaje(cifradoBase64) {
-        if (!cifradoBase64 || cifradoBase64.length === 0) return '';
-        if (!cifradoBase64.includes('|')) {
-            var esBase64 = /^[A-Za-z0-9+/]*={0,2}$/.test(cifradoBase64) && (cifradoBase64.length % 4 === 0);
-            if (!esBase64) return cifradoBase64;
-            try {
-                var buf = Uint8Array.from(atob(cifradoBase64), c => c.charCodeAt(0));
-                var desc = await crypto.subtle.decrypt({ name: "RSA-OAEP" }, miClavePrivada, buf);
-                return new TextDecoder().decode(desc);
-            } catch (e) { return cifradoBase64; }
-        }
-        try {
-            var partes = cifradoBase64.split('|');
-            if (partes.length !== 4) return '[Formato inválido]';
-            var iv = partes[0], datos = partes[1], claveParaDestinatario = partes[2], claveParaMi = partes[3];
-            var claveAESBase64 = null;
-            try { claveAESBase64 = await descifrarClaveConRSA(claveParaMi, miClavePrivada); }
-            catch (e) { try { claveAESBase64 = await descifrarClaveConRSA(claveParaDestinatario, miClavePrivada); } catch (e2) { return '[No se puede descifrar]'; } }
-            var claveAES = await importarClaveAES(claveAESBase64);
-            return await descifrarConAES(iv, datos, claveAES);
-        } catch (error) {
-            console.error('Error descifrando:', error);
-            return '[Error al descifrar]';
-        }
-    }
-
-    // ============================================
-    // VERIFICAR ESTADO
-    // ============================================
-    async function verificarEstado() {
-        var estadoDiv = document.getElementById('estadoTexto');
-        var form = document.getElementById('formActivacion');
-        var chat = document.getElementById('panelChat');
-        if (!clienteSupabase) { estadoDiv.innerText = '⚠️ Sin conexión'; form.classList.remove('hidden'); return; }
-        try {
-            var { data } = await clienteSupabase.from('usuarios').select('fecha_expiracion').eq('pin', miPIN).maybeSingle();
-            if (data && data.fecha_expiracion && new Date(data.fecha_expiracion) > new Date()) {
-                estadoDiv.className = 'status active';
-                estadoDiv.innerText = '✅ Servicio Activo';
-                form.classList.add('hidden');
-                chat.classList.remove('hidden');
-                document.getElementById('fechaVencimiento').innerText = new Date(data.fecha_expiracion).toLocaleDateString('es-ES');
-                if ('Notification' in window && Notification.permission === 'default') {
-                    document.getElementById('notifBanner').classList.remove('hidden');
-                }
-                return;
+// ============================================
+// VERIFICAR ESTADO
+// ============================================
+async function verificarEstado() {
+    var estadoDiv = document.getElementById('estadoTexto');
+    var form = document.getElementById('formActivacion');
+    var chat = document.getElementById('panelChat');
+    if (!clienteSupabase) { estadoDiv.innerText = '⚠️ Sin conexión'; form.classList.remove('hidden'); return; }
+    try {
+        var { data } = await clienteSupabase.from('usuarios').select('fecha_expiracion').eq('pin', miPIN).maybeSingle();
+        if (data && data.fecha_expiracion && new Date(data.fecha_expiracion) > new Date()) {
+            estadoDiv.className = 'status active';
+            estadoDiv.innerText = '✅ Servicio Activo';
+            form.classList.add('hidden');
+            chat.classList.remove('hidden');
+            document.getElementById('fechaVencimiento').innerText = new Date(data.fecha_expiracion).toLocaleDateString('es-ES');
+            if ('Notification' in window && Notification.permission === 'default') {
+                document.getElementById('notifBanner').classList.remove('hidden');
             }
-            estadoDiv.className = 'status expired';
-            estadoDiv.innerText = '️ Servicio Inactivo';
-            form.classList.remove('hidden');
-            chat.classList.add('hidden');
-        } catch (error) {
-            estadoDiv.innerText = '❌ Error';
-            form.classList.remove('hidden');
+            return;
         }
+        estadoDiv.className = 'status expired';
+        estadoDiv.innerText = '⚠️ Servicio Inactivo';
+        form.classList.remove('hidden');
+        chat.classList.add('hidden');
+    } catch (error) {
+        estadoDiv.innerText = '❌ Error';
+        form.classList.remove('hidden');
     }
+}
 
-    async function activar() {
-        var codigo = document.getElementById('codigoInput').value.trim().toUpperCase();
-        if (codigo.length < 5) { alert('Código inválido'); return; }
-        var btn = document.getElementById('btnActivar');
-        btn.disabled = true; btn.innerText = 'Procesando...';
-        try {
-            var resultado = await clienteSupabase.functions.invoke('activar-servicio', { body: { pin: miPIN, codigo: codigo } });
-            if (resultado.error) alert('Error: ' + resultado.error.message);
-            else if (resultado.data && resultado.data.exito) {
-                alert('¡Éxito! Activo hasta: ' + resultado.data.nueva_fecha);
-                document.getElementById('codigoInput').value = '';
-                verificarEstado();
-            } else alert('Error: ' + (resultado.data ? resultado.data.mensaje : 'Desconocido'));
-        } catch (error) { alert('Error: ' + error.message); }
-        finally { btn.disabled = false; btn.innerText = 'Activar'; }
+async function activar() {
+    var codigo = document.getElementById('codigoInput').value.trim().toUpperCase();
+    if (codigo.length < 5) { alert('Código inválido'); return; }
+    var btn = document.getElementById('btnActivar');
+    btn.disabled = true; btn.innerText = 'Procesando...';
+    try {
+        var resultado = await clienteSupabase.functions.invoke('activar-servicio', { body: { pin: miPIN, codigo: codigo } });
+        if (resultado.error) alert('Error: ' + resultado.error.message);
+        else if (resultado.data && resultado.data.exito) {
+            alert('¡Éxito! Activo hasta: ' + resultado.data.nueva_fecha);
+            document.getElementById('codigoInput').value = '';
+            verificarEstado();
+        } else alert('Error: ' + (resultado.data ? resultado.data.mensaje : 'Desconocido'));
+    } catch (error) { alert('Error: ' + error.message); }
+    finally { btn.disabled = false; btn.innerText = 'Activar'; }
+}
+
+function copiarPIN() {
+    navigator.clipboard.writeText(miPIN).then(() => alert('PIN copiado: ' + miPIN));
+}
+
+// ============================================
+// NOTIFICACIONES MEJORADAS
+// ============================================
+async function pedirPermisoNotificaciones() {
+    if (!('Notification' in window)) { alert('Tu navegador no soporta notificaciones'); return; }
+    var permiso = await Notification.requestPermission();
+    if (permiso === 'granted') {
+        document.getElementById('notifBanner').classList.add('hidden');
+        new Notification('✅ Notificaciones activadas', { body: 'Recibirás alertas de nuevos mensajes' });
+    } else {
+        alert('Permiso denegado');
     }
+}
 
-    function copiarPIN() {
-        navigator.clipboard.writeText(miPIN).then(() => alert('PIN copiado: ' + miPIN));
-    }
-
-    // ============================================
-    // NOTIFICACIONES (MEJORADO)
-    // ============================================
-    async function pedirPermisoNotificaciones() {
-        if (!('Notification' in window)) { alert('Tu navegador no soporta notificaciones'); return; }
-        var permiso = await Notification.requestPermission();
-        if (permiso === 'granted') {
-            document.getElementById('notifBanner').classList.add('hidden');
-            new Notification('✅ Notificaciones activadas', { body: 'Recibirás alertas de nuevos mensajes' });
-        } else {
-            alert('Permiso denegado');
-        }
-    }
-
-    function mostrarNotificacion(titulo, cuerpo) {
-        if (!('Notification' in window)) return;
-        if (Notification.permission !== 'granted') return;
-        // Mostrar siempre que llegue un mensaje nuevo, incluso si está en la misma pestaña
+function mostrarNotificacion(titulo, cuerpo) {
+    console.log('🔔 Intentando notificar:', titulo, cuerpo);
+    
+    // 1. Sonido
+    reproducirSonido();
+    
+    // 2. Notificación del navegador (si hay permiso)
+    if ('Notification' in window && Notification.permission === 'granted') {
         try {
             new Notification(titulo, { 
                 body: cuerpo, 
                 tag: 'chat-' + Date.now(), 
-                requireInteraction: false,
+                requireInteraction: true,
                 silent: false
             });
-            // Sonido de notificación
-            reproducirSonido();
-        } catch (e) { console.error('Error notificación:', e); }
+            console.log('✅ Notificación del navegador enviada');
+        } catch (e) { 
+            console.error('Error notificación:', e); 
+        }
     }
-
-    function reproducirSonido() {
-        try {
-            var audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            var oscillator = audioCtx.createOscillator();
-            var gainNode = audioCtx.createGain();
-            oscillator.connect(gainNode);
-            gainNode.connect(audioCtx.destination);
-            oscillator.frequency.value = 800;
-            oscillator.type = 'sine';
-            gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime);
-            gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
-            oscillator.start(audioCtx.currentTime);
-            oscillator.stop(audioCtx.currentTime + 0.3);
-        } catch (e) { console.log('No se pudo reproducir sonido'); }
-    }
-
-    // ============================================
-    // CONTACTOS
-    // ============================================
-    function getContactos() {
-        var c = localStorage.getItem('contactos_' + miPIN);
-        return c ? JSON.parse(c) : [];
-    }
-    function guardarContactos(c) { localStorage.setItem('contactos_' + miPIN, JSON.stringify(c)); }
     
-    function agregarContacto() {
-        var pin = document.getElementById('nuevoContactoPin').value.trim().toUpperCase();
-        if (pin.length !== 8) { alert('El PIN debe tener 8 caracteres'); return; }
-        if (pin === miPIN) { alert('No puedes agregarte a ti mismo'); return; }
-        var contactos = getContactos();
-        if (contactos.includes(pin)) { alert('Este contacto ya existe'); return; }
-        contactos.push(pin);
-        guardarContactos(contactos);
-        document.getElementById('nuevoContactoPin').value = '';
-        cargarContactos();
-    }
+    // 3. Alerta visual SIEMPRE
+    mostrarAlertaVisual(titulo, cuerpo);
+}
 
-    function cargarContactos() {
-        var contactos = getContactos();
-        var cont = document.getElementById('listaContactos');
-        if (contactos.length === 0) {
-            cont.innerHTML = '<p style="color: #888; text-align: center; padding: 20px;">No tienes contactos aún</p>';
+function mostrarAlertaVisual(titulo, cuerpo) {
+    // Crear banner temporal en la parte superior
+    var banner = document.createElement('div');
+    banner.style.cssText = `
+        position: fixed;
+        top: 10px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: linear-gradient(135deg, #00ff88, #007aff);
+        color: #000;
+        padding: 14px 20px;
+        border-radius: 12px;
+        box-shadow: 0 8px 30px rgba(0,0,0,0.5);
+        z-index: 10000;
+        font-weight: bold;
+        font-size: 14px;
+        max-width: 90%;
+        text-align: center;
+        animation: slideDown 0.3s ease-out;
+    `;
+    banner.innerHTML = '<div style="font-size: 12px; opacity: 0.8;">' + titulo + '</div>' +
+                       '<div>' + cuerpo + '</div>';
+    
+    document.body.appendChild(banner);
+    
+    // Remover después de 4 segundos
+    setTimeout(function() {
+        banner.style.animation = 'slideUp 0.3s ease-out';
+        setTimeout(function() { banner.remove(); }, 300);
+    }, 4000);
+}
+
+// Agregar animaciones CSS
+var styleAnimaciones = document.createElement('style');
+styleAnimaciones.textContent = `
+    @keyframes slideDown {
+        from { transform: translate(-50%, -100px); opacity: 0; }
+        to { transform: translate(-50%, 0); opacity: 1; }
+    }
+    @keyframes slideUp {
+        from { transform: translate(-50%, 0); opacity: 1; }
+        to { transform: translate(-50%, -100px); opacity: 0; }
+    }
+`;
+if (!document.querySelector('style[data-animaciones]')) {
+    styleAnimaciones.setAttribute('data-animaciones', 'true');
+    document.head.appendChild(styleAnimaciones);
+}
+
+function reproducirSonido() {
+    try {
+        var audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        var oscillator = audioCtx.createOscillator();
+        var gainNode = audioCtx.createGain();
+        
+        oscillator.connect(gainNode);
+        gainNode.connect(audioCtx.destination);
+        
+        // Sonido tipo "ding" (más agradable)
+        oscillator.frequency.setValueAtTime(523.25, audioCtx.currentTime); // Do5
+        oscillator.frequency.exponentialRampToValueAtTime(1046.5, audioCtx.currentTime + 0.1); // Do6
+        
+        gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.5);
+        
+        oscillator.start(audioCtx.currentTime);
+        oscillator.stop(audioCtx.currentTime + 0.5);
+        
+        console.log('🔊 Sonido reproducido');
+    } catch (e) { 
+        console.log('⚠️ No se pudo reproducir sonido:', e.message);
+        // Fallback: vibración (móvil)
+        if (navigator.vibrate) {
+            navigator.vibrate([200, 100, 200]);
+        }
+    }
+}
+
+// Inicializar audio con primera interacción del usuario
+document.addEventListener('click', function initAudio() {
+    try {
+        var audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        audioCtx.resume();
+        console.log('✅ AudioContext activado');
+        document.removeEventListener('click', initAudio);
+    } catch (e) {}
+}, { once: true });
+
+// ============================================
+// CONTACTOS
+// ============================================
+function getContactos() {
+    var c = localStorage.getItem('contactos_' + miPIN);
+    return c ? JSON.parse(c) : [];
+}
+function guardarContactos(c) { localStorage.setItem('contactos_' + miPIN, JSON.stringify(c)); }
+
+function agregarContacto() {
+    var pin = document.getElementById('nuevoContactoPin').value.trim().toUpperCase();
+    if (pin.length !== 8) { alert('El PIN debe tener 8 caracteres'); return; }
+    if (pin === miPIN) { alert('No puedes agregarte a ti mismo'); return; }
+    var contactos = getContactos();
+    if (contactos.includes(pin)) { alert('Este contacto ya existe'); return; }
+    contactos.push(pin);
+    guardarContactos(contactos);
+    document.getElementById('nuevoContactoPin').value = '';
+    cargarContactos();
+}
+
+function cargarContactos() {
+    var contactos = getContactos();
+    var cont = document.getElementById('listaContactos');
+    if (contactos.length === 0) {
+        cont.innerHTML = '<p style="color: #888; text-align: center; padding: 20px;">No tienes contactos aún</p>';
+        return;
+    }
+    cont.innerHTML = contactos.map(function(pin) {
+        var badge = mensajesNoLeidos[pin] ? '<span class="badge">' + mensajesNoLeidos[pin] + '</span>' : '';
+        return '<div class="contacto-item" onclick="mostrarChat(\'' + pin + '\')">' +
+               '<span class="contacto-pin">' + pin + '</span>' +
+               '<div style="display: flex; align-items: center; gap: 8px;">' + badge + '<span style="color: #888;">💬 →</span></div>' +
+               '</div>';
+    }).join('');
+}
+
+// ============================================
+// MENSAJES PENDIENTES (de PINs no guardados)
+// ============================================
+async function cargarMensajesPendientes() {
+    var contactos = getContactos();
+    try {
+        var { data, error } = await clienteSupabase
+            .from('mensajes')
+            .select('pin_remitente, leido')
+            .eq('pin_destinatario', miPIN)
+            .eq('leido', false);
+        
+        if (error || !data) return;
+        
+        var pendientes = {};
+        data.forEach(function(msg) {
+            if (!contactos.includes(msg.pin_remitente)) {
+                pendientes[msg.pin_remitente] = (pendientes[msg.pin_remitente] || 0) + 1;
+            }
+        });
+        
+        var cont = document.getElementById('listaPendientes');
+        var div = document.getElementById('mensajesPendientes');
+        
+        if (Object.keys(pendientes).length === 0) {
+            div.classList.add('hidden');
             return;
         }
-        cont.innerHTML = contactos.map(function(pin) {
-            var badge = mensajesNoLeidos[pin] ? '<span class="badge">' + mensajesNoLeidos[pin] + '</span>' : '';
-            return '<div class="contacto-item" onclick="mostrarChat(\'' + pin + '\')">' +
+        
+        div.classList.remove('hidden');
+        cont.innerHTML = Object.keys(pendientes).map(function(pin) {
+            return '<div class="contacto-item" onclick="agregarYAbrir(\'' + pin + '\')">' +
                    '<span class="contacto-pin">' + pin + '</span>' +
-                   '<div style="display: flex; align-items: center; gap: 8px;">' + badge + '<span style="color: #888;">💬 →</span></div>' +
+                   '<span class="badge">' + pendientes[pin] + ' nuevo' + (pendientes[pin] > 1 ? 's' : '') + '</span>' +
                    '</div>';
         }).join('');
-    }
+    } catch (error) { console.error('Error cargando pendientes:', error); }
+}
 
-    // ============================================
-    // MENSAJES PENDIENTES (de PINs no guardados)
-    // ============================================
-    async function cargarMensajesPendientes() {
+function agregarYAbrir(pin) {
+    if (confirm('¿Agregar ' + pin + ' a tus contactos y abrir el chat?')) {
         var contactos = getContactos();
-        try {
-            // Buscar mensajes de remitentes que NO están en mis contactos
-            var { data, error } = await clienteSupabase
-                .from('mensajes')
-                .select('pin_remitente, leido')
-                .eq('pin_destinatario', miPIN)
-                .eq('leido', false);
-            
-            if (error || !data) return;
-            
-            // Filtrar solo los de PINs no guardados
-            var pendientes = {};
-            data.forEach(function(msg) {
-                if (!contactos.includes(msg.pin_remitente)) {
-                    pendientes[msg.pin_remitente] = (pendientes[msg.pin_remitente] || 0) + 1;
-                }
-            });
-            
-            var cont = document.getElementById('listaPendientes');
-            var div = document.getElementById('mensajesPendientes');
-            
-            if (Object.keys(pendientes).length === 0) {
-                div.classList.add('hidden');
-                return;
-            }
-            
-            div.classList.remove('hidden');
-            cont.innerHTML = Object.keys(pendientes).map(function(pin) {
-                return '<div class="contacto-item" onclick="agregarYAbrir(\'' + pin + '\')">' +
-                       '<span class="contacto-pin">' + pin + '</span>' +
-                       '<span class="badge">' + pendientes[pin] + ' nuevo' + (pendientes[pin] > 1 ? 's' : '') + '</span>' +
-                       '</div>';
-            }).join('');
-        } catch (error) { console.error('Error cargando pendientes:', error); }
-    }
-
-    function agregarYAbrir(pin) {
-        if (confirm('¿Agregar ' + pin + ' a tus contactos y abrir el chat?')) {
-            var contactos = getContactos();
-            if (!contactos.includes(pin)) {
-                contactos.push(pin);
-                guardarContactos(contactos);
-            }
-            mostrarChat(pin);
+        if (!contactos.includes(pin)) {
+            contactos.push(pin);
+            guardarContactos(contactos);
         }
+        mostrarChat(pin);
     }
+}
 
-    // ============================================
-    // ARCHIVOS
-    // ============================================
-    document.getElementById('archivoInput').addEventListener('change', function(e) {
-        var file = e.target.files[0];
-        if (!file) return;
-        if (file.size > 50 * 1024 * 1024) { alert('Máximo 50 MB'); return; }
-        archivoSeleccionado = file;
-        mostrarPreviewArchivo(file);
-    });
+// ============================================
+// ARCHIVOS
+// ============================================
+document.getElementById('archivoInput').addEventListener('change', function(e) {
+    var file = e.target.files[0];
+    if (!file) return;
+    if (file.size > 50 * 1024 * 1024) { alert('Máximo 50 MB'); return; }
+    archivoSeleccionado = file;
+    mostrarPreviewArchivo(file);
+});
 
-    function mostrarPreviewArchivo(file) {
-        document.getElementById('archivoNombre').innerText = file.name + ' (' + formatBytes(file.size) + ')';
-        document.getElementById('archivoContenido').innerHTML = '';
-        var tipo = file.type.split('/')[0];
-        if (tipo === 'image') {
-            var reader = new FileReader();
-            reader.onload = function(e) {
-                var img = document.createElement('img');
-                img.src = e.target.result;
-                document.getElementById('archivoContenido').appendChild(img);
-            };
-            reader.readAsDataURL(file);
-        }
-        document.getElementById('archivoPreview').classList.remove('hidden');
+function mostrarPreviewArchivo(file) {
+    document.getElementById('archivoNombre').innerText = file.name + ' (' + formatBytes(file.size) + ')';
+    document.getElementById('archivoContenido').innerHTML = '';
+    var tipo = file.type.split('/')[0];
+    if (tipo === 'image') {
+        var reader = new FileReader();
+        reader.onload = function(e) {
+            var img = document.createElement('img');
+            img.src = e.target.result;
+            document.getElementById('archivoContenido').appendChild(img);
+        };
+        reader.readAsDataURL(file);
     }
+    document.getElementById('archivoPreview').classList.remove('hidden');
+}
 
-    function cancelarArchivo() {
-        archivoSeleccionado = null;
-        document.getElementById('archivoInput').value = '';
-        document.getElementById('archivoPreview').classList.add('hidden');
-        document.getElementById('archivoContenido').innerHTML = '';
-        document.getElementById('archivoProgressBar').style.width = '0%';
-    }
+function cancelarArchivo() {
+    archivoSeleccionado = null;
+    document.getElementById('archivoInput').value = '';
+    document.getElementById('archivoPreview').classList.add('hidden');
+    document.getElementById('archivoContenido').innerHTML = '';
+    document.getElementById('archivoProgressBar').style.width = '0%';
+}
 
-    function formatBytes(bytes) {
-        if (bytes === 0) return '0 Bytes';
-        var k = 1024, sizes = ['Bytes', 'KB', 'MB', 'GB'];
-        var i = Math.floor(Math.log(bytes) / Math.log(k));
-        return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
-    }
+function formatBytes(bytes) {
+    if (bytes === 0) return '0 Bytes';
+    var k = 1024, sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    var i = Math.floor(Math.log(bytes) / Math.log(k));
+    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+}
 
-    async function subirArchivo(file, pinDest) {
-        var ts = Date.now();
-        var ext = file.name.split('.').pop();
-        var fileName = miPIN + '_' + pinDest + '_' + ts + '.' + ext;
-        var { data, error } = await clienteSupabase.storage.from('chat-files').upload(fileName, file, { cacheControl: '3600', upsert: false, contentType: file.type });
-        if (error) throw error;
-        var { data: urlData } = await clienteSupabase.storage.from('chat-files').createSignedUrl(fileName, 60 * 60 * 24 * 30);
-        if (!urlData || !urlData.signedUrl) throw new Error('URL no generada');
-        return { url: urlData.signedUrl, path: data.path, nombre: file.name, tamaño: file.size, tipo: file.type };
-    }
+async function subirArchivo(file, pinDest) {
+    var ts = Date.now();
+    var ext = file.name.split('.').pop();
+    var fileName = miPIN + '_' + pinDest + '_' + ts + '.' + ext;
+    var { data, error } = await clienteSupabase.storage.from('chat-files').upload(fileName, file, { cacheControl: '3600', upsert: false, contentType: file.type });
+    if (error) throw error;
+    var { data: urlData } = await clienteSupabase.storage.from('chat-files').createSignedUrl(fileName, 60 * 60 * 24 * 30);
+    if (!urlData || !urlData.signedUrl) throw new Error('URL no generada');
+    return { url: urlData.signedUrl, path: data.path, nombre: file.name, tamaño: file.size, tipo: file.type };
+}
 
-    // ============================================
-    // INDICADOR "ESCRIBIENDO..."
-    // ============================================
-    function onEscribiendo() {
-        if (!contactoActual || !clienteSupabase) return;
-        if (!estoyEscribiendo) { estoyEscribiendo = true; actualizarEstadoEscribiendo(true); }
-        clearTimeout(timeoutEscribiendo);
-        timeoutEscribiendo = setTimeout(function() { estoyEscribiendo = false; actualizarEstadoEscribiendo(false); }, 2000);
-    }
+// ============================================
+// INDICADOR "ESCRIBIENDO..."
+// ============================================
+function onEscribiendo() {
+    if (!contactoActual || !clienteSupabase) return;
+    if (!estoyEscribiendo) { estoyEscribiendo = true; actualizarEstadoEscribiendo(true); }
+    clearTimeout(timeoutEscribiendo);
+    timeoutEscribiendo = setTimeout(function() { estoyEscribiendo = false; actualizarEstadoEscribiendo(false); }, 2000);
+}
 
-    async function actualizarEstadoEscribiendo(escribiendo) {
-        try {
-            await clienteSupabase.from('escribiendo').upsert({
-                pin_remitente: miPIN, pin_destinatario: contactoActual,
-                escribiendo: escribiendo, actualizado_en: new Date().toISOString()
-            });
-        } catch (error) { console.error('Error escribiendo:', error); }
-    }
+async function actualizarEstadoEscribiendo(escribiendo) {
+    try {
+        await clienteSupabase.from('escribiendo').upsert({
+            pin_remitente: miPIN, pin_destinatario: contactoActual,
+            escribiendo: escribiendo, actualizado_en: new Date().toISOString()
+        });
+    } catch (error) { console.error('Error escribiendo:', error); }
+}
 
-    function suscribirseAEscribiendo() {
-        if (!clienteSupabase) return;
-        if (canalEscribiendo) clienteSupabase.removeChannel(canalEscribiendo);
-        canalEscribiendo = clienteSupabase.channel('escribiendo_' + miPIN)
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'escribiendo', filter: 'pin_destinatario=eq.' + miPIN }, function(payload) {
-                if (payload.new && payload.new.pin_remitente === contactoActual) {
-                    document.getElementById('escribiendoTexto').innerText = payload.new.escribiendo ? '✍️ Escribiendo...' : '';
-                }
-            })
-            .subscribe();
-    }
-
-    // ============================================
-    // ENVIAR MENSAJE
-    // ============================================
-    async function enviarMensaje() {
-        var texto = document.getElementById('nuevoMensaje').value.trim();
-        if (!texto && !archivoSeleccionado) { alert('Escribe un mensaje o selecciona un archivo'); return; }
-        var contenedor = document.getElementById('chatMensajes');
-        var tipoMensaje = 'texto';
-        var archivoInfo = null;
-        var mensajeCifrado = '';
-        if (texto) {
-            var clavePub = await obtenerClavePublica(contactoActual);
-            if (!clavePub) { alert('⚠️ Este contacto no tiene cifrado configurado.'); return; }
-            try { mensajeCifrado = await cifrarMensaje(texto, clavePub); } catch (error) { alert('Error al cifrar'); return; }
-        }
-        if (archivoSeleccionado) {
-            try {
-                document.getElementById('archivoProgressBar').style.width = '50%';
-                archivoInfo = await subirArchivo(archivoSeleccionado, contactoActual);
-                document.getElementById('archivoProgressBar').style.width = '100%';
-                var tipo = archivoInfo.tipo.split('/')[0];
-                if (tipo === 'image') tipoMensaje = 'imagen';
-                else if (tipo === 'video') tipoMensaje = 'video';
-                else tipoMensaje = 'documento';
-                var div = document.createElement('div');
-                div.className = 'mensaje mensaje-enviado';
-                div.innerHTML = construirHTMLMensaje({ tipo_mensaje: tipoMensaje, archivo_url: archivoInfo.url, archivo_nombre: archivoInfo.nombre, texto_descifrado: texto, enviado_en: new Date().toISOString(), leido: false });
-                contenedor.appendChild(div);
-                contenedor.scrollTop = contenedor.scrollHeight;
-            } catch (error) { alert('Error al subir archivo: ' + error.message); document.getElementById('archivoProgressBar').style.width = '0%'; return; }
-        }
-        try {
-            var { error } = await clienteSupabase.from('mensajes').insert({
-                pin_remitente: miPIN, pin_destinatario: contactoActual,
-                mensaje_cifrado: mensajeCifrado, nonce: 'e2ee', tipo_mensaje: tipoMensaje,
-                archivo_url: archivoInfo ? archivoInfo.url : null,
-                archivo_nombre: archivoInfo ? archivoInfo.nombre : null,
-                archivo_tamaño: archivoInfo ? archivoInfo.tamaño : null,
-                leido: false
-            });
-            if (error) throw error;
-            document.getElementById('nuevoMensaje').value = '';
-            cancelarArchivo();
-            estoyEscribiendo = false;
-            actualizarEstadoEscribiendo(false);
-        } catch (error) { alert('Error al enviar: ' + error.message); }
-    }
-
-    // ============================================
-    // MARCAR COMO LEÍDOS
-    // ============================================
-    async function marcarComoLeidos() {
-        if (!contactoActual || !clienteSupabase) return;
-        try {
-            await clienteSupabase.from('mensajes')
-                .update({ leido: true, leido_en: new Date().toISOString() })
-                .eq('pin_remitente', contactoActual)
-                .eq('pin_destinatario', miPIN)
-                .eq('leido', false);
-            // Limpiar badge
-            delete mensajesNoLeidos[contactoActual];
-        } catch (error) { console.error('Error marcando leídos:', error); }
-    }
-
-    // ============================================
-    // CARGAR MENSAJES
-    // ============================================
-    async function cargarMensajes() {
-        try {
-            var { data, error } = await clienteSupabase.from('mensajes')
-                .select('*')
-                .or('and(pin_remitente.eq.' + miPIN + ',pin_destinatario.eq.' + contactoActual + '),' +
-                    'and(pin_remitente.eq.' + contactoActual + ',pin_destinatario.eq.' + miPIN + ')')
-                .order('enviado_en', { ascending: true });
-            if (error) throw error;
-            var contenedor = document.getElementById('chatMensajes');
-            if (!data || data.length === 0) {
-                contenedor.innerHTML = '<p style="color: #888; text-align: center; padding: 20px;">No hay mensajes aún</p>';
-                return;
+function suscribirseAEscribiendo() {
+    if (!clienteSupabase) return;
+    if (canalEscribiendo) clienteSupabase.removeChannel(canalEscribiendo);
+    canalEscribiendo = clienteSupabase.channel('escribiendo_' + miPIN)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'escribiendo', filter: 'pin_destinatario=eq.' + miPIN }, function(payload) {
+            if (payload.new && payload.new.pin_remitente === contactoActual) {
+                document.getElementById('escribiendoTexto').innerText = payload.new.escribiendo ? '✍️ Escribiendo...' : '';
             }
-            var mensajes = [];
-            for (var msg of data) {
-                var texto = '';
-                if (msg.mensaje_cifrado && msg.mensaje_cifrado.length > 0) {
-                    texto = await descifrarMensaje(msg.mensaje_cifrado);
-                }
-                mensajes.push({ ...msg, texto_descifrado: texto });
-            }
-            renderizarMensajes(mensajes);
+        })
+        .subscribe();
+}
+
+// ============================================
+// ENVIAR MENSAJE
+// ============================================
+async function enviarMensaje() {
+    var texto = document.getElementById('nuevoMensaje').value.trim();
+    if (!texto && !archivoSeleccionado) { alert('Escribe un mensaje o selecciona un archivo'); return; }
+    var contenedor = document.getElementById('chatMensajes');
+    var tipoMensaje = 'texto';
+    var archivoInfo = null;
+    var mensajeCifrado = '';
+    if (texto) {
+        var clavePub = await obtenerClavePublica(contactoActual);
+        if (!clavePub) { alert('⚠️ Este contacto no tiene cifrado configurado.'); return; }
+        try { mensajeCifrado = await cifrarMensaje(texto, clavePub); } catch (error) { alert('Error al cifrar'); return; }
+    }
+    if (archivoSeleccionado) {
+        try {
+            document.getElementById('archivoProgressBar').style.width = '50%';
+            archivoInfo = await subirArchivo(archivoSeleccionado, contactoActual);
+            document.getElementById('archivoProgressBar').style.width = '100%';
+            var tipo = archivoInfo.tipo.split('/')[0];
+            if (tipo === 'image') tipoMensaje = 'imagen';
+            else if (tipo === 'video') tipoMensaje = 'video';
+            else tipoMensaje = 'documento';
+            var div = document.createElement('div');
+            div.className = 'mensaje mensaje-enviado';
+            div.innerHTML = construirHTMLMensaje({ tipo_mensaje: tipoMensaje, archivo_url: archivoInfo.url, archivo_nombre: archivoInfo.nombre, texto_descifrado: texto, enviado_en: new Date().toISOString(), leido: false });
+            contenedor.appendChild(div);
             contenedor.scrollTop = contenedor.scrollHeight;
-        } catch (error) { console.error('Error:', error); }
+        } catch (error) { alert('Error al subir archivo: ' + error.message); document.getElementById('archivoProgressBar').style.width = '0%'; return; }
     }
+    try {
+        var { error } = await clienteSupabase.from('mensajes').insert({
+            pin_remitente: miPIN, pin_destinatario: contactoActual,
+            mensaje_cifrado: mensajeCifrado, nonce: 'e2ee', tipo_mensaje: tipoMensaje,
+            archivo_url: archivoInfo ? archivoInfo.url : null,
+            archivo_nombre: archivoInfo ? archivoInfo.nombre : null,
+            archivo_tamaño: archivoInfo ? archivoInfo.tamaño : null,
+            leido: false
+        });
+        if (error) throw error;
+        document.getElementById('nuevoMensaje').value = '';
+        cancelarArchivo();
+        estoyEscribiendo = false;
+        actualizarEstadoEscribiendo(false);
+    } catch (error) { alert('Error al enviar: ' + error.message); }
+}
 
-    function renderizarMensajes(mensajes) {
+// ============================================
+// MARCAR COMO LEÍDOS
+// ============================================
+async function marcarComoLeidos() {
+    if (!contactoActual || !clienteSupabase) return;
+    try {
+        await clienteSupabase.from('mensajes')
+            .update({ leido: true, leido_en: new Date().toISOString() })
+            .eq('pin_remitente', contactoActual)
+            .eq('pin_destinatario', miPIN)
+            .eq('leido', false);
+        delete mensajesNoLeidos[contactoActual];
+    } catch (error) { console.error('Error marcando leídos:', error); }
+}
+
+// ============================================
+// CARGAR MENSAJES
+// ============================================
+async function cargarMensajes() {
+    try {
+        var { data, error } = await clienteSupabase.from('mensajes')
+            .select('*')
+            .or('and(pin_remitente.eq.' + miPIN + ',pin_destinatario.eq.' + contactoActual + '),' +
+                'and(pin_remitente.eq.' + contactoActual + ',pin_destinatario.eq.' + miPIN + ')')
+            .order('enviado_en', { ascending: true });
+        if (error) throw error;
         var contenedor = document.getElementById('chatMensajes');
-        var html = '';
-        var ultimaFecha = '';
-        mensajes.forEach(function(msg) {
-            var fechaMsg = new Date(msg.enviado_en);
-            var fechaStr = formatearFecha(fechaMsg);
-            if (fechaStr !== ultimaFecha) {
-                html += '<div class="fecha-separador"><span>' + fechaStr + '</span></div>';
-                ultimaFecha = fechaStr;
+        if (!data || data.length === 0) {
+            contenedor.innerHTML = '<p style="color: #888; text-align: center; padding: 20px;">No hay mensajes aún</p>';
+            return;
+        }
+        var mensajes = [];
+        for (var msg of data) {
+            var texto = '';
+            if (msg.mensaje_cifrado && msg.mensaje_cifrado.length > 0) {
+                texto = await descifrarMensaje(msg.mensaje_cifrado);
             }
-            html += construirHTMLMensaje(msg);
-        });
-        contenedor.innerHTML = html;
-    }
-
-    function formatearFecha(fecha) {
-        var ahora = new Date();
-        var hoy = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate());
-        var msgDia = new Date(fecha.getFullYear(), fecha.getMonth(), fecha.getDate());
-        var diff = (hoy - msgDia) / (1000 * 60 * 60 * 24);
-        if (diff === 0) return 'Hoy';
-        if (diff === 1) return 'Ayer';
-        if (diff < 7) return fecha.toLocaleDateString('es-ES', { weekday: 'long' });
-        return fecha.toLocaleDateString('es-ES', { day: 'numeric', month: 'long' });
-    }
-
-    function formatearHora(fecha) {
-        return fecha.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
-    }
-
-    function construirHTMLMensaje(msg) {
-        var esMio = msg.pin_remitente === miPIN;
-        var clase = esMio ? 'mensaje-enviado' : 'mensaje-recibido';
-        if (mensajesSeleccionados.includes(msg.id)) clase += ' seleccionado';
-        var contenido = '';
-        if (msg.archivo_url) {
-            if (msg.tipo_mensaje === 'imagen') contenido = '<img src="' + msg.archivo_url + '" onclick="window.open(this.src)" style="cursor: pointer;">';
-            else if (msg.tipo_mensaje === 'video') contenido = '<video controls><source src="' + msg.archivo_url + '"></video>';
-            else if (msg.tipo_mensaje === 'documento') contenido = '<a href="' + msg.archivo_url + '" target="_blank">📎 ' + (msg.archivo_nombre || 'Archivo') + '</a>';
-            else contenido = '<a href="' + msg.archivo_url + '" target="_blank"> Archivo</a>';
+            mensajes.push({ ...msg, texto_descifrado: texto });
         }
-        if (msg.texto_descifrado && msg.texto_descifrado.length > 0) {
-            if (contenido) contenido = '<div style="margin-bottom: 4px;">' + msg.texto_descifrado + '</div>' + contenido;
-            else contenido = msg.texto_descifrado;
+        renderizarMensajes(mensajes);
+        contenedor.scrollTop = contenedor.scrollHeight;
+    } catch (error) { console.error('Error:', error); }
+}
+
+function renderizarMensajes(mensajes) {
+    var contenedor = document.getElementById('chatMensajes');
+    var html = '';
+    var ultimaFecha = '';
+    mensajes.forEach(function(msg) {
+        var fechaMsg = new Date(msg.enviado_en);
+        var fechaStr = formatearFecha(fechaMsg);
+        if (fechaStr !== ultimaFecha) {
+            html += '<div class="fecha-separador"><span>' + fechaStr + '</span></div>';
+            ultimaFecha = fechaStr;
         }
-        if (!contenido) contenido = '<em style="color: #888;">[Archivo]</em>';
-        var fechaHora = msg.enviado_en ? formatearHora(new Date(msg.enviado_en)) : '';
-        var checks = '';
-        if (esMio) {
-            if (msg.leido) checks = '<span class="check-leido">✓✓</span>';
-            else checks = '<span style="color: #888; font-weight: bold;">✓</span>';
-        }
-        var onclickAttr = modoSeleccion ? 'onclick="toggleSeleccion(\'' + msg.id + '\')"' : 'oncontextmenu="mostrarMenuMensaje(event, \'' + msg.id + '\')"';
-        return '<div class="mensaje ' + clase + '" data-id="' + msg.id + '" ' + onclickAttr + '>' + contenido + 
-               '<div class="mensaje-meta">' + fechaHora + (checks ? ' ' + checks : '') + '</div>' +
-               '</div>';
-    }
+        html += construirHTMLMensaje(msg);
+    });
+    contenedor.innerHTML = html;
+}
 
-    // ============================================
-    // SELECCIÓN Y BORRADO DE MENSAJES
-    // ============================================
-    function seleccionarModo() {
-        modoSeleccion = true;
-        mensajesSeleccionados = [];
-        document.getElementById('barraSeleccion').classList.remove('hidden');
-        document.getElementById('menuChat').classList.add('hidden');
-        actualizarVistaMensajes();
-    }
+function formatearFecha(fecha) {
+    var ahora = new Date();
+    var hoy = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate());
+    var msgDia = new Date(fecha.getFullYear(), fecha.getMonth(), fecha.getDate());
+    var diff = (hoy - msgDia) / (1000 * 60 * 60 * 24);
+    if (diff === 0) return 'Hoy';
+    if (diff === 1) return 'Ayer';
+    if (diff < 7) return fecha.toLocaleDateString('es-ES', { weekday: 'long' });
+    return fecha.toLocaleDateString('es-ES', { day: 'numeric', month: 'long' });
+}
 
-    function cancelarSeleccion() {
-        modoSeleccion = false;
-        mensajesSeleccionados = [];
-        document.getElementById('barraSeleccion').classList.add('hidden');
-        actualizarVistaMensajes();
-    }
+function formatearHora(fecha) {
+    return fecha.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+}
 
-    function toggleSeleccion(id) {
-        var idx = mensajesSeleccionados.indexOf(id);
-        if (idx > -1) mensajesSeleccionados.splice(idx, 1);
-        else mensajesSeleccionados.push(id);
-        document.getElementById('contadorSeleccion').innerText = mensajesSeleccionados.length + ' seleccionado' + (mensajesSeleccionados.length !== 1 ? 's' : '');
-        actualizarVistaMensajes();
+function construirHTMLMensaje(msg) {
+    var esMio = msg.pin_remitente === miPIN;
+    var clase = esMio ? 'mensaje-enviado' : 'mensaje-recibido';
+    if (mensajesSeleccionados.includes(msg.id)) clase += ' seleccionado';
+    var contenido = '';
+    if (msg.archivo_url) {
+        if (msg.tipo_mensaje === 'imagen') contenido = '<img src="' + msg.archivo_url + '" onclick="window.open(this.src)" style="cursor: pointer;">';
+        else if (msg.tipo_mensaje === 'video') contenido = '<video controls><source src="' + msg.archivo_url + '"></video>';
+        else if (msg.tipo_mensaje === 'documento') contenido = '<a href="' + msg.archivo_url + '" target="_blank">📎 ' + (msg.archivo_nombre || 'Archivo') + '</a>';
+        else contenido = '<a href="' + msg.archivo_url + '" target="_blank">📎 Archivo</a>';
     }
-
-    function actualizarVistaMensajes() {
-        // Re-renderizar para mostrar selección
-        var contenedor = document.getElementById('chatMensajes');
-        var mensajesDivs = contenedor.querySelectorAll('.mensaje');
-        mensajesDivs.forEach(function(div) {
-            var id = div.getAttribute('data-id');
-            if (mensajesSeleccionados.includes(id)) div.classList.add('seleccionado');
-            else div.classList.remove('seleccionado');
-        });
+    if (msg.texto_descifrado && msg.texto_descifrado.length > 0) {
+        if (contenido) contenido = '<div style="margin-bottom: 4px;">' + msg.texto_descifrado + '</div>' + contenido;
+        else contenido = msg.texto_descifrado;
     }
-
-    async function borrarSeleccionados() {
-        if (mensajesSeleccionados.length === 0) { alert('No hay mensajes seleccionados'); return; }
-        if (!confirm('¿Borrar ' + mensajesSeleccionados.length + ' mensaje(s)?')) return;
-        try {
-            var { error } = await clienteSupabase.from('mensajes').delete().in('id', mensajesSeleccionados);
-            if (error) throw error;
-            alert('✅ Mensajes borrados');
-            cancelarSeleccion();
-            cargarMensajes();
-        } catch (error) { alert('Error al borrar: ' + error.message); }
+    if (!contenido) contenido = '<em style="color: #888;">[Archivo]</em>';
+    var fechaHora = msg.enviado_en ? formatearHora(new Date(msg.enviado_en)) : '';
+    var checks = '';
+    if (esMio) {
+        if (msg.leido) checks = '<span class="check-leido">✓✓</span>';
+        else checks = '<span style="color: #888; font-weight: bold;">✓</span>';
     }
+    var onclickAttr = modoSeleccion ? 'onclick="toggleSeleccion(\'' + msg.id + '\')"' : 'oncontextmenu="mostrarMenuMensaje(event, \'' + msg.id + '\')"';
+    return '<div class="mensaje ' + clase + '" data-id="' + msg.id + '" ' + onclickAttr + '>' + contenido + 
+           '<div class="mensaje-meta">' + fechaHora + (checks ? ' ' + checks : '') + '</div>' +
+           '</div>';
+}
 
-    async function borrarMensajeIndividual(id) {
-        if (!confirm('¿Borrar este mensaje?')) return;
-        try {
-            var { error } = await clienteSupabase.from('mensajes').delete().eq('id', id);
-            if (error) throw error;
-            cerrarMenus();
-            cargarMensajes();
-        } catch (error) { alert('Error al borrar: ' + error.message); }
+// ============================================
+// SELECCIÓN Y BORRADO DE MENSAJES
+// ============================================
+function seleccionarModo() {
+    modoSeleccion = true;
+    mensajesSeleccionados = [];
+    document.getElementById('barraSeleccion').classList.remove('hidden');
+    document.getElementById('menuChat').classList.add('hidden');
+    actualizarVistaMensajes();
+}
+
+function cancelarSeleccion() {
+    modoSeleccion = false;
+    mensajesSeleccionados = [];
+    document.getElementById('barraSeleccion').classList.add('hidden');
+    actualizarVistaMensajes();
+}
+
+function toggleSeleccion(id) {
+    var idx = mensajesSeleccionados.indexOf(id);
+    if (idx > -1) mensajesSeleccionados.splice(idx, 1);
+    else mensajesSeleccionados.push(id);
+    document.getElementById('contadorSeleccion').innerText = mensajesSeleccionados.length + ' seleccionado' + (mensajesSeleccionados.length !== 1 ? 's' : '');
+    actualizarVistaMensajes();
+}
+
+function actualizarVistaMensajes() {
+    var contenedor = document.getElementById('chatMensajes');
+    var mensajesDivs = contenedor.querySelectorAll('.mensaje');
+    mensajesDivs.forEach(function(div) {
+        var id = div.getAttribute('data-id');
+        if (mensajesSeleccionados.includes(id)) div.classList.add('seleccionado');
+        else div.classList.remove('seleccionado');
+    });
+}
+
+async function borrarSeleccionados() {
+    if (mensajesSeleccionados.length === 0) { alert('No hay mensajes seleccionados'); return; }
+    if (!confirm('¿Borrar ' + mensajesSeleccionados.length + ' mensaje(s)?')) return;
+    try {
+        var { error } = await clienteSupabase.from('mensajes').delete().in('id', mensajesSeleccionados);
+        if (error) throw error;
+        alert('✅ Mensajes borrados');
+        cancelarSeleccion();
+        cargarMensajes();
+    } catch (error) { alert('Error al borrar: ' + error.message); }
+}
+
+async function borrarMensajeIndividual(id) {
+    if (!confirm('¿Borrar este mensaje?')) return;
+    try {
+        var { error } = await clienteSupabase.from('mensajes').delete().eq('id', id);
+        if (error) throw error;
+        cerrarMenus();
+        cargarMensajes();
+    } catch (error) { alert('Error al borrar: ' + error.message); }
+}
+
+async function limpiarChatCompleto() {
+    if (!confirm('⚠️ ¿Borrar TODOS los mensajes de este chat?\n\nEsta acción no se puede deshacer.')) return;
+    try {
+        var { error } = await clienteSupabase.from('mensajes').delete()
+            .or('and(pin_remitente.eq.' + miPIN + ',pin_destinatario.eq.' + contactoActual + '),' +
+                'and(pin_remitente.eq.' + contactoActual + ',pin_destinatario.eq.' + miPIN + ')');
+        if (error) throw error;
+        alert('✅ Chat limpiado');
+        cerrarMenus();
+        cargarMensajes();
+    } catch (error) { alert('Error al limpiar: ' + error.message); }
+}
+
+// ============================================
+// MENÚS CONTEXTUALES
+// ============================================
+function mostrarMenuMensaje(event, id) {
+    event.preventDefault();
+    var menu = document.getElementById('menuContextual');
+    menu.innerHTML = '<button onclick="copiarMensaje(\'' + id + '\')">📋 Copiar texto</button>' +
+                     '<button onclick="borrarMensajeIndividual(\'' + id + '\')" class="danger">🗑️ Borrar mensaje</button>' +
+                     '<button onclick="cerrarMenus()">✕ Cerrar</button>';
+    menu.style.left = event.clientX + 'px';
+    menu.style.top = event.clientY + 'px';
+    menu.classList.remove('hidden');
+}
+
+function copiarMensaje(id) {
+    var div = document.querySelector('.mensaje[data-id="' + id + '"]');
+    if (div) {
+        var texto = div.innerText.replace(/✓✓|✓|\d{2}:\d{2}/g, '').trim();
+        navigator.clipboard.writeText(texto).then(() => alert('📋 Copiado'));
     }
+    cerrarMenus();
+}
 
-    async function limpiarChatCompleto() {
-        if (!confirm('⚠️ ¿Borrar TODOS los mensajes de este chat?\n\nEsta acción no se puede deshacer.')) return;
-        try {
-            var { error } = await clienteSupabase.from('mensajes').delete()
-                .or('and(pin_remitente.eq.' + miPIN + ',pin_destinatario.eq.' + contactoActual + '),' +
-                    'and(pin_remitente.eq.' + contactoActual + ',pin_destinatario.eq.' + miPIN + ')');
-            if (error) throw error;
-            alert('✅ Chat limpiado');
-            cerrarMenus();
-            cargarMensajes();
-        } catch (error) { alert('Error al limpiar: ' + error.message); }
-    }
+function mostrarMenuChat() {
+    var menu = document.getElementById('menuChat');
+    var btn = event.target;
+    var rect = btn.getBoundingClientRect();
+    menu.style.right = '16px';
+    menu.style.top = (rect.bottom + 8) + 'px';
+    menu.style.left = 'auto';
+    menu.classList.remove('hidden');
+}
 
-    // ============================================
-    // MENÚS CONTEXTUALES
-    // ============================================
-    function mostrarMenuMensaje(event, id) {
-        event.preventDefault();
-        var menu = document.getElementById('menuContextual');
-        menu.innerHTML = '<button onclick="copiarMensaje(\'' + id + '\')">📋 Copiar texto</button>' +
-                         '<button onclick="borrarMensajeIndividual(\'' + id + '\')" class="danger">️ Borrar mensaje</button>' +
-                         '<button onclick="cerrarMenus()">✕ Cerrar</button>';
-        menu.style.left = event.clientX + 'px';
-        menu.style.top = event.clientY + 'px';
-        menu.classList.remove('hidden');
-    }
+function cerrarMenus() {
+    document.getElementById('menuContextual').classList.add('hidden');
+    document.getElementById('menuChat').classList.add('hidden');
+}
 
-    function copiarMensaje(id) {
-        var div = document.querySelector('.mensaje[data-id="' + id + '"]');
-        if (div) {
-            var texto = div.innerText.replace(/✓✓|✓|\d{2}:\d{2}/g, '').trim();
-            navigator.clipboard.writeText(texto).then(() => alert('📋 Copiado'));
-        }
+document.addEventListener('click', function(e) {
+    if (!e.target.closest('.menu-contextual') && !e.target.closest('[onclick*="mostrarMenuChat"]')) {
         cerrarMenus();
     }
+});
 
-    function mostrarMenuChat() {
-        var menu = document.getElementById('menuChat');
-        var btn = event.target;
-        var rect = btn.getBoundingClientRect();
-        menu.style.right = '16px';
-        menu.style.top = (rect.bottom + 8) + 'px';
-        menu.style.left = 'auto';
-        menu.classList.remove('hidden');
-    }
+// ============================================
+// TIEMPO REAL MEJORADO
+// ============================================
+function suscribirseAMensajes() {
+    if (!clienteSupabase) return;
+    cancelarSuscripcionMensajes();
 
-    function cerrarMenus() {
-        document.getElementById('menuContextual').classList.add('hidden');
-        document.getElementById('menuChat').classList.add('hidden');
-    }
+    canalRealtime = clienteSupabase.channel('mensajes_' + miPIN + '_' + Date.now())
+        .on('postgres_changes', {
+            event: 'INSERT', schema: 'public', table: 'mensajes',
+            filter: 'pin_destinatario=eq.' + miPIN
+        }, async function(payload) {
+            console.log('🔔 Nuevo mensaje recibido en tiempo real');
+            var nuevo = payload.new;
+            var texto = '';
+            if (nuevo.mensaje_cifrado && nuevo.mensaje_cifrado.length > 0) {
+                texto = await descifrarMensaje(nuevo.mensaje_cifrado);
+            }
+            
+            // Incrementar contador de no leídos
+            mensajesNoLeidos[nuevo.pin_remitente] = (mensajesNoLeidos[nuevo.pin_remitente] || 0) + 1;
+            console.log('📊 Mensajes no leídos de', nuevo.pin_remitente + ':', mensajesNoLeidos[nuevo.pin_remitente]);
+            
+            // Actualizar badge en la lista de contactos
+            if (document.getElementById('listaContactos')) {
+                cargarContactos();
+            }
+            
+            // Notificación SIEMPRE
+            var cuerpo = nuevo.tipo_mensaje !== 'texto' ? '📎 Archivo adjunto' : (texto.substring(0, 50) || 'Mensaje');
+            mostrarNotificacion('Mensaje de ' + nuevo.pin_remitente, cuerpo);
+            
+            // Si estamos en el chat con ese remitente, mostrar en pantalla
+            if (contactoActual === nuevo.pin_remitente) {
+                nuevo.texto_descifrado = texto;
+                agregarMensajeAPantalla(nuevo);
+                setTimeout(marcarComoLeidos, 1000);
+            }
+        })
+        .on('postgres_changes', {
+            event: 'UPDATE', schema: 'public', table: 'mensajes',
+            filter: 'pin_remitente=eq.' + miPIN
+        }, function(payload) {
+            if (payload.new.leido) {
+                var elementos = document.querySelectorAll('.mensaje-enviado .mensaje-meta');
+                elementos.forEach(function(meta) {
+                    var check = meta.querySelector('span:not(.check-leido)');
+                    if (check && check.innerText === '✓') {
+                        check.className = 'check-leido';
+                        check.innerText = '✓✓';
+                    }
+                });
+            }
+        })
+        .on('postgres_changes', {
+            event: 'DELETE', schema: 'public', table: 'mensajes',
+            filter: 'pin_destinatario=eq.' + miPIN
+        }, function(payload) {
+            if (contactoActual) cargarMensajes();
+        })
+        .subscribe(function(status) {
+            console.log('📡 Suscripción a mensajes:', status);
+        });
+}
 
-    // Cerrar menús al hacer clic fuera
-    document.addEventListener('click', function(e) {
-        if (!e.target.closest('.menu-contextual') && !e.target.closest('[onclick*="mostrarMenuChat"]')) {
-            cerrarMenus();
-        }
-    });
+function agregarMensajeAPantalla(mensaje) {
+    var contenedor = document.getElementById('chatMensajes');
+    var sinMensajes = contenedor.querySelector('p');
+    if (sinMensajes) contenedor.innerHTML = '';
+    var div = document.createElement('div');
+    div.innerHTML = construirHTMLMensaje(mensaje);
+    contenedor.appendChild(div.firstChild);
+    contenedor.scrollTop = contenedor.scrollHeight;
+}
 
-    // ============================================
-    // TIEMPO REAL (MEJORADO)
-    // ============================================
-    function suscribirseAMensajes() {
-        if (!clienteSupabase) return;
-        cancelarSuscripcionMensajes();
+function cancelarSuscripcionMensajes() {
+    if (canalRealtime) { clienteSupabase.removeChannel(canalRealtime); canalRealtime = null; }
+}
+function cancelarSuscripcionEscribiendo() {
+    if (canalEscribiendo) { clienteSupabase.removeChannel(canalEscribiendo); canalEscribiendo = null; }
+}
+function cancelarSuscripciones() {
+    cancelarSuscripcionMensajes();
+    cancelarSuscripcionEscribiendo();
+    var div = document.getElementById('escribiendoTexto');
+    if (div) div.innerText = '';
+}
 
-        canalRealtime = clienteSupabase.channel('mensajes_' + miPIN + '_' + Date.now())
-            .on('postgres_changes', {
-                event: 'INSERT', schema: 'public', table: 'mensajes',
-                filter: 'pin_destinatario=eq.' + miPIN
-            }, async function(payload) {
-                console.log('🔔 Nuevo mensaje recibido');
-                var nuevo = payload.new;
-                var texto = '';
-                if (nuevo.mensaje_cifrado && nuevo.mensaje_cifrado.length > 0) {
-                    texto = await descifrarMensaje(nuevo.mensaje_cifrado);
-                }
-                
-                // Incrementar contador de no leídos
-                mensajesNoLeidos[nuevo.pin_remitente] = (mensajesNoLeidos[nuevo.pin_remitente] || 0) + 1;
-                
-                // Notificación SIEMPRE (no solo si está en el chat)
-                var cuerpo = nuevo.tipo_mensaje !== 'texto' ? '📎 Archivo adjunto' : (texto.substring(0, 50) || 'Mensaje');
-                mostrarNotificacion('Mensaje de ' + nuevo.pin_remitente, cuerpo);
-                
-                // Si estamos en el chat con ese remitente, mostrar en pantalla
-                if (contactoActual === nuevo.pin_remitente) {
-                    nuevo.texto_descifrado = texto;
-                    agregarMensajeAPantalla(nuevo);
-                    // Marcar como leído automáticamente
-                    marcarComoLeidos();
-                }
-            })
-            .on('postgres_changes', {
-                event: 'UPDATE', schema: 'public', table: 'mensajes',
-                filter: 'pin_remitente=eq.' + miPIN
-            }, function(payload) {
-                if (payload.new.leido) {
-                    var elementos = document.querySelectorAll('.mensaje-enviado .mensaje-meta');
-                    elementos.forEach(function(meta) {
-                        var check = meta.querySelector('span:not(.check-leido)');
-                        if (check && check.innerText === '✓') {
-                            check.className = 'check-leido';
-                            check.innerText = '✓✓';
-                        }
-                    });
-                }
-            })
-            .on('postgres_changes', {
-                event: 'DELETE', schema: 'public', table: 'mensajes',
-                filter: 'pin_destinatario=eq.' + miPIN
-            }, function(payload) {
-                // Si se borró un mensaje, recargar
-                if (contactoActual) cargarMensajes();
-            })
-            .subscribe();
-    }
-
-    function agregarMensajeAPantalla(mensaje) {
-        var contenedor = document.getElementById('chatMensajes');
-        var sinMensajes = contenedor.querySelector('p');
-        if (sinMensajes) contenedor.innerHTML = '';
-        var div = document.createElement('div');
-        div.innerHTML = construirHTMLMensaje(mensaje);
-        contenedor.appendChild(div.firstChild);
-        contenedor.scrollTop = contenedor.scrollHeight;
-    }
-
-    function cancelarSuscripcionMensajes() {
-        if (canalRealtime) { clienteSupabase.removeChannel(canalRealtime); canalRealtime = null; }
-    }
-    function cancelarSuscripcionEscribiendo() {
-        if (canalEscribiendo) { clienteSupabase.removeChannel(canalEscribiendo); canalEscribiendo = null; }
-    }
-    function cancelarSuscripciones() {
-        cancelarSuscripcionMensajes();
-        cancelarSuscripcionEscribiendo();
-        var div = document.getElementById('escribiendoTexto');
-        if (div) div.innerText = '';
-    }
-
-    // ============================================
-    // INICIO
-    // ============================================
-    window.addEventListener('DOMContentLoaded', async function() {
-        generarPIN();
-        await inicializarTodo();
-        await verificarEstado();
-    });
+// ============================================
+// INICIO
+// ============================================
+window.addEventListener('DOMContentLoaded', async function() {
+    generarPIN();
+    await inicializarTodo();
+    await verificarEstado();
+});
 </script>
 
 </body>
