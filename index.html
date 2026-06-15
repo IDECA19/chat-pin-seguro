@@ -589,20 +589,41 @@
     }
 
     async function descifrarMensaje(cifradoBase64) {
-        if (!cifradoBase64 || cifradoBase64.length === 0) return '';
-        if (!cifradoBase64.includes('|')) return cifradoBase64;
+    if (!cifradoBase64 || cifradoBase64.length === 0) return '';
+    if (!cifradoBase64.includes('|')) return cifradoBase64;
+    
+    try {
+        var partes = cifradoBase64.split('|');
+        if (partes.length !== 4) return '[Formato inválido]';
+        
+        var iv = partes[0];
+        var datos = partes[1];
+        var claveParaDestinatario = partes[2];  // Cifrada con clave pública del destinatario
+        var claveParaMi = partes[3];            // Cifrada con clave pública del remitente
+        
+        var claveAESBase64 = null;
+        
+        // Intento 1: Con claveParaDestinatario (si soy el destinatario)
         try {
-            var partes = cifradoBase64.split('|');
-            if (partes.length !== 4) return '[Formato inválido]';
-            var claveParaMi = partes[3];
-            var claveAESBase64 = await descifrarClaveConRSA(claveParaMi, miClavePrivada);
-            var claveAES = await importarClaveAES(claveAESBase64);
-            return await descifrarConAES(partes[0], partes[1], claveAES);
-        } catch (error) {
-            console.error('Error descifrando:', error);
-            return '[Error]';
+            claveAESBase64 = await descifrarClaveConRSA(claveParaDestinatario, miClavePrivada);
+            console.log('✅ Descifrado con claveParaDestinatario');
+        } catch (e1) {
+            // Intento 2: Con claveParaMi (si soy el remitente leyendo mis propios mensajes)
+            try {
+                claveAESBase64 = await descifrarClaveConRSA(claveParaMi, miClavePrivada);
+                console.log('✅ Descifrado con claveParaMi');
+            } catch (e2) {
+                return '[No se puede descifrar]';
+            }
         }
+        
+        var claveAES = await importarClaveAES(claveAESBase64);
+        return await descifrarConAES(iv, datos, claveAES);
+    } catch (error) {
+        console.error('Error descifrando:', error);
+        return '[Error]';
     }
+}
 
     // ============================================
     // CIFRADO DE ARCHIVOS
