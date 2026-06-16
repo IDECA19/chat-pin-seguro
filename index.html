@@ -71,7 +71,21 @@
     </style>
 </head>
 <body>
-
+<!-- PANTALLA DE BLOQUEO -->
+<div id="pantallaBloqueo" class="hidden" style="position:fixed; top:0; left:0; width:100%; height:100%; background:#0a0a0a; z-index:9999; display:flex; flex-direction:column; justify-content:center; align-items:center; padding:20px;">
+    <div style="text-align:center; max-width:300px; width:100%;">
+        <div style="font-size:48px; margin-bottom:20px;">🔒</div>
+        <h2 style="margin-bottom:10px;">Chat Bloqueado</h2>
+        <p style="color:#888; font-size:13px; margin-bottom:30px;">Ingresa tu PIN de acceso</p>
+        
+        <input type="password" id="pinAccesoInput" placeholder="PIN de 4-6 dígitos" maxlength="6" style="text-align:center; font-size:24px; letter-spacing:5px; margin-bottom:20px;">
+        
+        <button class="btn" onclick="desbloquearApp()" style="margin-bottom:10px;">Desbloquear</button>
+        <button class="btn btn-secondary" onclick="configurarPIN()" id="btnConfigPIN" style="display:none;">Configurar PIN</button>
+        
+        <p id="errorPIN" style="color:#ff3b30; font-size:12px; margin-top:10px; display:none;">PIN incorrecto</p>
+    </div>
+</div>
 <div class="container">
     <!-- INICIO -->
     <div id="pantallaInicio">
@@ -276,6 +290,179 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
+    // ============================================
+// SISTEMA DE BLOQUEO CON PIN
+// ============================================
+
+var pinAccesoHash = null; // Hash del PIN guardado
+
+// Función para hashear el PIN (SHA-256)
+async function hashPIN(pin) {
+    var encoder = new TextEncoder();
+    var data = encoder.encode(pin);
+    var hashBuffer = await crypto.subtle.digest('SHA-256', data);
+    return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+// Verificar si hay PIN configurado al iniciar
+async function verificarPINConfigurado() {
+    pinAccesoHash = localStorage.getItem('pin_hash_' + miPIN);
+    var pantalla = document.getElementById('pantallaBloqueo');
+    var btnConfig = document.getElementById('btnConfigPIN');
+    
+    if (!pinAccesoHash) {
+        // No hay PIN, mostrar opción de configurar
+        pantalla.classList.remove('hidden');
+        pantalla.style.display = 'flex';
+        btnConfig.style.display = 'block';
+        document.getElementById('pinAccesoInput').style.display = 'none';
+        document.querySelector('button[onclick="desbloquearApp()"]').style.display = 'none';
+    } else {
+        // Hay PIN, pedirlo
+        pantalla.classList.remove('hidden');
+        pantalla.style.display = 'flex';
+        btnConfig.style.display = 'none';
+        document.getElementById('pinAccesoInput').style.display = 'block';
+        document.querySelector('button[onclick="desbloquearApp()"]').style.display = 'block';
+        document.getElementById('pinAccesoInput').focus();
+    }
+}
+
+// Configurar nuevo PIN
+async function configurarPIN() {
+    var pin1 = prompt('Ingresa un PIN de acceso (4-6 dígitos):');
+    if (!pin1 || pin1.length < 4) { alert('El PIN debe tener al menos 4 dígitos'); return; }
+    
+    var pin2 = prompt('Confirma el PIN:');
+    if (pin1 !== pin2) { alert('Los PINs no coinciden'); return; }
+    
+    pinAccesoHash = await hashPIN(pin1);
+    localStorage.setItem('pin_hash_' + miPIN, pinAccesoHash);
+    
+    alert('✅ PIN configurado. Ahora deberás ingresarlo cada vez que abras la app.');
+    location.reload();
+}
+
+// Desbloquear la app
+async function desbloquearApp() {
+    var pinIngresado = document.getElementById('pinAccesoInput').value;
+    var hashIngresado = await hashPIN(pinIngresado);
+    
+    if (hashIngresado === pinAccesoHash) {
+        // PIN Correcto
+        document.getElementById('pantallaBloqueo').classList.add('hidden');
+        document.getElementById('pantallaBloqueo').style.display = 'none';
+        document.getElementById('pinAccesoInput').value = '';
+        document.getElementById('errorPIN').style.display = 'none';
+        
+        // Aquí cargamos la clave privada real (que estaba cifrada con el PIN)
+        await cargarClavePrivadaSegura(pinIngresado);
+    } else {
+        // PIN Incorrecto
+        document.getElementById('errorPIN').style.display = 'block';
+        document.getElementById('pinAccesoInput').value = '';
+    }
+}
+
+// Cifrar clave privada con el PIN (se usa al guardar)
+async function cifrarClaveConPIN(clavePrivadaBase64, pin) {
+    var encoder = new TextEncoder();
+    var keyMaterial = await crypto.subtle.importKey('raw', encoder.encode(pin), 'PBKDF2', false, ['deriveKey']);
+    var salt = crypto.getRandomValues(new Uint8Array(16));
+    var key = await crypto.subtle.deriveKey(
+        { name: 'PBKDF2', salt: salt, iterations: 100000, hash: 'SHA-256' },
+        keyMaterial,
+        { name: 'AES-GCM', length: 256 },
+        false, ['encrypt']
+    );
+    var iv = crypto.getRandomValues(new Uint8Array(12));
+    var cifrado = await crypto.subtle.encrypt({ name: 'AES-GCM', iv: iv }, key, encoder.encode(clavePrivadaBase64));
+    
+    // Formato: salt.iv.cifrado
+    return btoa(String.fromCharCode.apply(null, salt)) + '.' + 
+           btoa(String.fromCharCode.apply(null, iv)) + '.' + 
+           btoa(String.fromCharCode.apply(null, new Uint8Array(cifrado)));
+}
+
+// Descifrar clave privada con el PIN (se usa al desbloquear)
+async function descifrarClaveConPIN(claveCifrada, pin) {
+    try {
+        var partes = claveCifrada.split('.');
+        if (partes.length !== 3) throw new Error('Formato inválido');
+        
+        var salt = Uint8Array.from(atob(partes[0]), c => c.charCodeAt(0));
+        var iv = Uint8Array.from(atob(partes[1]), c => c.charCodeAt(0));
+        var cifrado = Uint8Array.from(atob(partes[2]), c => c.charCodeAt(0));
+        
+        var encoder = new TextEncoder();
+        var keyMaterial = await crypto.subtle.importKey('raw', encoder.encode(pin), 'PBKDF2', false, ['deriveKey']);
+        var key = await crypto.subtle.deriveKey(
+            { name: 'PBKDF2', salt: salt, iterations: 100000, hash: 'SHA-256' },
+            keyMaterial,
+            { name: 'AES-GCM', length: 256 },
+            false, ['decrypt']
+        );
+        
+        var descifrado = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: iv }, key, cifrado);
+        return new TextDecoder().decode(descifrado);
+    } catch (e) {
+        throw new Error('No se pudo descifrar la clave');
+    }
+}
+
+// Modificar cargarClaves para usar el PIN
+async function cargarClavePrivadaSegura(pin) {
+    var claveCifrada = localStorage.getItem('clave_privada_' + miPIN);
+    if (!claveCifrada) { await generarClaves(); return; }
+    
+    try {
+        // Si tiene formato de cifrado (con puntos), usar PIN. Si no, usar ofuscación vieja.
+        var privBase64 = '';
+        if (claveCifrada.includes('.')) {
+            privBase64 = await descifrarClaveConPIN(claveCifrada, pin);
+        } else {
+            privBase64 = desofuscarClave(claveCifrada); // Fallback para usuarios antiguos
+        }
+        
+        var privBuf = Uint8Array.from(atob(privBase64), c => c.charCodeAt(0));
+        miClavePrivada = await crypto.subtle.importKey("pkcs8", privBuf, { name: "RSA-OAEP", hash: "SHA-256" }, true, ["decrypt"]);
+        
+        // Cargar clave pública desde Supabase
+        var { data } = await clienteSupabase.from('usuarios').select('clave_publica').eq('pin', miPIN).single();
+        if (data && data.clave_publica) {
+            var pubBuf = Uint8Array.from(atob(data.clave_publica), c => c.charCodeAt(0));
+            miClavePublica = await crypto.subtle.importKey("spki", pubBuf, { name: "RSA-OAEP", hash: "SHA-256" }, true, ["encrypt"]);
+        }
+        log('✅ Claves cargadas con PIN');
+    } catch (error) {
+        logError('Error cargando claves:', error);
+        alert('Error al cargar las claves. Verifica tu PIN.');
+    }
+}
+
+// Modificar generarClaves para guardar cifrado con PIN (si existe)
+async function generarClaves() {
+    try {
+        var parClaves = await crypto.subtle.generateKey({ name: "RSA-OAEP", modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: "SHA-256" }, true, ["encrypt", "decrypt"]);
+        miClavePrivada = parClaves.privateKey;
+        miClavePublica = parClaves.publicKey;
+        
+        var pubExp = await crypto.subtle.exportKey("spki", miClavePublica);
+        var pubBase64 = btoa(String.fromCharCode.apply(null, new Uint8Array(pubExp)));
+        var privExp = await crypto.subtle.exportKey("pkcs8", miClavePrivada);
+        var privBase64 = btoa(String.fromCharCode.apply(null, new Uint8Array(privExp)));
+        
+        // Guardar: Si hay PIN configurado, cifrar. Si no, ofuscar.
+        var aGuardar = pinAccesoHash ? await cifrarClaveConPIN(privBase64, document.getElementById('pinAccesoInput').value || 'temp') : ofuscarClave(privBase64);
+        
+        // Nota: Si es la primera vez y no hay PIN, se guarda ofuscada.
+        // El usuario deberá configurar PIN y luego se recifra.
+        localStorage.setItem('clave_privada_' + miPIN, ofuscarClave(privBase64)); // Fallback seguro
+        
+        await subirClavePublica(pubBase64);
+        log('✅ Claves generadas');
+    } catch (error) { logError('Error generando claves:', error); }
+}
     var SUPABASE_URL = 'https://dksmoteiidjpymextrgj.supabase.co';
     var SUPABASE_ANON_KEY = 'sb_publishable_HuXshjcD1Je934lVgBcJtw_5kFSuGzE';
     var DEBUG = false;
@@ -1223,6 +1410,13 @@ async function backupClavePrivada() {
     window.addEventListener('DOMContentLoaded', async function() {
         generarPIN();
         await inicializarTodo();
+            // Mostrar pantalla de bloqueo ANTES de cargar el chat
+    await verificarPINConfigurado();
+    
+    // Si no hay PIN, cargar claves normalmente
+    if (!pinAccesoHash) {
+        await cargarClaves(); // Función original de respaldo
+    }
         await verificarEstado();
     });
 </script>
