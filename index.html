@@ -42,7 +42,7 @@
         .check-leido { color: #007aff !important; font-weight: bold; }
         .chat-header { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid #2a2a2a; }
         .chat-messages { max-height: 420px; overflow-y: auto; padding: 10px 4px; }
-        .mensaje img, .mensaje video { max-width: 220px; border-radius: 8px; margin-top: 4px; }
+        .mensaje img, .mensaje video { max-width: 220px; border-radius: 8px; margin-top: 4px; display: block; }
         .archivo-preview { background: #222; padding: 10px; border-radius: 8px; margin-top: 10px; }
         .archivo-preview img { max-width: 100%; max-height: 150px; border-radius: 8px; }
         .progress-bar { background: #333; height: 4px; margin-top: 10px; border-radius: 2px; overflow: hidden; }
@@ -68,6 +68,10 @@
         .pref-desc { font-size: 11px; color: #888; margin-bottom: 8px; }
         .pref-status { font-size: 11px; color: #00ff88; margin-top: 4px; }
         
+        /* Contenedor dinámico de carga para descifrar archivos multimedia progresivamente */
+        .media-container { min-height: 40px; display: flex; align-items: center; justify-content: flex-start; padding: 4px; margin-top: 6px; }
+        .loading-media { font-size: 11px; color: #888; display: inline-flex; align-items: center; gap: 4px; }
+
         /* Barra de selección múltiple */
         .barra-seleccion { background: #007aff; padding: 10px 16px; border-radius: 8px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 100; }
         .barra-seleccion button { background: rgba(255,255,255,0.2); border: none; color: white; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 12px; margin-left: 6px; }
@@ -296,6 +300,32 @@
         auto_destruccion_dias: 0, rotacion_claves_dias: 0, ocultar_al_cambiar: false,
         borrado_seguro: false, dosfa_backup: false, limpieza_metadatos: false, forward_secrecy: false
     };
+
+    // Helper para formatear bytes
+    function formatBytes(bytes, decimals = 2) {
+        if (!bytes || bytes === 0) return '0 Bytes';
+        const k = 1024;
+        const dm = decimals < 0 ? 0 : decimals;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+    }
+
+    // Extrae la ruta de almacenamiento relativa dentro de "chat-files" desde un enlace firmado de Supabase
+    function obtenerPathDesdeUrl(url) {
+        if (!url) return null;
+        try {
+            if (url.includes('/storage/v1/object/')) {
+                var match = url.match(/\/chat-files\/([^?]+)/);
+                if (match && match[1]) {
+                    return decodeURIComponent(match[1]);
+                }
+            }
+        } catch (e) {
+            logError('Error extrayendo path de url:', e);
+        }
+        return null;
+    }
 
     // ============================================
     // SISTEMA DE BLOQUEO CON PIN
@@ -972,11 +1002,11 @@
             a.href = url; a.download = 'backup_' + miPIN + '_' + Date.now() + '.html';
             document.body.appendChild(a); a.click(); document.body.removeChild(a);
             URL.revokeObjectURL(url);
-            alert('✅ Backup descargado.');
+            alert('✅ Backup downloaded.');
         } catch (error) { alert('❌ Error: ' + error.message); }
     }
 
-    function escapeHtml(t) { var d = document.createElement('div'); d.appendChild(document.createTextNode(t)); return d.innerHTML; }
+    function escapeHtml(t) { if(!t) return ''; var d = document.createElement('div'); d.appendChild(document.createTextNode(t)); return d.innerHTML; }
 
     async function backupClavePrivada() {
         try {
@@ -995,7 +1025,7 @@
             a.href = url; a.download = 'clave_' + miPIN + '_' + Date.now() + '.html';
             document.body.appendChild(a); a.click(); document.body.removeChild(a);
             URL.revokeObjectURL(url);
-            alert('✅ Backup descargado.');
+            alert('✅ Backup downloaded.');
         } catch (error) { alert('Error: ' + error.message); }
     }
 
@@ -1151,6 +1181,78 @@
     }
 }
 
+    // Descarga, descifra al vuelo y renderiza el adjunto seguro usando Blob URLs locales
+    async function cargarYDescifrarAdjunto(msg) {
+        var container = document.getElementById('media-container-' + msg.id);
+        if (!container) return;
+
+        // Comprobar si ya se renderizó para evitar llamadas redundantes
+        if (container.getAttribute('data-loaded') === 'true') return;
+
+        try {
+            var path = obtenerPathDesdeUrl(msg.archivo_url) || msg.archivo_url;
+            if (!path) {
+                container.innerHTML = '<span style="color: #ff3b30; font-size: 11px;">⚠️ Error: Ruta no válida</span>';
+                return;
+            }
+
+            log('📥 Descargando adjunto para descifrar: ' + path);
+            var { data: blob, error } = await clienteSupabase.storage
+                .from('chat-files')
+                .download(path);
+
+            // Si falla la descarga directa, intentar solicitar un nuevo enlace firmado actual temporal
+            if (error) {
+                log('⚠️ Error de descarga directa, solicitando nueva URL firmada...');
+                var { data: signedData, error: signedError } = await clienteSupabase.storage
+                    .from('chat-files')
+                    .createSignedUrl(path, 300);
+
+                if (signedError || !signedData) throw new Error('No se pudo descargar el archivo del storage.');
+
+                var resp = await fetch(signedData.signedUrl);
+                blob = await resp.blob();
+            }
+
+            if (!blob) throw new Error('Archivo vacío en el servidor.');
+
+            // Descifrar si está marcado como cifrado
+            var decryptedBlob;
+            if (msg.archivo_cifrado) {
+                log('🔐 Descifrando adjunto: ' + msg.archivo_nombre);
+                var arrayBuffer = await blob.arrayBuffer();
+                
+                var iv = msg.archivo_iv;
+                var claveCifrada = msg.archivo_clave;
+                var claveCifradaDest = msg.archivo_clave_destinatario;
+
+                var decryptedBuffer = await descifrarArchivo(arrayBuffer, iv, claveCifrada, claveCifradaDest);
+                decryptedBlob = new Blob([decryptedBuffer], { type: msg.tipo_mensaje === 'imagen' ? 'image/png' : msg.tipo_mensaje === 'video' ? 'video/mp4' : 'application/octet-stream' });
+            } else {
+                decryptedBlob = blob;
+            }
+
+            // Crear un objeto URL local seguro para el navegador
+            var objectUrl = URL.createObjectURL(decryptedBlob);
+            container.setAttribute('data-loaded', 'true');
+
+            // Renderizar dinámicamente según el tipo de archivo
+            if (msg.tipo_mensaje === 'imagen') {
+                container.innerHTML = '<img src="' + objectUrl + '" style="max-width: 220px; border-radius: 8px; margin-top: 4px;" onclick="window.open(\'' + objectUrl + '\')">';
+            } else if (msg.tipo_mensaje === 'video') {
+                container.innerHTML = '<video controls style="max-width: 220px; border-radius: 8px; margin-top: 4px;"><source src="' + objectUrl + '"></video>';
+            } else if (msg.tipo_mensaje === 'documento' || msg.tipo_mensaje === 'archivo') {
+                var tamStr = msg.archivo_tamaño ? ' (' + formatBytes(msg.archivo_tamaño) + ')' : '';
+                container.innerHTML = '<a href="' + objectUrl + '" download="' + (msg.archivo_nombre || 'archivo') + '" style="color: #00ff88; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; background: rgba(0,255,136,0.1); border: 1px solid rgba(0,255,136,0.2); border-radius: 6px; margin-top: 4px;">📎 ' + (msg.archivo_nombre || 'Descargar') + tamStr + '</a>';
+            } else {
+                container.innerHTML = '<a href="' + objectUrl + '" download="' + (msg.archivo_nombre || 'archivo') + '">📎 Descargar</a>';
+            }
+        } catch (err) {
+            logError('❌ Error descifrando adjunto:', err);
+            container.innerHTML = '<span style="color: #ff3b30; font-size: 11px;">⚠️ Error al descifrar archivo</span>';
+        }
+    }
+
     // ============================================
     // ESTADO Y ACTIVAR
     // ============================================
@@ -1203,99 +1305,130 @@
         var tipoMensaje = 'texto';
         var archivoInfo = null;
         var mensajeCifrado = '';
+        
         if (texto) {
             var clavePub = await obtenerClavePublica(contactoActual);
             if (!clavePub) { alert('⚠️ Sin cifrado'); return; }
             try { mensajeCifrado = await cifrarMensaje(texto, clavePub); } catch (error) { alert('Error cifrado'); return; }
         }
+        
         if (archivoSeleccionado) {
-    try {
-        log('📎 Procesando archivo:', archivoSeleccionado.name);
-        document.getElementById('archivoProgressBar').style.width = '30%';
-        
-        archivoInfo = await subirArchivo(archivoSeleccionado, contactoActual);
-        log('✅ Archivo subido exitosamente:', archivoInfo);
-        
-        document.getElementById('archivoProgressBar').style.width = '100%';
-        
-        var tipo = archivoInfo.tipo.split('/')[0];
-        if (tipo === 'image') tipoMensaje = 'imagen';
-        else if (tipo === 'video') tipoMensaje = 'video';
-        else tipoMensaje = 'documento';
-        
-        log('📋 Tipo de mensaje:', tipoMensaje);
-        
-        // Mostrar preview inmediato
-        var div = document.createElement('div');
-        div.className = 'mensaje mensaje-enviado';
-        div.innerHTML = construirContenidoMensaje({ 
+            try {
+                log('📎 Procesando archivo: ' + archivoSeleccionado.name);
+                document.getElementById('archivoProgressBar').style.width = '30%';
+                
+                archivoInfo = await subirArchivo(archivoSeleccionado, contactoActual);
+                log('✅ Archivo subido exitosamente:', archivoInfo);
+                
+                document.getElementById('archivoProgressBar').style.width = '100%';
+                
+                var tipo = archivoInfo.tipo.split('/')[0];
+                if (tipo === 'image') tipoMensaje = 'imagen';
+                else if (tipo === 'video') tipoMensaje = 'video';
+                else tipoMensaje = 'documento';
+                
+                setTimeout(function() {
+                    document.getElementById('archivoProgressBar').style.width = '0%';
+                }, 500);
+            } catch (error) { 
+                logError('❌ Error al subir archivo:', error);
+                alert('Error al subir archivo: ' + error.message);
+                document.getElementById('archivoProgressBar').style.width = '0%';
+                return;
+            }
+        }
+
+        // Generar un ID temporal para renderizado inmediato
+        var tempId = 'temp-' + Date.now();
+        var mensajeTemp = { 
+            id: tempId,
+            pin_remitente: miPIN, 
+            pin_destinatario: contactoActual, 
             tipo_mensaje: tipoMensaje, 
-            archivo_url: archivoInfo.url, 
-            archivo_nombre: archivoInfo.nombre,
-            archivo_tamaño: archivoInfo.tamaño,
-            texto_descifrado: texto 
-        }) + '<div class="mensaje-meta"><span>✓</span></div>';
-        contenedor.appendChild(div);
-        contenedor.scrollTop = contenedor.scrollHeight;
+            archivo_url: archivoInfo ? archivoInfo.url : null, 
+            archivo_nombre: archivoInfo ? archivoInfo.nombre : null, 
+            archivo_tamaño: archivoInfo ? archivoInfo.tamaño : null,
+            archivo_iv: archivoInfo ? archivoInfo.iv : null,
+            archivo_clave: archivoInfo ? archivoInfo.claveParaMi : null,
+            archivo_clave_destinatario: archivoInfo ? archivoInfo.claveParaDestinatario : null,
+            archivo_cifrado: archivoInfo ? archivoInfo.cifrado : false,
+            texto_descifrado: texto, 
+            enviado_en: new Date().toISOString(), 
+            leido: false 
+        };
         
-        setTimeout(function() {
-            document.getElementById('archivoProgressBar').style.width = '0%';
-        }, 500);
-    } catch (error) { 
-        logError('❌ Error al subir archivo:', error);
-        alert('Error al subir archivo: ' + error.message);
-        document.getElementById('archivoProgressBar').style.width = '0%';
-        return;
-    }
-}
-        var mensajeTemp = { pin_remitente: miPIN, pin_destinatario: contactoActual, tipo_mensaje: tipoMensaje, archivo_url: archivoInfo ? archivoInfo.url : null, archivo_nombre: archivoInfo ? archivoInfo.nombre : null, texto_descifrado: texto, enviado_en: new Date().toISOString(), leido: false };
         var sinMensajes = contenedor.querySelector('p');
         if (sinMensajes) contenedor.innerHTML = '';
+        
         var divTemp = document.createElement('div');
         divTemp.className = 'mensaje mensaje-enviado';
+        divTemp.setAttribute('data-id', tempId);
         divTemp.innerHTML = construirContenidoMensaje(mensajeTemp) + '<div class="mensaje-meta"><span>✓</span></div>';
         contenedor.appendChild(divTemp);
         contenedor.scrollTop = contenedor.scrollHeight;
+
+        // Renderizar el archivo local inmediatamente en la burbuja sin esperar descargas
+        if (archivoSeleccionado && archivoInfo) {
+            var localContainer = document.getElementById('media-container-' + tempId);
+            if (localContainer) {
+                var localUrl = URL.createObjectURL(archivoSeleccionado);
+                localContainer.setAttribute('data-loaded', 'true');
+                if (tipoMensaje === 'imagen') {
+                    localContainer.innerHTML = '<img src="' + localUrl + '" style="max-width: 220px; border-radius: 8px; margin-top: 4px;">';
+                } else if (tipoMensaje === 'video') {
+                    localContainer.innerHTML = '<video controls style="max-width: 220px; border-radius: 8px; margin-top: 4px;"><source src="' + localUrl + '"></video>';
+                } else {
+                    localContainer.innerHTML = '<a href="' + localUrl + '" download="' + archivoInfo.nombre + '" style="color: #00ff88; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; background: rgba(0,255,136,0.1); border: 1px solid rgba(0,255,136,0.2); border-radius: 6px; margin-top: 4px;">📎 ' + archivoInfo.nombre + '</a>';
+                }
+            }
+        }
+        
         try {
-            var { error } = await clienteSupabase.from('mensajes').insert({ pin_remitente: miPIN, pin_destinatario: contactoActual, mensaje_cifrado: mensajeCifrado, nonce: 'e2ee', tipo_mensaje: tipoMensaje, archivo_url: archivoInfo ? archivoInfo.url : null, archivo_nombre: archivoInfo ? archivoInfo.nombre : null, archivo_tamaño: archivoInfo ? archivoInfo.tamaño : null, archivo_iv: archivoInfo ? archivoInfo.iv : null, archivo_clave: archivoInfo ? archivoInfo.claveParaMi : null, archivo_clave_destinatario: archivoInfo ? archivoInfo.claveParaDestinatario : null, archivo_cifrado: archivoInfo ? archivoInfo.cifrado : false, leido: false });
+            var { error } = await clienteSupabase.from('mensajes').insert({ 
+                pin_remitente: miPIN, 
+                pin_destinatario: contactoActual, 
+                mensaje_cifrado: mensajeCifrado, 
+                nonce: 'e2ee', 
+                tipo_mensaje: tipoMensaje, 
+                archivo_url: archivoInfo ? archivoInfo.url : null, 
+                archivo_nombre: archivoInfo ? archivoInfo.nombre : null, 
+                archivo_tamaño: archivoInfo ? archivoInfo.tamaño : null, 
+                archivo_iv: archivoInfo ? archivoInfo.iv : null, 
+                archivo_clave: archivoInfo ? archivoInfo.claveParaMi : null, 
+                archivo_clave_destinatario: archivoInfo ? archivoInfo.claveParaDestinatario : null, 
+                archivo_cifrado: archivoInfo ? archivoInfo.cifrado : false, 
+                leido: false 
+            });
             if (error) throw error;
             document.getElementById('nuevoMensaje').value = '';
             cancelarArchivo();
-        } catch (error) { alert('Error: ' + error.message); divTemp.style.opacity = '0.5'; }
+            cargarMensajes(); // Actualiza el listado real de la BD
+        } catch (error) { 
+            alert('Error: ' + error.message); 
+            divTemp.style.opacity = '0.5'; 
+        }
     }
 
     function construirContenidoMensaje(msg) {
-    log('📝 Construyendo contenido:', msg.tipo_mensaje, msg.archivo_url ? 'con URL' : 'sin URL');
-    
-    var contenido = '';
-    
-    if (msg.archivo_url) {
-        log('🔗 URL del archivo:', msg.archivo_url.substring(0, 100) + '...');
+        log('📝 Construyendo contenedor para mensaje: ' + msg.id);
+        var contenido = '';
         
-        if (msg.tipo_mensaje === 'imagen') {
-            log('🖼️ Creando elemento IMG');
-            contenido = '<img src="' + msg.archivo_url + '" onerror="console.error(\'Error cargando imagen\')" onload="console.log(\'Imagen cargada\')">';
-        } else if (msg.tipo_mensaje === 'video') {
-            log('🎥 Creando elemento VIDEO');
-            contenido = '<video controls><source src="' + msg.archivo_url + '"></video>';
-        } else if (msg.tipo_mensaje === 'documento') {
-            log('📄 Creando enlace de documento');
-            contenido = '<a href="' + msg.archivo_url + '" target="_blank" style="color: inherit; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; background: rgba(0,0,0,0.2); border-radius: 6px; margin-top: 4px;">📎 ' + (msg.archivo_nombre || 'Archivo') + ' (' + formatBytes(msg.archivo_tamaño) + ')</a>';
-        } else {
-            contenido = '<a href="' + msg.archivo_url + '" target="_blank">📎 Archivo</a>';
+        // Si tiene archivo adjunto, preparar contenedor seguro de carga progresiva
+        if (msg.archivo_url) {
+            contenido = '<div id="media-container-' + msg.id + '" class="media-container" data-loaded="false">';
+            contenido += '<span class="loading-media">🔐 Descifrando adjunto...</span>';
+            contenido += '</div>';
         }
+        
+        if (msg.texto_descifrado) {
+            var textoEscapado = escapeHtml(msg.texto_descifrado);
+            if (contenido) contenido = '<div style="margin-bottom: 4px;">' + textoEscapado + '</div>' + contenido;
+            else contenido = textoEscapado;
+        }
+        
+        if (!contenido) contenido = '<em style="color: #888;">[Archivo]</em>';
+        return contenido;
     }
-    
-    if (msg.texto_descifrado) {
-        if (contenido) contenido = '<div>' + msg.texto_descifrado + '</div>' + contenido;
-        else contenido = msg.texto_descifrado;
-    }
-    
-    if (!contenido) contenido = '<em style="color: #888;">[Archivo]</em>';
-    
-    log('✅ Contenido construido');
-    return contenido;
-}
 
     async function marcarComoLeidos() {
         if (!contactoActual || !clienteSupabase) return;
@@ -1328,7 +1461,14 @@
             });
             contenedor.innerHTML = html;
             contenedor.scrollTop = contenedor.scrollHeight;
-        } catch (error) { logError('Error:', error); }
+
+            // Iniciar descarga y descifrado progresivo de archivos adjuntos
+            mensajes.forEach(function(msg) {
+                if (msg.archivo_url) {
+                    cargarYDescifrarAdjunto(msg);
+                }
+            });
+        } catch (error) { logError('Error cargando mensajes:', error); }
     }
 
     function suscribirseAMensajes() {
@@ -1349,9 +1489,15 @@
                     if (sinMensajes) contenedor.innerHTML = '';
                     var div = document.createElement('div');
                     div.className = 'mensaje mensaje-recibido';
+                    div.setAttribute('data-id', nuevo.id);
                     div.innerHTML = construirContenidoMensaje(nuevo);
                     contenedor.appendChild(div);
                     contenedor.scrollTop = contenedor.scrollHeight;
+                    
+                    // Iniciar descifrado automático al recibir
+                    if (nuevo.archivo_url) {
+                        cargarYDescifrarAdjunto(nuevo);
+                    }
                     setTimeout(marcarComoLeidos, 1000);
                 } else { cargarContactos(); cargarMensajesPendientes(); }
             })
