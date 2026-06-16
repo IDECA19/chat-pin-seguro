@@ -1085,17 +1085,71 @@
         var iv = Uint8Array.from(atob(ivBase64), c => c.charCodeAt(0));
         return await crypto.subtle.decrypt({ name: "AES-GCM", iv: iv }, claveAES, arrayBufferCifrado);
     }
-    async function subirArchivo(file, pinDestinatario) {
+   async function subirArchivo(file, pinDestinatario) {
+    try {
+        log('📤 Subiendo archivo:', file.name, file.size, 'bytes');
+        
         var clavePublicaDest = await obtenerClavePublica(pinDestinatario);
-        if (!clavePublicaDest) throw new Error('No hay clave pública');
+        if (!clavePublicaDest) throw new Error('No hay clave pública del destinatario');
+        
+        // Cifrar archivo
         var archivoCifrado = await cifrarArchivo(file, clavePublicaDest);
-        var fileName = miPIN + '_' + pinDestinatario + '_' + Date.now() + '.enc';
-        var { data, error } = await clienteSupabase.storage.from('chat-files').upload(fileName, archivoCifrado.blob, { cacheControl: '3600', upsert: false, contentType: 'application/octet-stream' });
-        if (error) throw error;
-        var { data: urlData } = await clienteSupabase.storage.from('chat-files').createSignedUrl(fileName, 3600);
-        if (!urlData || !urlData.signedUrl) throw new Error('No URL');
-        return { url: urlData.signedUrl, nombre: archivoCifrado.nombreOriginal, tipo: archivoCifrado.tipoOriginal, tamaño: archivoCifrado.tamañoOriginal, iv: archivoCifrado.iv, claveParaDestinatario: archivoCifrado.claveParaDestinatario, claveParaMi: archivoCifrado.claveParaMi, cifrado: true };
+        log('✅ Archivo cifrado:', archivoCifrado.blob.size, 'bytes');
+        
+        // Nombre único
+        var ts = Date.now();
+        var ext = file.name.split('.').pop();
+        var fileName = miPIN + '_' + pinDestinatario + '_' + ts + '.' + ext + '.enc';
+        log('📁 Nombre archivo:', fileName);
+        
+        // Subir a Supabase Storage
+        var { data, error } = await clienteSupabase.storage
+            .from('chat-files')
+            .upload(fileName, archivoCifrado.blob, { 
+                cacheControl: '3600', 
+                upsert: false, 
+                contentType: 'application/octet-stream' 
+            });
+        
+        if (error) {
+            logError('❌ Error subiendo a Storage:', error);
+            throw new Error('Error al subir archivo: ' + error.message);
+        }
+        
+        log('✅ Archivo subido:', data.path);
+        
+        // Crear URL firmada (válida por 1 hora = 3600 segundos)
+        var { data: urlData, error: urlError } = await clienteSupabase.storage
+            .from('chat-files')
+            .createSignedUrl(fileName, 3600); // 1 hora
+        
+        if (urlError) {
+            logError('❌ Error creando URL firmada:', urlError);
+            throw new Error('Error al generar URL: ' + urlError.message);
+        }
+        
+        if (!urlData || !urlData.signedUrl) {
+            throw new Error('No se generó URL firmada');
+        }
+        
+        log('✅ URL firmada generada:', urlData.signedUrl.substring(0, 80) + '...');
+        
+        return {
+            url: urlData.signedUrl,
+            path: data.path,
+            nombre: archivoCifrado.nombreOriginal,
+            tipo: archivoCifrado.tipoOriginal,
+            tamaño: archivoCifrado.tamañoOriginal,
+            iv: archivoCifrado.iv,
+            claveParaDestinatario: archivoCifrado.claveParaDestinatario,
+            claveParaMi: archivoCifrado.claveParaMi,
+            cifrado: true
+        };
+    } catch (error) {
+        logError('❌ Error en subirArchivo:', error);
+        throw error;
     }
+}
 
     // ============================================
     // ESTADO Y ACTIVAR
@@ -1155,16 +1209,45 @@
             try { mensajeCifrado = await cifrarMensaje(texto, clavePub); } catch (error) { alert('Error cifrado'); return; }
         }
         if (archivoSeleccionado) {
-            try {
-                document.getElementById('archivoProgressBar').style.width = '50%';
-                archivoInfo = await subirArchivo(archivoSeleccionado, contactoActual);
-                document.getElementById('archivoProgressBar').style.width = '100%';
-                var tipo = archivoInfo.tipo.split('/')[0];
-                if (tipo === 'image') tipoMensaje = 'imagen';
-                else if (tipo === 'video') tipoMensaje = 'video';
-                else tipoMensaje = 'documento';
-            } catch (error) { alert('Error: ' + error.message); document.getElementById('archivoProgressBar').style.width = '0%'; return; }
-        }
+    try {
+        log('📎 Procesando archivo:', archivoSeleccionado.name);
+        document.getElementById('archivoProgressBar').style.width = '30%';
+        
+        archivoInfo = await subirArchivo(archivoSeleccionado, contactoActual);
+        log('✅ Archivo subido exitosamente:', archivoInfo);
+        
+        document.getElementById('archivoProgressBar').style.width = '100%';
+        
+        var tipo = archivoInfo.tipo.split('/')[0];
+        if (tipo === 'image') tipoMensaje = 'imagen';
+        else if (tipo === 'video') tipoMensaje = 'video';
+        else tipoMensaje = 'documento';
+        
+        log('📋 Tipo de mensaje:', tipoMensaje);
+        
+        // Mostrar preview inmediato
+        var div = document.createElement('div');
+        div.className = 'mensaje mensaje-enviado';
+        div.innerHTML = construirContenidoMensaje({ 
+            tipo_mensaje: tipoMensaje, 
+            archivo_url: archivoInfo.url, 
+            archivo_nombre: archivoInfo.nombre,
+            archivo_tamaño: archivoInfo.tamaño,
+            texto_descifrado: texto 
+        }) + '<div class="mensaje-meta"><span>✓</span></div>';
+        contenedor.appendChild(div);
+        contenedor.scrollTop = contenedor.scrollHeight;
+        
+        setTimeout(function() {
+            document.getElementById('archivoProgressBar').style.width = '0%';
+        }, 500);
+    } catch (error) { 
+        logError('❌ Error al subir archivo:', error);
+        alert('Error al subir archivo: ' + error.message);
+        document.getElementById('archivoProgressBar').style.width = '0%';
+        return;
+    }
+}
         var mensajeTemp = { pin_remitente: miPIN, pin_destinatario: contactoActual, tipo_mensaje: tipoMensaje, archivo_url: archivoInfo ? archivoInfo.url : null, archivo_nombre: archivoInfo ? archivoInfo.nombre : null, texto_descifrado: texto, enviado_en: new Date().toISOString(), leido: false };
         var sinMensajes = contenedor.querySelector('p');
         if (sinMensajes) contenedor.innerHTML = '';
@@ -1182,16 +1265,37 @@
     }
 
     function construirContenidoMensaje(msg) {
-        var contenido = '';
-        if (msg.archivo_url) {
-            if (msg.tipo_mensaje === 'imagen') contenido = '<img src="' + msg.archivo_url + '">';
-            else if (msg.tipo_mensaje === 'video') contenido = '<video controls><source src="' + msg.archivo_url + '"></video>';
-            else contenido = '📎 ' + msg.archivo_nombre;
+    log('📝 Construyendo contenido:', msg.tipo_mensaje, msg.archivo_url ? 'con URL' : 'sin URL');
+    
+    var contenido = '';
+    
+    if (msg.archivo_url) {
+        log('🔗 URL del archivo:', msg.archivo_url.substring(0, 100) + '...');
+        
+        if (msg.tipo_mensaje === 'imagen') {
+            log('🖼️ Creando elemento IMG');
+            contenido = '<img src="' + msg.archivo_url + '" onerror="console.error(\'Error cargando imagen\')" onload="console.log(\'Imagen cargada\')">';
+        } else if (msg.tipo_mensaje === 'video') {
+            log('🎥 Creando elemento VIDEO');
+            contenido = '<video controls><source src="' + msg.archivo_url + '"></video>';
+        } else if (msg.tipo_mensaje === 'documento') {
+            log('📄 Creando enlace de documento');
+            contenido = '<a href="' + msg.archivo_url + '" target="_blank" style="color: inherit; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; background: rgba(0,0,0,0.2); border-radius: 6px; margin-top: 4px;">📎 ' + (msg.archivo_nombre || 'Archivo') + ' (' + formatBytes(msg.archivo_tamaño) + ')</a>';
+        } else {
+            contenido = '<a href="' + msg.archivo_url + '" target="_blank">📎 Archivo</a>';
         }
-        if (msg.texto_descifrado) { if (contenido) contenido = '<div>' + msg.texto_descifrado + '</div>' + contenido; else contenido = msg.texto_descifrado; }
-        if (!contenido) contenido = '<em style="color: #888;">[Archivo]</em>';
-        return contenido;
     }
+    
+    if (msg.texto_descifrado) {
+        if (contenido) contenido = '<div>' + msg.texto_descifrado + '</div>' + contenido;
+        else contenido = msg.texto_descifrado;
+    }
+    
+    if (!contenido) contenido = '<em style="color: #888;">[Archivo]</em>';
+    
+    log('✅ Contenido construido');
+    return contenido;
+}
 
     async function marcarComoLeidos() {
         if (!contactoActual || !clienteSupabase) return;
@@ -1269,6 +1373,70 @@
     document.addEventListener('click', function(e) {
         if (!e.target.closest('.menu-contextual') && !e.target.closest('.contacto-menu-btn') && !e.target.closest('.btn-warning') && !e.target.closest('.btn-info') && !e.target.closest('.btn-secondary')) cerrarMenus();
     });
+
+    async function testearStorage() {
+    try {
+        log('🧪 Probando Storage...');
+        
+        // Probar lista de buckets
+        var { data: buckets, error: bucketsError } = await clienteSupabase.storage.listBuckets();
+        if (bucketsError) {
+            logError('❌ Error listando buckets:', bucketsError);
+            return;
+        }
+        
+        log('✅ Buckets disponibles:', buckets.map(b => b.name).join(', '));
+        
+        // Verificar si existe chat-files
+        var chatFilesBucket = buckets.find(b => b.name === 'chat-files');
+        if (!chatFilesBucket) {
+            logError('❌ Bucket chat-files NO existe. Créalo en Supabase → Storage');
+            alert('❌ El bucket "chat-files" no existe.\n\nVe a Supabase → Storage → New bucket → Nombre: chat-files → Private: NO');
+            return;
+        }
+        
+        log('✅ Bucket chat-files existe');
+        
+        // Probar subida de archivo pequeño
+        var testBlob = new Blob(['test'], { type: 'text/plain' });
+        var testFileName = 'test_' + miPIN + '_' + Date.now() + '.txt';
+        
+        var { data: uploadData, error: uploadError } = await clienteSupabase.storage
+            .from('chat-files')
+            .upload(testFileName, testBlob);
+        
+        if (uploadError) {
+            logError('❌ Error en upload de prueba:', uploadError);
+            alert('❌ Error al subir: ' + uploadError.message);
+            return;
+        }
+        
+        log('✅ Upload de prueba exitoso:', uploadData.path);
+        
+        // Probar URL firmada
+        var { data: urlData, error: urlError } = await clienteSupabase.storage
+            .from('chat-files')
+            .createSignedUrl(testFileName, 60);
+        
+        if (urlError) {
+            logError('❌ Error creando URL firmada:', urlError);
+            alert('❌ Error creando URL: ' + urlError.message);
+            return;
+        }
+        
+        log('✅ URL firmada de prueba:', urlData.signedUrl);
+        
+        // Limpiar archivo de prueba
+        await clienteSupabase.storage.from('chat-files').remove([testFileName]);
+        log('✅ Archivo de prueba eliminado');
+        
+        alert('✅ Storage funciona correctamente!\n\nBucket: chat-files\nURL firmada: OK\nUpload: OK');
+        
+    } catch (error) {
+        logError('❌ Error en test:', error);
+        alert('Error: ' + error.message);
+    }
+}
 
     // ============================================
     // INICIALIZACIÓN
