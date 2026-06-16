@@ -342,59 +342,89 @@
         return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
     }
 
-    async function verificarPINConfigurado() {
-        pinAccesoHash = localStorage.getItem('pin_hash_' + miPIN);
-        codigoRecuperacionHash = localStorage.getItem('codigo_recuperacion_hash_' + miPIN);
+   async function verificarPINConfigurado() {
+    pinAccesoHash = localStorage.getItem('pin_hash_' + miPIN);
+    codigoRecuperacionHash = localStorage.getItem('codigo_recuperacion_hash_' + miPIN);
+    
+    var pantalla = document.getElementById('pantallaBloqueo');
+    var btnConfig = document.getElementById('btnConfigPIN');
+    var btnRecuperar = document.getElementById('btnRecuperar');
+    var btnDesbloquear = document.getElementById('btnDesbloquear');
+    var inputPIN = document.getElementById('pinAccesoInput');
+    
+    if (!pinAccesoHash) {
+        // No hay PIN configurado - mostrar inicio directamente
+        pantalla.classList.add('hidden');
+        pantalla.style.display = 'none';
+        document.getElementById('pantallaInicio').classList.remove('hidden');
+        document.getElementById('pantallaContactos').classList.add('hidden');
+        document.getElementById('pantallaChat').classList.add('hidden');
+        document.getElementById('pantallaSeguridad').classList.add('hidden');
+        await verificarEstado();
+    } else {
+        // Hay PIN, mostrar bloqueo
+        pantalla.classList.remove('hidden');
+        pantalla.style.display = 'flex';
+        btnConfig.style.display = 'none';
+        btnRecuperar.style.display = 'block';
+        btnDesbloquear.style.display = 'block';
+        inputPIN.style.display = 'block';
+        inputPIN.focus();
         
-        var pantalla = document.getElementById('pantallaBloqueo');
-        var btnConfig = document.getElementById('btnConfigPIN');
-        var btnRecuperar = document.getElementById('btnRecuperar');
-        
-        if (!pinAccesoHash) {
-            pantalla.classList.remove('hidden');
-            pantalla.style.display = 'flex';
-            btnConfig.style.display = 'block';
-            btnRecuperar.style.display = 'none';
-            document.getElementById('pinAccesoInput').style.display = 'none';
-            document.querySelector('button[onclick="desbloquearApp()"]').style.display = 'none';
-        } else {
-            pantalla.classList.remove('hidden');
-            pantalla.style.display = 'flex';
-            btnConfig.style.display = 'none';
-            btnRecuperar.style.display = 'block';
-            document.getElementById('pinAccesoInput').style.display = 'block';
-            document.querySelector('button[onclick="desbloquearApp()"]').style.display = 'block';
-            document.getElementById('pinAccesoInput').focus();
-        }
+        // Ocultar todas las pantallas mientras está bloqueado
+        document.getElementById('pantallaInicio').classList.add('hidden');
+        document.getElementById('pantallaContactos').classList.add('hidden');
+        document.getElementById('pantallaChat').classList.add('hidden');
+        document.getElementById('pantallaSeguridad').classList.add('hidden');
     }
+}
 
     async function configurarPIN() {
-        var pin1 = prompt('Ingresa un PIN de acceso (4-6 dígitos):');
-        if (!pin1 || pin1.length < 4) { alert('El PIN debe tener al menos 4 dígitos'); return; }
-        var pin2 = prompt('Confirma el PIN:');
-        if (pin1 !== pin2) { alert('Los PINs no coinciden'); return; }
-        
-        var codigoRecuperacion = generarCodigoRecuperacion();
-        var mensaje = '⚠️ IMPORTANTE: Guarda este código de recuperación\n\n' +
-                      codigoRecuperacion + '\n\n' +
-                      'Si olvidas tu PIN, necesitarás este código para recuperar el acceso.\n\n' +
-                      '¿Lo guardaste?';
-        
-        if (!confirm(mensaje)) { alert('Debes guardar el código de recuperación antes de continuar.'); return; }
-        
-        pinAccesoHash = await hashPIN(pin1);
-        codigoRecuperacionHash = await hashCodigo(codigoRecuperacion);
-        
-        localStorage.setItem('pin_hash_' + miPIN, pinAccesoHash);
-        localStorage.setItem('codigo_recuperacion_hash_' + miPIN, codigoRecuperacionHash);
-        
-        // Cifrar clave privada con el PIN si existe
-        var clavePrivadaActual = localStorage.getItem('clave_privada_' + miPIN);
-        if (clavePrivadaActual) {
-            var privBase64 = desofuscarClave(clavePrivadaActual);
+    var pin1 = prompt(' Ingresa un PIN de acceso (4-6 dígitos):');
+    if (!pin1 || pin1.length < 4 || pin1.length > 6) { alert('El PIN debe tener entre 4 y 6 dígitos'); return; }
+    if (!/^\d+$/.test(pin1)) { alert('El PIN solo puede contener números'); return; }
+    
+    var pin2 = prompt('Confirma el PIN:');
+    if (pin1 !== pin2) { alert('Los PINs no coinciden'); return; }
+    
+    var codigoRecuperacion = generarCodigoRecuperacion();
+    
+    var mensaje = '⚠️ IMPORTANTE: Guarda este código de recuperación\n\n' +
+                  '═══════════════════════════\n' +
+                  codigoRecuperacion + '\n' +
+                  '═══════════════════════════\n\n' +
+                  'Si olvidas tu PIN, necesitarás este código para recuperar el acceso.\n\n' +
+                  'Este código se muestra UNA SOLA VEZ y NO se puede recuperar después.\n\n' +
+                  '💡 Recomendación: Guárdalo en un gestor de contraseñas.\n\n' +
+                  '¿Lo guardaste?';
+    
+    if (!confirm(mensaje)) { alert('Debes guardar el código de recuperación antes de continuar.'); return; }
+    if (!confirm('¿Confirmas que guardaste el código: ' + codigoRecuperacion + '?')) { alert('Debes confirmar para continuar.'); return; }
+    
+    // Guardar hashes
+    pinAccesoHash = await hashPIN(pin1);
+    codigoRecuperacionHash = await hashCodigo(codigoRecuperacion);
+    localStorage.setItem('pin_hash_' + miPIN, pinAccesoHash);
+    localStorage.setItem('codigo_recuperacion_hash_' + miPIN, codigoRecuperacionHash);
+    
+    // ⚠️ IMPORTANTE: Guardar el PIN en sessionStorage para que sobreviva al reload
+    sessionStorage.setItem('pin_temporal_' + miPIN, pin1);
+    
+    // Cifrar clave privada si ya existe
+    var clavePrivadaActual = localStorage.getItem('clave_privada_' + miPIN);
+    if (clavePrivadaActual) {
+        try {
+            var privBase64 = clavePrivadaActual.includes('.') ? await descifrarClaveConPIN(clavePrivadaActual, pin1) : desofuscarClave(clavePrivadaActual);
             var claveCifrada = await cifrarClaveConPIN(privBase64, pin1);
             localStorage.setItem('clave_privada_' + miPIN, claveCifrada);
+        } catch (e) {
+            logError('Error cifrando clave con PIN:', e);
         }
+    }
+    
+    alert('✅ PIN configurado correctamente.\n\nAhora deberás ingresar tu PIN cada vez que abras la app.');
+    location.reload();
+}
         
         alert('✅ PIN configurado correctamente.');
         location.reload();
@@ -455,44 +485,90 @@
     }
 
     async function desbloquearApp() {
-        var pinIngresado = document.getElementById('pinAccesoInput').value;
-        var hashIngresado = await hashPIN(pinIngresado);
+    var pinIngresado = document.getElementById('pinAccesoInput').value;
+    if (!pinIngresado) return;
+    
+    var hashIngresado = await hashPIN(pinIngresado);
+    
+    if (hashIngresado === pinAccesoHash) {
+        // PIN Correcto
+        pinActualTemporal = pinIngresado;
+        // Guardar en sessionStorage para que sobreviva a cualquier reload
+        sessionStorage.setItem('pin_temporal_' + miPIN, pinIngresado);
         
-        if (hashIngresado === pinAccesoHash) {
-            document.getElementById('pantallaBloqueo').classList.add('hidden');
-            document.getElementById('pantallaBloqueo').style.display = 'none';
-            document.getElementById('pinAccesoInput').value = '';
-            document.getElementById('errorPIN').style.display = 'none';
-            await cargarClavePrivadaSegura(pinIngresado);
-        } else {
-            document.getElementById('errorPIN').style.display = 'block';
-            document.getElementById('pinAccesoInput').value = '';
-        }
-    }
-
-    async function cargarClavePrivadaSegura(pin) {
-        var claveCifrada = localStorage.getItem('clave_privada_' + miPIN);
-        if (!claveCifrada) { await generarClaves(); return; }
+        // Ocultar pantalla de bloqueo
+        document.getElementById('pantallaBloqueo').classList.add('hidden');
+        document.getElementById('pantallaBloqueo').style.display = 'none';
+        document.getElementById('pinAccesoInput').value = '';
+        document.getElementById('errorPIN').style.display = 'none';
+        
         try {
-            var privBase64 = '';
-            if (claveCifrada.includes('.')) {
-                privBase64 = await descifrarClaveConPIN(claveCifrada, pin);
-            } else {
-                privBase64 = desofuscarClave(claveCifrada);
-            }
-            var privBuf = Uint8Array.from(atob(privBase64), c => c.charCodeAt(0));
-            miClavePrivada = await crypto.subtle.importKey("pkcs8", privBuf, { name: "RSA-OAEP", hash: "SHA-256" }, true, ["decrypt"]);
-            var { data } = await clienteSupabase.from('usuarios').select('clave_publica').eq('pin', miPIN).single();
-            if (data && data.clave_publica) {
-                var pubBuf = Uint8Array.from(atob(data.clave_publica), c => c.charCodeAt(0));
-                miClavePublica = await crypto.subtle.importKey("spki", pubBuf, { name: "RSA-OAEP", hash: "SHA-256" }, true, ["encrypt"]);
-            }
-            log('✅ Claves cargadas con PIN');
+            // Cargar clave privada
+            await cargarClavePrivadaSegura(pinIngresado);
         } catch (error) {
-            logError('Error cargando claves:', error);
-            alert('Error al cargar las claves. Verifica tu PIN.');
+            logError('Error al cargar claves:', error);
+            alert('️ Error al cargar las claves. Se generarán nuevas.');
+            await generarClaves();
         }
+        
+        try {
+            // Mostrar pantalla de inicio y verificar estado
+            document.getElementById('pantallaInicio').classList.remove('hidden');
+            document.getElementById('pantallaContactos').classList.add('hidden');
+            document.getElementById('pantallaChat').classList.add('hidden');
+            document.getElementById('pantallaSeguridad').classList.add('hidden');
+            await verificarEstado();
+        } catch (error) {
+            logError('Error al verificar estado:', error);
+        }
+    } else {
+        // PIN Incorrecto
+        document.getElementById('errorPIN').style.display = 'block';
+        document.getElementById('pinAccesoInput').value = '';
+        document.getElementById('pinAccesoInput').focus();
     }
+}
+    async function cargarClavePrivadaSegura(pin) {
+    var claveCifrada = localStorage.getItem('clave_privada_' + miPIN);
+    
+    if (!claveCifrada) { 
+        log('No hay clave guardada, generando nuevas...');
+        await generarClaves(); 
+        return; 
+    }
+    
+    try {
+        var privBase64 = '';
+        if (claveCifrada.includes('.')) {
+            // Formato cifrado con PIN
+            if (!pin) throw new Error('Se requiere PIN para descifrar');
+            privBase64 = await descifrarClaveConPIN(claveCifrada, pin);
+            log('✅ Clave descifrada con PIN');
+        } else {
+            // Formato antiguo ofuscado (fallback)
+            privBase64 = desofuscarClave(claveCifrada);
+            log('✅ Clave cargada (formato ofuscado)');
+        }
+        
+        var privBuf = Uint8Array.from(atob(privBase64), c => c.charCodeAt(0));
+        miClavePrivada = await crypto.subtle.importKey("pkcs8", privBuf, { name: "RSA-OAEP", hash: "SHA-256" }, true, ["decrypt"]);
+        
+        var { data } = await clienteSupabase.from('usuarios').select('clave_publica').eq('pin', miPIN).single();
+        if (data && data.clave_publica) {
+            var pubBuf = Uint8Array.from(atob(data.clave_publica), c => c.charCodeAt(0));
+            miClavePublica = await crypto.subtle.importKey("spki", pubBuf, { name: "RSA-OAEP", hash: "SHA-256" }, true, ["encrypt"]);
+        } else {
+            log('⚠️ No hay clave pública en servidor, subiendo...');
+            var pubExp = await crypto.subtle.exportKey("spki", miClavePublica);
+            var pubBase64 = btoa(String.fromCharCode.apply(null, new Uint8Array(pubExp)));
+            await subirClavePublica(pubBase64);
+        }
+        log('✅ Claves cargadas correctamente');
+    } catch (error) {
+        logError('Error cargando claves:', error);
+        throw error; // Propagar error para que el llamador lo maneje
+    }
+}
 
     async function cifrarClaveConPIN(clavePrivadaBase64, pin) {
         var encoder = new TextEncoder();
@@ -683,19 +759,31 @@
     // CLAVES (LÓGICA DE FONDO)
     // ============================================
     async function generarClaves() {
-        try {
-            var parClaves = await crypto.subtle.generateKey({ name: "RSA-OAEP", modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: "SHA-256" }, true, ["encrypt", "decrypt"]);
-            miClavePrivada = parClaves.privateKey; miClavePublica = parClaves.publicKey;
-            var pubExp = await crypto.subtle.exportKey("spki", miClavePublica);
-            var pubBase64 = btoa(String.fromCharCode.apply(null, new Uint8Array(pubExp)));
-            var privExp = await crypto.subtle.exportKey("pkcs8", miClavePrivada);
-            var privBase64 = btoa(String.fromCharCode.apply(null, new Uint8Array(privExp)));
-            // Guardar ofuscada por defecto
-            localStorage.setItem('clave_privada_' + miPIN, ofuscarClave(privBase64));
-            await subirClavePublica(pubBase64);
-            log('✅ Claves generadas');
-        } catch (error) { logError('Error generando claves:', error); }
-    }
+    try {
+        var parClaves = await crypto.subtle.generateKey({ name: "RSA-OAEP", modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: "SHA-256" }, true, ["encrypt", "decrypt"]);
+        miClavePrivada = parClaves.privateKey;
+        miClavePublica = parClaves.publicKey;
+        var pubExp = await crypto.subtle.exportKey("spki", miClavePublica);
+        var pubBase64 = btoa(String.fromCharCode.apply(null, new Uint8Array(pubExp)));
+        var privExp = await crypto.subtle.exportKey("pkcs8", miClavePrivada);
+        var privBase64 = btoa(String.fromCharCode.apply(null, new Uint8Array(privExp)));
+        
+        // ⚠️ FIX: Usar sessionStorage para obtener el PIN temporal
+        var pinTemporal = pinActualTemporal || sessionStorage.getItem('pin_temporal_' + miPIN);
+        
+        // Si hay PIN activo, cifrar con PIN. Si no, ofuscar.
+        var aGuardar;
+        if (pinAccesoHash && pinTemporal) {
+            aGuardar = await cifrarClaveConPIN(privBase64, pinTemporal);
+        } else {
+            aGuardar = ofuscarClave(privBase64);
+        }
+        localStorage.setItem('clave_privada_' + miPIN, aGuardar);
+        
+        await subirClavePublica(pubBase64);
+        log('✅ Claves generadas');
+    } catch (error) { logError('Error generando claves:', error); }
+}
 
     async function subirClavePublica(pubBase64) {
         if (!clienteSupabase) return;
@@ -1177,15 +1265,20 @@
         if (!e.target.closest('.menu-contextual') && !e.target.closest('.contacto-menu-btn') && !e.target.closest('.btn-warning') && !e.target.closest('.btn-info')) { cerrarMenus(); }
     });
 
-    window.addEventListener('DOMContentLoaded', async function() {
+window.addEventListener('DOMContentLoaded', async function() {
+    try {
         generarPIN();
         await inicializarTodo();
-        await verificarPINConfigurado(); // Aquí se detiene si hay PIN
-        if (!pinAccesoHash) {
-            await cargarClaves(); // Cargar si no hay PIN
-            await verificarEstado();
-        }
-    });
+        await verificarPINConfigurado();
+    } catch (error) {
+        logError('Error en inicialización:', error);
+        // Mostrar inicio de todas formas para evitar pantalla negra
+        document.getElementById('pantallaBloqueo').classList.add('hidden');
+        document.getElementById('pantallaBloqueo').style.display = 'none';
+        document.getElementById('pantallaInicio').classList.remove('hidden');
+        alert('⚠️ Error al iniciar: ' + error.message);
+    }
+});
 </script>
 
 </body>
