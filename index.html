@@ -251,6 +251,22 @@
             </div>
         </div>
     </div>
+    <!-- 7. Forward Secrecy -->
+<div class="pref-item" style="border: 1px solid #ff9500;">
+    <div class="pref-title">🔐 Forward Secrecy (Protección avanzada)</div>
+    <div class="pref-desc">
+        Cuando las claves roten, los mensajes antiguos quedarán <strong>ilegibles en el servidor</strong>.
+        Solo podrás consultarlos desde el backup que descargues.<br><br>
+        <strong style="color:#ff9500;">⚠️ Requiere "Rotación de claves" activada para funcionar.</strong>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="btn btn-warning btn-small" onclick="activarForwardSecrecy()" id="btnActivarFS" style="flex:1;">🔒 Activar Forward Secrecy</button>
+        <button class="btn btn-danger btn-small" onclick="desactivarForwardSecrecy()" id="btnDesactivarFS" style="flex:1;">Desactivar</button>
+    </div>
+    <button class="btn btn-info btn-small" onclick="generarBackupMensajes()" style="margin-top:8px;">📦 Generar backup de mensajes ahora</button>
+    <button class="btn btn-secondary btn-small" onclick="backupClavePrivada()" style="margin-top:8px;"> Backup de clave privada</button>
+    <div class="pref-status" id="statusFS">Estado: Desactivado</div>
+</div>
 </div>
 
 <!-- MENÚS -->
@@ -297,7 +313,8 @@
         ocultar_al_cambiar: false,
         borrado_seguro: false,
         dosfa_backup: false,
-        limpieza_metadatos: false
+        limpieza_metadatos: false,
+        forward_secrecy: false
     };
 
     async function cargarPreferencias() {
@@ -314,6 +331,7 @@
                 prefs.borrado_seguro = data.borrado_seguro === true;
                 prefs.dosfa_backup = data.dosfa_backup === true;
                 prefs.limpieza_metadatos = data.limpieza_metadatos === true;
+                prefs.forward_secrecy = data.forward_secrecy === true;
             }
             
             // Guardar localmente como respaldo
@@ -363,6 +381,22 @@
             logError('Error guardando preferencia:', error);
             alert('Error al guardar. La preferencia se mantendrá localmente.');
         }
+        // Actualizar estado de Forward Secrecy
+var btnActivar = document.getElementById('btnActivarFS');
+var btnDesactivar = document.getElementById('btnDesactivarFS');
+var statusFS = document.getElementById('statusFS');
+
+if (prefs.forward_secrecy) {
+    if (btnActivar) btnActivar.style.display = 'none';
+    if (btnDesactivar) btnDesactivar.style.display = 'block';
+    if (statusFS) statusFS.innerText = 'Estado: ✅ ACTIVADO';
+    if (statusFS) statusFS.style.color = '#00ff88';
+} else {
+    if (btnActivar) btnActivar.style.display = 'block';
+    if (btnDesactivar) btnDesactivar.style.display = 'none';
+    if (statusFS) statusFS.innerText = 'Estado: Desactivado';
+    if (statusFS) statusFS.style.color = '#00ff88';
+}
     }
 
     async function guardarPreferenciaBool(campo, valor) {
@@ -406,17 +440,49 @@
 
     // Aplicar rotación de claves al iniciar
     async function verificarRotacionClaves() {
-        if (prefs.rotacion_claves_dias === 0) return;
+    // Si forward secrecy está activado, usar lógica especial
+    if (prefs.forward_secrecy && prefs.rotacion_claves_dias > 0) {
         var ultimaRotacion = parseInt(localStorage.getItem('rotacion_claves_' + miPIN) || '0');
         var diasTranscurridos = (Date.now() - ultimaRotacion) / (1000 * 60 * 60 * 24);
+        
         if (diasTranscurridos >= prefs.rotacion_claves_dias) {
-            if (confirm('🔑 Es hora de rotar tus claves (cada ' + prefs.rotacion_claves_dias + ' días).\n\n️ Los mensajes antiguos quedarán ilegibles.\n\n¿Rotar ahora?')) {
+            // Advertencia con opción de backup
+            var hacerBackup = confirm(
+                '🔑 Es hora de rotar tus claves (Forward Secrecy activo).\n\n' +
+                'Los mensajes antiguos quedarán ILEGIBLES en el servidor.\n\n' +
+                '¿Deseas hacer un backup descifrado ANTES de rotar?'
+            );
+            
+            if (hacerBackup) {
+                await generarBackupMensajes();
+            }
+            
+            var confirmar = confirm(
+                '¿Rotar claves ahora?\n\n' +
+                'Los mensajes anteriores quedarán ilegibles en el servidor.'
+            );
+            
+            if (confirmar) {
                 await generarClaves();
                 localStorage.setItem('rotacion_claves_' + miPIN, Date.now());
-                alert('✅ Claves rotadas correctamente.');
+                alert('✅ Claves rotadas. Forward Secrecy aplicado.');
             }
         }
+        return;
     }
+    
+    // Lógica normal (sin forward secrecy)
+    if (prefs.rotacion_claves_dias === 0) return;
+    var ultimaRotacion = parseInt(localStorage.getItem('rotacion_claves_' + miPIN) || '0');
+    var diasTranscurridos = (Date.now() - ultimaRotacion) / (1000 * 60 * 60 * 24);
+    if (diasTranscurridos >= prefs.rotacion_claves_dias) {
+        if (confirm('🔑 Es hora de rotar tus claves (cada ' + prefs.rotacion_claves_dias + ' días).\n\n⚠️ Los mensajes antiguos quedarán ilegibles.\n\n¿Rotar ahora?')) {
+            await generarClaves();
+            localStorage.setItem('rotacion_claves_' + miPIN, Date.now());
+            alert('✅ Claves rotadas correctamente.');
+        }
+    }
+}
 
     // Borrado seguro
     function borradoSeguroLocalStorage() {
