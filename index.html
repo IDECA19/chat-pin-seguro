@@ -84,6 +84,7 @@
         <button class="btn" onclick="desbloquearApp()" id="btnDesbloquear">Desbloquear</button>
         <button class="btn btn-secondary" onclick="configurarPIN()" id="btnConfigPIN" style="display:none;">🔑 Configurar PIN</button>
         <button class="btn btn-warning" onclick="recuperarAcceso()" id="btnRecuperar" style="display:none;">Olvidé mi PIN</button>
+        <button class="btn btn-danger" onclick="resetEmergencia()" id="btnReset" style="display:none; margin-top:10px;">⚠️ Reset de Emergencia</button>
         
         <p id="errorPIN" style="color:#ff3b30; font-size:12px; margin-top:10px; display:none;">PIN incorrecto</p>
     </div>
@@ -388,6 +389,7 @@
             btnConfig.style.display = 'none';
             btnRecuperar.style.display = 'block';
             btnDesbloquear.style.display = 'block';
+            document.getElementById('btnReset').style.display = 'block';
             inputPIN.style.display = 'block';
             inputPIN.focus();
             
@@ -485,6 +487,44 @@
         }
     }
 
+    async function resetEmergencia() {
+    // Doble confirmación para evitar reseteos accidentales
+    var confirmacion1 = confirm(
+        '⚠️ RESET DE EMERGENCIA\n\n' +
+        'Esta acción:\n' +
+        '• Eliminará tu PIN de acceso\n' +
+        '• Eliminará tu código de recuperación\n' +
+        '• Eliminará tu clave privada (se generará una nueva)\n\n' +
+        '⚠️ NO podrás descifrar mensajes antiguos.\n' +
+        '️ Tus contactos seguirán guardados.\n\n' +
+        '¿Estás seguro de continuar?'
+    );
+    
+    if (!confirmacion1) return;
+    
+    var confirmacion2 = confirm(
+        'ÚLTIMA CONFIRMACIÓN\n\n' +
+        '¿Realmente deseas hacer un reset de emergencia?\n\n' +
+        'Escribe "RESET" en el siguiente cuadro para confirmar.'
+    );
+    
+    if (!confirmacion2) return;
+    
+    var texto = prompt('Escribe RESET para confirmar:');
+    if (texto !== 'RESET') {
+        alert('❌ Cancelado. Debes escribir RESET exactamente.');
+        return;
+    }
+    
+    // Ejecutar reset
+    localStorage.removeItem('pin_hash_' + miPIN);
+    localStorage.removeItem('codigo_recuperacion_hash_' + miPIN);
+    localStorage.removeItem('clave_privada_' + miPIN);
+    sessionStorage.removeItem('pin_temporal_' + miPIN);
+    
+    alert('✅ Reset completado.\n\nSe generará una nueva clave privada.\nRecarga la página para continuar.');
+    location.reload();
+}
     async function descifrarClaveConCodigo(claveCifrada, codigo) {
         var partes = claveCifrada.split('.');
         if (partes.length !== 3) throw new Error('Formato inválido');
