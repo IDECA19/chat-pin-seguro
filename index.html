@@ -429,6 +429,201 @@
     }
 
     // ============================================
+// FORWARD SECRECY CON BACKUP LOCAL
+// ============================================
+
+async function activarForwardSecrecy() {
+    // Paso 1: Advertencia clara
+    var confirmacion1 = confirm(
+        '⚠️ ADVERTENCIA IMPORTANTE\n\n' +
+        'Forward Secrecy hará que los mensajes antiguos queden ILEGIBLES\n' +
+        'una vez que roten las claves.\n\n' +
+        'Esto es IRREVERSIBLE. No podrás recuperar esos mensajes\n' +
+        'en el servidor después de la rotación.\n\n' +
+        '¿Entiendes las consecuencias?'
+    );
+    
+    if (!confirmacion1) return;
+    
+    // Paso 2: Ofrecer backup
+    var hacerBackup = confirm(
+        ' ¿Deseas hacer un backup descifrado de tus mensajes actuales?\n\n' +
+        'Se generará un archivo HTML que podrás abrir en cualquier navegador\n' +
+        'para consultar tus mensajes antiguos.\n\n' +
+        'Este backup se guardará en tu dispositivo.'
+    );
+    
+    if (hacerBackup) {
+        await generarBackupMensajes();
+    }
+    
+    // Paso 3: Confirmación final
+    var confirmacion2 = confirm(
+        '🔐 ÚLTIMA CONFIRMACIÓN\n\n' +
+        '¿Activar Forward Secrecy?\n\n' +
+        '• Las claves rotarán según tu configuración\n' +
+        '• Los mensajes anteriores quedarán ilegibles en el servidor\n' +
+        '• Solo podrás leerlos desde el backup que acabas de descargar\n\n' +
+        'Esta acción NO se puede deshacer.'
+    );
+    
+    if (!confirmacion2) return;
+    
+    // Paso 4: Activar
+    prefs.forward_secrecy = true;
+    await guardarPreferenciaBool('forward_secrecy', true);
+    
+    // Paso 5: Forzar rotación inmediata
+    await generarClaves();
+    localStorage.setItem('rotacion_claves_' + miPIN, Date.now());
+    
+    alert('✅ Forward Secrecy activado.\n\n' +
+          'Tus claves han sido rotadas.\n' +
+          'Los mensajes anteriores ahora son ilegibles en el servidor.');
+}
+
+async function desactivarForwardSecrecy() {
+    if (!confirm('¿Desactivar Forward Secrecy?\n\nLas claves dejarán de rotar automáticamente.')) return;
+    prefs.forward_secrecy = false;
+    await guardarPreferenciaBool('forward_secrecy', false);
+    alert('✅ Forward Secrecy desactivado.');
+}
+
+async function generarBackupMensajes() {
+    try {
+        // Obtener todos los contactos
+        var contactos = getContactos();
+        var html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Backup Chat - ' + miPIN + '</title>';
+        html += '<style>body{font-family:Arial;background:#1a1a1a;color:#fff;padding:20px;max-width:600px;margin:0 auto;}';
+        html += '.chat{margin:20px 0;padding:15px;background:#222;border-radius:10px;}';
+        html += '.msg{padding:8px 12px;margin:6px 0;border-radius:12px;max-width:80%;word-wrap:break-word;}';
+        html += '.enviado{background:#00ff88;color:#000;margin-left:auto;}';
+        html += '.recibido{background:#2a2a2a;color:#fff;}';
+        html += '.fecha{color:#888;font-size:11px;text-align:center;margin:15px 0;}';
+        html += '.meta{font-size:10px;color:#888;margin-top:4px;text-align:right;}';
+        html += 'h2{color:#00ff88;}h3{color:#888;font-size:14px;}</style></head><body>';
+        html += '<h1>🔒 Backup de Chat</h1>';
+        html += '<p>PIN: <strong>' + miPIN + '</strong></p>';
+        html += '<p>Fecha de backup: <strong>' + new Date().toLocaleString('es-ES') + '</strong></p>';
+        html += '<p style="color:#ff9500;">⚠️ Este archivo contiene tus mensajes DESCIFRADOS. Guárdalo en un lugar seguro.</p>';
+        html += '<hr>';
+        
+        // Procesar cada contacto
+        for (var pin of contactos) {
+            var { data: mensajes } = await clienteSupabase.from('mensajes')
+                .select('*')
+                .or('and(pin_remitente.eq.' + miPIN + ',pin_destinatario.eq.' + pin + '),and(pin_remitente.eq.' + pin + ',pin_destinatario.eq.' + miPIN + ')')
+                .order('enviado_en', { ascending: true });
+            
+            if (!mensajes || mensajes.length === 0) continue;
+            
+            html += '<div class="chat">';
+            html += '<h2>💬 Chat con ' + pin + '</h2>';
+            
+            var ultimaFecha = '';
+            for (var msg of mensajes) {
+                var fecha = new Date(msg.enviado_en);
+                var fechaStr = fecha.toLocaleDateString('es-ES');
+                
+                if (fechaStr !== ultimaFecha) {
+                    html += '<div class="fecha">' + fechaStr + '</div>';
+                    ultimaFecha = fechaStr;
+                }
+                
+                // Descifrar mensaje
+                var texto = '';
+                try {
+                    if (msg.mensaje_cifrado && msg.mensaje_cifrado.length > 0) {
+                        texto = await descifrarMensaje(msg.mensaje_cifrado);
+                    }
+                } catch (e) {
+                    texto = '[No se pudo descifrar]';
+                }
+                
+                var esMio = msg.pin_remitente === miPIN;
+                var clase = esMio ? 'enviado' : 'recibido';
+                var hora = fecha.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+                
+                html += '<div class="msg ' + clase + '">';
+                if (texto) html += '<div>' + escapeHtml(texto) + '</div>';
+                if (msg.archivo_url) {
+                    html += '<div style="margin-top:6px;"><a href="' + msg.archivo_url + '" target="_blank" style="color:inherit;">📎 ' + (msg.archivo_nombre || 'Archivo') + '</a></div>';
+                }
+                html += '<div class="meta">' + hora + (esMio ? ' ✓✓' : '') + '</div>';
+                html += '</div>';
+            }
+            
+            html += '</div>';
+        }
+        
+        html += '<hr><p style="color:#888;font-size:11px;">Backup generado el ' + new Date().toLocaleString('es-ES') + '</p>';
+        html += '</body></html>';
+        
+        // Descargar archivo
+        var blob = new Blob([html], { type: 'text/html' });
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = 'backup_chat_' + miPIN + '_' + Date.now() + '.html';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        
+        alert('✅ Backup descargado.\n\nGuárdalo en un lugar seguro (ej: USB, nube cifrada).\n\nEste archivo contiene todos tus mensajes DESCIFRADOS.');
+        
+    } catch (error) {
+        logError('Error generando backup:', error);
+        alert('❌ Error al generar backup: ' + error.message);
+    }
+}
+
+function escapeHtml(texto) {
+    var div = document.createElement('div');
+    div.appendChild(document.createTextNode(texto));
+    return div.innerHTML;
+}
+
+// Backup de clave privada (separado del backup de mensajes)
+async function backupClavePrivada() {
+    try {
+        var privOfuscada = localStorage.getItem('clave_privada_' + miPIN);
+        if (!privOfuscada) { alert('No hay clave para exportar'); return; }
+        var privBase64 = desofuscarClave(privOfuscada);
+        
+        var html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Backup Clave - ' + miPIN + '</title></head><body>';
+        html += '<h1>🔑 Backup de Clave Privada</h1>';
+        html += '<p>PIN: <strong>' + miPIN + '</strong></p>';
+        html += '<p>Fecha: <strong>' + new Date().toLocaleString('es-ES') + '</strong></p>';
+        html += '<p style="color:#ff3b30;">⚠️ ESTE ARCHIVO CONTIENE TU CLAVE PRIVADA EN TEXTO PLANO.</p>';
+        html += '<p style="color:#ff3b30;">⚠️ GUÁRDALO EN UN LUGAR SEGURO Y ELIMINA ESTE ARCHIVO DESPUÉS DE USARLO.</p>';
+        html += '<hr>';
+        html += '<h3>Clave privada (Base64):</h3>';
+        html += '<textarea readonly style="width:100%;height:200px;font-family:monospace;font-size:11px;">' + privBase64 + '</textarea>';
+        html += '<hr>';
+        html += '<h3>Clave pública (Base64):</h3>';
+        var pubExp = await crypto.subtle.exportKey("spki", miClavePublica);
+        var pubBase64 = btoa(String.fromCharCode.apply(null, new Uint8Array(pubExp)));
+        html += '<textarea readonly style="width:100%;height:200px;font-family:monospace;font-size:11px;">' + pubBase64 + '</textarea>';
+        html += '</body></html>';
+        
+        var blob = new Blob([html], { type: 'text/html' });
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = 'backup_clave_' + miPIN + '_' + Date.now() + '.html';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        
+        alert('✅ Backup de clave descargado.\n\n⚠️ Este archivo NO está cifrado. Guárdalo en un lugar MUY seguro.');
+    } catch (error) {
+        logError('Error backup clave:', error);
+        alert('Error: ' + error.message);
+    }
+}
+    // ============================================
     // NAVEGACIÓN
     // ============================================
     function mostrarInicio() { cancelarSuscripciones(); document.getElementById('pantallaInicio').classList.remove('hidden'); document.getElementById('pantallaContactos').classList.add('hidden'); document.getElementById('pantallaChat').classList.add('hidden'); document.getElementById('pantallaSeguridad').classList.add('hidden'); }
