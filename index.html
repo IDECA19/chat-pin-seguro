@@ -1,3 +1,285 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat PIN Seguro</title>
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#000000">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://dksmoteiidjpymextrgj.supabase.co; media-src 'self' blob: https://dksmoteiidjpymextrgj.supabase.co; connect-src 'self' https://dksmoteiidjpymextrgj.supabase.co wss://dksmoteiidjpymextrgj.supabase.co https://cdn.jsdelivr.net; font-src 'self';">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0a0a0a; color: #fff; min-height: 100vh; }
+        .container { max-width: 480px; margin: 0 auto; padding: 16px; }
+        .card { background: #1a1a1a; padding: 16px; border-radius: 12px; border: 1px solid #2a2a2a; margin-bottom: 12px; }
+        .pin-display { font-size: 1.8em; font-weight: 800; color: #00ff88; letter-spacing: 2px; margin: 8px 0; font-family: 'Courier New', monospace; text-align: center; }
+        .btn { background: #00ff88; color: #000; border: none; padding: 12px; border-radius: 8px; font-size: 14px; font-weight: 700; cursor: pointer; width: 100%; margin: 6px 0; }
+        .btn:hover { transform: translateY(-1px); }
+        .btn-secondary { background: #2a2a2a; color: #fff; }
+        .btn-warning { background: #ff9500; color: #000; }
+        .btn-danger { background: #ff3b30; color: #fff; }
+        .btn-info { background: #007aff; color: #fff; }
+        .btn-small { padding: 6px 12px; font-size: 12px; width: auto; }
+        .status { padding: 10px; border-radius: 8px; font-size: 13px; font-weight: 600; margin: 10px 0; text-align: center; }
+        .active { background: rgba(0, 255, 136, 0.15); color: #00ff88; }
+        .expired { background: rgba(255, 59, 48, 0.15); color: #ff3b30; }
+        input, textarea, select { width: 100%; padding: 12px; margin: 6px 0; border-radius: 8px; border: 1px solid #333; background: #222; color: #fff; font-size: 14px; }
+        input:focus, textarea:focus, select:focus { outline: none; border-color: #00ff88; }
+        .hidden { display: none !important; }
+        .contacto-item { background: #222; padding: 14px; border-radius: 10px; margin: 8px 0; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
+        .contacto-item:hover { background: #2a2a2a; }
+        .contacto-pin { font-family: 'Courier New', monospace; font-weight: bold; color: #00ff88; font-size: 16px; }
+        .contacto-menu-btn { background: none; border: none; color: #888; font-size: 18px; cursor: pointer; padding: 4px 8px; border-radius: 4px; }
+        .contacto-menu-btn:hover { background: #333; color: #fff; }
+        .badge { background: #ff3b30; color: white; border-radius: 10px; padding: 2px 8px; font-size: 11px; font-weight: bold; }
+        .mensaje { background: #222; padding: 10px 14px; border-radius: 16px; margin: 6px 0; max-width: 85%; word-wrap: break-word; position: relative; user-select: none; }
+        .mensaje.seleccionado { border: 2px solid #007aff; background: rgba(0, 122, 255, 0.1); }
+        .mensaje-enviado { background: #00ff88; color: #000; margin-left: auto; }
+        .mensaje-recibido { background: #2a2a2a; color: #fff; }
+        .mensaje-meta { font-size: 10px; margin-top: 4px; display: flex; justify-content: flex-end; align-items: center; gap: 4px; }
+        .mensaje-enviado .mensaje-meta { color: rgba(0,0,0,0.7); }
+        .mensaje-recibido .mensaje-meta { color: #888; }
+        .check-leido { color: #007aff !important; font-weight: bold; }
+        .chat-header { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid #2a2a2a; }
+        .chat-messages { max-height: 420px; overflow-y: auto; padding: 10px 4px; }
+        .mensaje img, .mensaje video { max-width: 220px; border-radius: 8px; margin-top: 4px; display: block; }
+        .archivo-preview { background: #222; padding: 10px; border-radius: 8px; margin-top: 10px; }
+        .archivo-preview img { max-width: 100%; max-height: 150px; border-radius: 8px; }
+        .progress-bar { background: #333; height: 4px; margin-top: 10px; border-radius: 2px; overflow: hidden; }
+        .progress-bar-fill { background: #00ff88; height: 100%; width: 0%; transition: width 0.3s; }
+        .toggle-container { display: flex; align-items: center; justify-content: space-between; padding: 12px; background: #222; border-radius: 8px; margin: 10px 0; }
+        .toggle-label { font-size: 13px; color: #ccc; }
+        .toggle { position: relative; width: 50px; height: 26px; }
+        .toggle input { opacity: 0; width: 0; height: 0; }
+        .toggle-slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background: #555; border-radius: 26px; transition: 0.3s; }
+        .toggle-slider:before { content: ""; position: absolute; height: 20px; width: 20px; left: 3px; bottom: 3px; background: white; border-radius: 50%; transition: 0.3s; }
+        .toggle input:checked + .toggle-slider { background: #00ff88; }
+        .toggle input:checked + .toggle-slider:before { transform: translateX(24px); }
+        .menu-contextual { position: fixed; background: #2a2a2a; border: 1px solid #444; border-radius: 8px; padding: 8px 0; z-index: 1000; box-shadow: 0 4px 20px rgba(0,0,0,0.5); min-width: 180px; }
+        .menu-contextual button { background: none; border: none; color: #fff; padding: 10px 16px; width: 100%; text-align: left; cursor: pointer; font-size: 14px; display: flex; align-items: center; gap: 8px; }
+        .menu-contextual button:hover { background: #333; }
+        .menu-contextual button.danger { color: #ff3b30; }
+        .menu-contextual button.danger:hover { background: rgba(255, 59, 48, 0.1); }
+        .security-badge { background: rgba(0, 255, 136, 0.1); border: 1px solid rgba(0,255,136,0.3); padding: 6px 10px; border-radius: 20px; font-size: 11px; color: #00ff88; margin-top: 10px; text-align: center; display: inline-flex; align-items: center; gap: 4px; }
+        h2 { margin: 0 0 8px 0; font-size: 22px; }
+        h3 { margin: 12px 0 8px 0; color: #888; font-size: 13px; }
+        .pref-item { background: #222; padding: 12px; border-radius: 8px; margin: 8px 0; border: 1px solid #333; }
+        .pref-title { font-weight: bold; color: #fff; margin-bottom: 4px; font-size: 14px; }
+        .pref-desc { font-size: 11px; color: #888; margin-bottom: 8px; }
+        .pref-status { font-size: 11px; color: #00ff88; margin-top: 4px; }
+        
+        /* Contenedor dinámico de carga para descifrar archivos multimedia progresivamente */
+        .media-container { min-height: 40px; display: flex; align-items: center; justify-content: flex-start; padding: 4px; margin-top: 6px; }
+        .loading-media { font-size: 11px; color: #888; display: inline-flex; align-items: center; gap: 4px; }
+
+        /* Barra de selección múltiple */
+        .barra-seleccion { background: #007aff; padding: 10px 16px; border-radius: 8px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 100; }
+        .barra-seleccion button { background: rgba(255,255,255,0.2); border: none; color: white; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 12px; margin-left: 6px; }
+        .barra-seleccion button:hover { background: rgba(255,255,255,0.3); }
+        .barra-seleccion button.danger { background: #ff3b30; }
+        
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
+    </style>
+</head>
+<body>
+
+<!-- PANTALLA DE BLOQUEO -->
+<div id="pantallaBloqueo" style="position:fixed; top:0; left:0; width:100%; height:100%; background:#0a0a0a; z-index:9999; display:none; flex-direction:column; justify-content:center; align-items:center; padding:20px;">
+    <div style="text-align:center; max-width:320px; width:100%;">
+        <div style="font-size:48px; margin-bottom:20px;">🔒</div>
+        <h2 style="margin-bottom:10px;">Chat Bloqueado</h2>
+        <p style="color:#888; font-size:13px; margin-bottom:30px;">Ingresa tu PIN de acceso</p>
+        <input type="password" id="pinAccesoInput" placeholder="PIN de 4-6 dígitos" maxlength="6" style="text-align:center; font-size:24px; letter-spacing:5px; margin-bottom:20px;">
+        <button class="btn" onclick="desbloquearApp()" id="btnDesbloquear">Desbloquear</button>
+        <button class="btn btn-secondary" onclick="configurarPIN()" id="btnConfigPIN" style="display:none;">🔑 Configurar PIN</button>
+        <button class="btn btn-warning" onclick="recuperarAcceso()" id="btnRecuperar" style="display:none;">Olvidé mi PIN</button>
+        <button class="btn btn-danger" onclick="resetEmergencia()" id="btnReset" style="display:none; margin-top:10px;">⚠️ Reset de Emergencia</button>
+        <p id="errorPIN" style="color:#ff3b30; font-size:12px; margin-top:10px; display:none;">PIN incorrecto</p>
+    </div>
+</div>
+
+<div class="container">
+    <!-- INICIO -->
+    <div id="pantallaInicio" class="hidden">
+        <h2>🔒 Chat Anónimo</h2>
+        <p style="color: #888; font-size: 13px; margin-bottom: 12px;">Tu PIN es tu identidad</p>
+        <div class="card">
+            <p style="color: #888; margin: 0; font-size: 12px;">TU PIN</p>
+            <div class="pin-display" id="miPin">...</div>
+            <button class="btn btn-secondary" onclick="copiarPIN()">📋 Copiar mi PIN</button>
+        </div>
+        <div class="card">
+            <div id="estadoTexto" class="status expired">Cargando...</div>
+            <div id="formActivacion" class="hidden">
+                <p style="color: #ccc; margin: 10px 0; font-size: 13px;">Código de Activación:</p>
+                <input type="text" id="codigoInput" placeholder="Ej: ACT-45D-XXXX" maxlength="20">
+                <button class="btn" onclick="activar()" id="btnActivar">Activar</button>
+            </div>
+            <div id="panelChat" class="hidden">
+                <button class="btn" onclick="mostrarContactos()">💬 Ir al Chat</button>
+                <p style="font-size: 12px; color: #888; margin-top: 10px; text-align: center;">
+                    Vence: <span id="fechaVencimiento" style="color: #fff;"></span>
+                </p>
+                <!-- <div style="text-align: center;"><span class="security-badge">🔐 Cifrado Híbrido AES+RSA</span></div> -->
+                <div class="toggle-container">
+                    <div>
+                        <div class="toggle-label" style="font-weight: bold;">🔒 Modo Privado</div>
+                        <div style="font-size: 11px; color: #888; margin-top: 2px;">Solo recibir de contactos guardados</div>
+                    </div>
+                    <label class="toggle">
+                        <input type="checkbox" id="toggleModoPrivado" onchange="cambiarModoPrivado()">
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+                <button class="btn btn-info" onclick="mostrarPanelSeguridad()" style="margin-top: 8px;">🛡️ Seguridad Avanzada</button>
+                <button class="btn btn-warning" onclick="mostrarBackupMenu()" style="margin-top: 8px;">🔑 Backup de Claves</button>
+                <button class="btn btn-secondary" onclick="cambiarPIN()" id="btnCambiarPIN" style="margin-top: 8px;">🔐 Cambiar PIN de acceso</button>
+            </div>
+            <!--- PROBAR ESTE BLOQUE NOTIFICAR --->
+
+            <div class="pref-item" style="border: 1px solid #007aff;">
+    <div class="pref-title">🔔 Notificaciones</div>
+    <div class="pref-desc">Configura cómo recibir alertas de nuevos mensajes.</div>
+    <button class="btn btn-info btn-small" onclick="mostrarConfigNotificaciones()">⚙️ Configurar Notificaciones</button>
+    <button class="btn btn-secondary btn-small" onclick="solicitarPermisoNotificaciones().then(r => alert(r ? '✅ Permiso concedido' : '❌ Permiso denegado'))" style="margin-top: 8px;">🔓 Solicitar Permiso</button>
+</div>
+            <!--- FIN DE BLOQUE NOTIFICAR --->
+        </div>
+    </div>
+
+    <!-- CONTACTOS -->
+    <div id="pantallaContactos" class="hidden">
+        <div class="chat-header">
+            <button class="btn btn-secondary" onclick="mostrarInicio()" style="width: auto; padding: 8px 14px; margin: 0;">← Volver</button>
+            <h2 style="margin: 0; flex: 1; font-size: 20px;">Mis Contactos</h2>
+        </div>
+        <div class="card">
+            <h3>Agregar nuevo contacto</h3>
+            <input type="text" id="nuevoContactoPin" placeholder="PIN del contacto (8 caracteres)" maxlength="8">
+            <button class="btn" onclick="agregarContacto()">➕ Agregar</button>
+        </div>
+        <div id="listaContactos"><p style="color: #888; text-align: center; padding: 20px;">No tienes contactos aún</p></div>
+        <div id="listaBloqueados" class="hidden"><h3>🚫 PINs Bloqueados</h3><div id="contenidoBloqueados"></div></div>
+        <div id="seccionPendientes" class="hidden"><h3>📨 Mensajes de desconocidos</h3><div id="listaPendientes"></div></div>
+    </div>
+
+    <!-- CHAT -->
+    <div id="pantallaChat" class="hidden">
+        <div class="chat-header">
+            <button class="btn btn-secondary" onclick="mostrarContactos()" style="width: auto; padding: 8px 14px; margin: 0;">← Volver</button>
+            <h2 style="margin: 0; flex: 1; font-size: 18px;">Chat con <span id="chatContactoPin" style="color: #00ff88;"></span></h2>
+            <button class="btn btn-small btn-warning" onclick="mostrarMenuChat()" title="Opciones" style="margin: 0;">⋮</button>
+        </div>
+        
+        <!-- Barra de selección múltiple -->
+        <div id="barraSeleccion" class="barra-seleccion hidden">
+            <span id="contadorSeleccion">0 seleccionados</span>
+            <div>
+                <button onclick="cancelarSeleccion()">Cancelar</button>
+                <button class="danger" onclick="borrarSeleccionados()">🗑️ Borrar</button>
+            </div>
+        </div>
+        
+        <div class="card" style="padding: 12px;">
+            <div id="chatMensajes" class="chat-messages"><p style="color: #888; text-align: center; padding: 20px;">No hay mensajes aún</p></div>
+        </div>
+        <div class="card">
+            <textarea id="nuevoMensaje" placeholder="Escribe tu mensaje..." rows="2"></textarea>
+            <input type="file" id="archivoInput" style="display: none;" accept="image/*,video/*,.pdf,.doc,.docx,.txt,.zip">
+            <div style="display: flex; gap: 8px; margin-top: 8px;">
+                <button class="btn btn-secondary" onclick="document.getElementById('archivoInput').click()" style="flex: 1; margin: 0;">📎 Adjuntar</button>
+                <button class="btn" onclick="enviarMensaje()" style="flex: 2; margin: 0;">📤 Enviar</button>
+            </div>
+            <div id="archivoPreview" class="archivo-preview hidden">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span id="archivoNombre" style="font-size: 12px; color: #ccc;"></span>
+                    <button onclick="cancelarArchivo()" style="background: #ff3b30; border: none; color: white; padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 12px;">✕</button>
+                </div>
+                <div id="archivoContenido"></div>
+                <div class="progress-bar"><div id="archivoProgressBar" class="progress-bar-fill"></div></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- PANEL DE SEGURIDAD -->
+    <div id="pantallaSeguridad" class="hidden">
+        <div class="chat-header">
+            <button class="btn btn-secondary" onclick="cerrarPanelSeguridad()" style="width: auto; padding: 8px 14px; margin: 0;">← Volver</button>
+            <h2 style="margin: 0; flex: 1; font-size: 20px;">🛡️ Seguridad Avanzada</h2>
+        </div>
+        <div class="card">
+            <p style="font-size: 12px; color: #888; margin-bottom: 12px;">⚠️ <strong>Tú controlas estas políticas.</strong></p>
+            <div class="pref-item">
+                <div class="pref-title">⏱️ Auto-destrucción de mensajes</div>
+                <div class="pref-desc">Los mensajes se borran automáticamente después del tiempo seleccionado.</div>
+                <select id="prefAutoDestruccion" onchange="guardarPreferencia('auto_destruccion_dias', this.value)">
+                    <option value="0">Desactivado</option><option value="7">7 días</option><option value="30">30 días</option><option value="90">90 días</option><option value="365">1 año</option>
+                </select>
+                <div class="pref-status" id="statusAutoDestruccion">Estado: Desactivado</div>
+            </div>
+            <div class="pref-item">
+                <div class="pref-title">🔑 Rotación automática de claves</div>
+                <div class="pref-desc">Genera nuevas claves periódicamente.</div>
+                <select id="prefRotacionClaves" onchange="guardarPreferencia('rotacion_claves_dias', this.value)">
+                    <option value="0">Desactivado</option><option value="30">Cada 30 días</option><option value="90">Cada 90 días</option><option value="180">Cada 6 meses</option>
+                </select>
+                <div class="pref-status" id="statusRotacion">Estado: Desactivado</div>
+            </div>
+            <div class="pref-item">
+                <div class="pref-title">👁️ Ocultar mensajes al cambiar de pestaña</div>
+                <div class="pref-desc">Desenfoca los mensajes cuando la app pierde el foco.</div>
+                <label class="toggle"><input type="checkbox" id="prefOcultarCambiar" onchange="guardarPreferenciaBool('ocultar_al_cambiar', this.checked)"><span class="toggle-slider"></span></label>
+                <div class="pref-status" id="statusOcultar">Estado: Desactivado</div>
+            </div>
+            <div class="pref-item">
+                <div class="pref-title">🗑️ Borrado seguro de datos</div>
+                <div class="pref-desc">Sobrescribe los datos antes de borrarlos.</div>
+                <label class="toggle"><input type="checkbox" id="prefBorradoSeguro" onchange="guardarPreferenciaBool('borrado_seguro', this.checked)"><span class="toggle-slider"></span></label>
+                <div class="pref-status" id="statusBorrado">Estado: Desactivado</div>
+            </div>
+            <div class="pref-item">
+                <div class="pref-title">🔐 Doble factor para backup</div>
+                <div class="pref-desc">Requiere código adicional al exportar/importar claves.</div>
+                <label class="toggle"><input type="checkbox" id="prefDosfa" onchange="guardarPreferenciaBool('dosfa_backup', this.checked)"><span class="toggle-slider"></span></label>
+                <div class="pref-status" id="statusDosfa">Estado: Desactivado</div>
+            </div>
+            <div class="pref-item">
+                <div class="pref-title">🧹 Limpieza de metadatos</div>
+                <div class="pref-desc">Borra mensajes leídos después de 7 días.</div>
+                <label class="toggle"><input type="checkbox" id="prefLimpiezaMeta" onchange="guardarPreferenciaBool('limpieza_metadatos', this.checked)"><span class="toggle-slider"></span></label>
+                <div class="pref-status" id="statusLimpieza">Estado: Desactivado</div>
+            </div>
+
+            <!-- XXXX NUEVO VERIFICAR LUGAR -->
+            <div class="pref-item" style="border: 1px solid #ff9500;">
+                <div class="pref-title">🔐 Forward Secrecy</div>
+                <div class="pref-desc">Cuando roten las claves, los mensajes antiguos quedarán ilegibles en el servidor.<br><strong style="color:#ff9500;">⚠️ Requiere "Rotación de claves" activada.</strong></div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                    <button class="btn btn-warning btn-small" onclick="activarForwardSecrecy()" id="btnActivarFS" style="flex:1;">🔒 Activar</button>
+                    <button class="btn btn-danger btn-small" onclick="desactivarForwardSecrecy()" id="btnDesactivarFS" style="flex:1;display:none;">Desactivar</button>
+                </div>
+                <div class="pref-item" style="border: 1px solid #007aff;">
+    <div class="pref-title">🧪 Diagnóstico de Storage</div>
+    <div class="pref-desc">Verifica que el bucket de archivos funcione correctamente.</div>
+    <button class="btn btn-info btn-small" onclick="testearStorage()">🧪 Ejecutar Test de Storage</button>
+</div>
+                <button class="btn btn-info btn-small" onclick="generarBackupMensajes()" style="margin-top:8px;">📦 Backup de mensajes</button>
+                <button class="btn btn-secondary btn-small" onclick="backupClavePrivada()" style="margin-top:8px;">🔑 Backup de clave privada</button>
+                <div class="pref-status" id="statusFS">Estado: Desactivado</div>
+                
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- MENÚS CONTEXTUALES -->
+<div id="menuContextual" class="menu-contextual hidden"></div>
+<div id="menuChat" class="menu-contextual hidden"></div>
+<div id="menuBackup" class="menu-contextual hidden"></div>
+
+
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 var SUPABASE_URL = 'https://dksmoteiidjpymextrgj.supabase.co';
