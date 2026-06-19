@@ -124,11 +124,15 @@ h3 { margin: 12px 0 8px 0; color: #888; font-size: 13px; }
 <label class="toggle"><input type="checkbox" id="toggleModoPrivado" onchange="cambiarModoPrivado()"><span class="toggle-slider"></span></label>
 </div>
         <!-- NUEVO: Panel de Notificaciones -->
-<div class="pref-item" style="border: 1px solid #007aff;">
-<div class="pref-title">🔔 Notificaciones</div>
-<div class="pref-desc">Configura cómo recibir alertas de nuevos mensajes.</div>
-<button class="btn btn-info btn-small" onclick="mostrarConfigNotificaciones()">️ Configurar Notificaciones</button>
-<button class="btn btn-secondary btn-small" onclick="solicitarPermisoNotificaciones().then(function(r) { alert(r ? '✅ Permiso concedido' : '❌ Permiso denegado'); })" style="margin-top: 8px;">🔓 Solicitar Permiso</button>
+<div class="pref-item" style="border: 1px solid #007aff; border-radius: 12px; padding: 16px;">
+    <div class="pref-title" style="color: #007aff; margin-bottom: 8px;">🔔 Notificaciones</div>
+    <div class="pref-desc" style="margin-bottom: 12px;">Configura cómo recibir alertas de nuevos mensajes.</div>
+    <button class="btn btn-info" onclick="solicitarPermisoNotificaciones()" style="margin-bottom: 8px;">
+        🔓 Solicitar Permiso de Notificaciones
+    </button>
+    <button class="btn btn-secondary" onclick="probarNotificacion()">
+        🧪 Probar Notificación
+    </button>
 </div>
     <!-- FIN DE NUEVO: Panel de Notificaciones -->
 <button class="btn btn-info" onclick="mostrarPanelSeguridad()" style="margin-top: 8px;">🛡️ Seguridad Avanzada</button>
@@ -1538,6 +1542,135 @@ window.addEventListener('DOMContentLoaded', async function() {
         alert('⚠️ Error: ' + error.message);
     }
 });
+</script>
+        <script>
+// Registrar Service Worker para notificaciones en background
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function() {
+        navigator.serviceWorker.register('/sw.js')
+            .then(function(registration) {
+                console.log('✅ Service Worker registrado:', registration.scope);
+                
+                // Suscribirse a notificaciones push (opcional)
+                // Esto requiere un servidor de notificaciones
+            })
+            .catch(function(error) {
+                console.log('❌ Error registrando Service Worker:', error);
+            });
+    });
+}
+
+// Función para solicitar permiso de notificaciones correctamente
+function solicitarPermisoNotificaciones() {
+    if (!('Notification' in window)) {
+        alert('❌ Tu navegador no soporta notificaciones');
+        return false;
+    }
+    
+    Notification.requestPermission().then(function(permission) {
+        console.log('Permiso de notificación:', permission);
+        if (permission === 'granted') {
+            alert('✅ Permiso de notificaciones concedido');
+            // Probar notificación
+            new Notification('Kerix - Notificaciones activas', {
+                body: 'Recibirás alertas de nuevos mensajes',
+                icon: '/icon.png',
+                badge: '/badge.png'
+            });
+        } else if (permission === 'denied') {
+            alert('❌ Permiso denegado. Ve a configuración del navegador para activar notificaciones.');
+        }
+    });
+}
+
+// Función para mostrar notificación (compatible con foreground y background)
+function mostrarNotificacionKerix(titulo, cuerpo, pinRemitente) {
+    // Verificar si estamos en el chat del remitente
+    var contactoActualElement = document.getElementById('chatContactoPin');
+    var contactoActual = contactoActualElement ? contactoActualElement.innerText : '';
+    
+    // No mostrar si estamos en el chat del remitente
+    if (document.visibilityState === 'visible' && contactoActual === pinRemitente) {
+        return;
+    }
+    
+    // Intentar notificación nativa
+    if (Notification.permission === 'granted') {
+        new Notification(titulo, {
+            body: cuerpo,
+            icon: '/icon.png',
+            badge: '/badge.png',
+            tag: 'chat-' + pinRemitente,
+            requireInteraction: false
+        });
+    }
+    
+    // También mostrar notificación visual en la app
+    mostrarNotificacionVisual(titulo, cuerpo, pinRemitente);
+}
+
+// Función para notificación visual (burbuja en la app)
+function mostrarNotificacionVisual(titulo, cuerpo, pinRemitente) {
+    var contenedor = document.getElementById('notificacionesContainer');
+    if (!contenedor) {
+        contenedor = document.createElement('div');
+        contenedor.id = 'notificacionesContainer';
+        contenedor.style.cssText = 'position: fixed; top: 20px; right: 20px; z-index: 10000; display: flex; flex-direction: column; gap: 10px; pointer-events: none;';
+        document.body.appendChild(contenedor);
+    }
+    
+    var burbuja = document.createElement('div');
+    burbuja.style.cssText = 'background: linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 100%); border: 2px solid #00ff88; border-radius: 12px; padding: 16px 20px; min-width: 280px; max-width: 350px; box-shadow: 0 8px 32px rgba(0, 255, 136, 0.3); animation: slideInRight 0.3s ease-out; pointer-events: auto; cursor: pointer;';
+    burbuja.innerHTML = '<div style="display: flex; justify-content: space-between; align-items: start; gap: 8px;"><div style="flex: 1;"><div style="font-weight: bold; color: #00ff88; font-size: 14px; margin-bottom: 4px;">' + titulo + '</div><div style="color: #fff; font-size: 13px; line-height: 1.4;">' + cuerpo + '</div></div><button onclick="this.parentElement.parentElement.remove()" style="background: none; border: none; color: #888; cursor: pointer; font-size: 18px; padding: 0; line-height: 1;">✕</button></div>';
+    burbuja.onclick = function(e) {
+        if (e.target.tagName !== 'BUTTON') {
+            // Abrir chat del remitente
+            window.location.href = '/';
+        }
+    };
+    contenedor.appendChild(burbuja);
+    
+    // Auto-remover después de 5 segundos
+    setTimeout(function() {
+        if (burbuja.parentElement) {
+            burbuja.style.animation = 'slideOutRight 0.3s ease-in';
+            setTimeout(function() { if (burbuja.parentElement) burbuja.remove(); }, 300);
+        }
+    }, 5000);
+}
+
+// Agregar animaciones CSS
+var style = document.createElement('style');
+style.textContent = `
+    @keyframes slideInRight {
+        from { transform: translateX(400px); opacity: 0; }
+        to { transform: translateX(0); opacity: 1; }
+    }
+    @keyframes slideOutRight {
+        from { transform: translateX(0); opacity: 1; }
+        to { transform: translateX(400px); opacity: 0; }
+    }
+`;
+document.head.appendChild(style);
+
+// Hacer las funciones globales
+window.solicitarPermisoNotificaciones = solicitarPermisoNotificaciones;
+window.mostrarNotificacionKerix = mostrarNotificacionKerix;
+
+        <!-- PRUEBA DE NOTIFICACIONES -->
+        function probarNotificacion() {
+    if (Notification.permission === 'granted') {
+        new Notification('Kerix - Prueba de notificación', {
+            body: '¡Las notificaciones funcionan correctamente! ✅',
+            icon: '/icon.png',
+            badge: '/badge.png',
+            requireInteraction: false
+        });
+        alert('✅ Notificación de prueba enviada');
+    } else {
+        alert('❌ Primero solicita permiso de notificaciones');
+    }
+}
 </script>
 </body>
 </html>
