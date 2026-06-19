@@ -242,6 +242,8 @@
                 <label class="toggle"><input type="checkbox" id="prefLimpiezaMeta" onchange="guardarPreferenciaBool('limpieza_metadatos', this.checked)"><span class="toggle-slider"></span></label>
                 <div class="pref-status" id="statusLimpieza">Estado: Desactivado</div>
             </div>
+
+            <!-- XXXX NUEVO VERIFICAR LUGAR -->
             <div class="pref-item" style="border: 1px solid #ff9500;">
                 <div class="pref-title">🔐 Forward Secrecy</div>
                 <div class="pref-desc">Cuando roten las claves, los mensajes antiguos quedarán ilegibles en el servidor.<br><strong style="color:#ff9500;">⚠️ Requiere "Rotación de claves" activada.</strong></div>
@@ -249,9 +251,15 @@
                     <button class="btn btn-warning btn-small" onclick="activarForwardSecrecy()" id="btnActivarFS" style="flex:1;">🔒 Activar</button>
                     <button class="btn btn-danger btn-small" onclick="desactivarForwardSecrecy()" id="btnDesactivarFS" style="flex:1;display:none;">Desactivar</button>
                 </div>
+                <div class="pref-item" style="border: 1px solid #007aff;">
+    <div class="pref-title">🧪 Diagnóstico de Storage</div>
+    <div class="pref-desc">Verifica que el bucket de archivos funcione correctamente.</div>
+    <button class="btn btn-info btn-small" onclick="testearStorage()">🧪 Ejecutar Test de Storage</button>
+</div>
                 <button class="btn btn-info btn-small" onclick="generarBackupMensajes()" style="margin-top:8px;">📦 Backup de mensajes</button>
                 <button class="btn btn-secondary btn-small" onclick="backupClavePrivada()" style="margin-top:8px;">🔑 Backup de clave privada</button>
                 <div class="pref-status" id="statusFS">Estado: Desactivado</div>
+                
             </div>
         </div>
     </div>
@@ -524,35 +532,54 @@
     }
 
     async function cambiarPIN() {
-        if (!pinAccesoHash) { alert('Configura un PIN primero.'); return; }
-        var pinActual = prompt('PIN actual:');
-        if (!pinActual) return;
-        if (await hashPIN(pinActual) !== pinAccesoHash) { alert('❌ PIN incorrecto'); return; }
-        var nuevoPin = prompt('Nuevo PIN (4-6 dígitos):');
-        if (!nuevoPin || nuevoPin.length < 4 || nuevoPin.length > 6 || !/^\d+$/.test(nuevoPin)) { alert('PIN inválido'); return; }
-        var nuevoPin2 = prompt('Confirma:');
-        if (nuevoPin !== nuevoPin2) { alert('No coinciden'); return; }
-        pinAccesoHash = await hashPIN(nuevoPin);
-        localStorage.setItem('pin_hash_' + miPIN, pinAccesoHash);
-        var claveCifrada = localStorage.getItem('clave_privada_' + miPIN);
-        if (claveCifrada) {
-            try {
-                var privBase64 = await descifrarClaveConPIN(claveCifrada, pinActual);
-                localStorage.setItem('clave_privada_' + miPIN, await cifrarClaveConPIN(privBase64, nuevoPin));
-            } catch (e) { logError('Error:', e); }
+    // Si NO hay PIN configurado, ofrecer configurarlo
+    if (!pinAccesoHash) {
+        if (confirm('No tienes PIN configurado.\n\n¿Deseas configurar un PIN de acceso ahora?')) {
+            await configurarPIN();
         }
-        pinActualTemporal = nuevoPin;
-        sessionStorage.setItem('pin_temporal_' + miPIN, nuevoPin);
-        alert('✅ PIN cambiado.');
+        return;
     }
-
-    document.addEventListener('keydown', function(e) {
-        if (e.key === 'Enter' && document.getElementById('pantallaBloqueo').style.display === 'flex') {
-            var inputPIN = document.getElementById('pinAccesoInput');
-            if (inputPIN.value) desbloquearApp();
+    
+    // Si HAY PIN, permitir cambiarlo
+    var pinActual = prompt('🔐 Ingresa tu PIN actual:');
+    if (!pinActual) return;
+    
+    if (await hashPIN(pinActual) !== pinAccesoHash) { 
+        alert(' PIN incorrecto'); 
+        return; 
+    }
+    
+    var nuevoPin = prompt('Nuevo PIN (4-6 dígitos):');
+    if (!nuevoPin || nuevoPin.length < 4 || nuevoPin.length > 6 || !/^\d+$/.test(nuevoPin)) { 
+        alert('PIN inválido (4-6 dígitos numéricos)'); 
+        return; 
+    }
+    
+    var nuevoPin2 = prompt('Confirma el nuevo PIN:');
+    if (nuevoPin !== nuevoPin2) { 
+        alert('Los PINs no coinciden'); 
+        return; 
+    }
+    
+    // Actualizar hash
+    pinAccesoHash = await hashPIN(nuevoPin);
+    localStorage.setItem('pin_hash_' + miPIN, pinAccesoHash);
+    
+    // Re-cifrar clave privada con nuevo PIN
+    var claveCifrada = localStorage.getItem('clave_privada_' + miPIN);
+    if (claveCifrada) {
+        try {
+            var privBase64 = await descifrarClaveConPIN(claveCifrada, pinActual);
+            localStorage.setItem('clave_privada_' + miPIN, await cifrarClaveConPIN(privBase64, nuevoPin));
+        } catch (e) { 
+            logError('Error re-cifrando clave:', e); 
         }
-    });
-
+    }
+    
+    pinActualTemporal = nuevoPin;
+    sessionStorage.setItem('pin_temporal_' + miPIN, nuevoPin);
+    alert('✅ PIN cambiado correctamente.');
+}
     // ============================================
     // PREFERENCIAS
     // ============================================
@@ -1164,17 +1191,18 @@
         
         log('✅ URL firmada generada:', urlData.signedUrl.substring(0, 80) + '...');
         
-        return {
-            url: urlData.signedUrl,
-            path: data.path,
-            nombre: archivoCifrado.nombreOriginal,
-            tipo: archivoCifrado.tipoOriginal,
-            tamaño: archivoCifrado.tamañoOriginal,
-            iv: archivoCifrado.iv,
-            claveParaDestinatario: archivoCifrado.claveParaDestinatario,
-            claveParaMi: archivoCifrado.claveParaMi,
-            cifrado: true
-        };
+return {
+    url: urlData.signedUrl,
+    path: data.path,
+    nombre: archivoCifrado.nombreOriginal,
+    tipo: archivoCifrado.tipoOriginal,
+    tipoOriginal: archivoCifrado.tipoOriginal,
+    tamaño: archivoCifrado.tamañoOriginal,
+    iv: archivoCifrado.iv,
+    claveParaDestinatario: archivoCifrado.claveParaDestinatario,
+    claveParaMi: archivoCifrado.claveParaMi,
+    cifrado: true
+};
     } catch (error) {
         logError('❌ Error en subirArchivo:', error);
         throw error;
@@ -1227,7 +1255,9 @@
                 var claveCifradaDest = msg.archivo_clave_destinatario;
 
                 var decryptedBuffer = await descifrarArchivo(arrayBuffer, iv, claveCifrada, claveCifradaDest);
-                decryptedBlob = new Blob([decryptedBuffer], { type: msg.tipo_mensaje === 'imagen' ? 'image/png' : msg.tipo_mensaje === 'video' ? 'video/mp4' : 'application/octet-stream' });
+                // <!-- decryptedBlob = new Blob([decryptedBuffer], { type: msg.tipo_mensaje === 'imagen' ? 'image/png' : msg.tipo_mensaje === 'video' ? 'video/mp4' : 'application/octet-stream' }); -->
+            var tipoMime = msg.tipoOriginal || (msg.tipo_mensaje === 'imagen' ? 'image/*' : msg.tipo_mensaje === 'video' ? 'video/*' : 'application/octet-stream');
+            decryptedBlob = new Blob([decryptedBuffer], { type: tipoMime });
             } else {
                 decryptedBlob = blob;
             }
@@ -1351,7 +1381,9 @@
             archivo_iv: archivoInfo ? archivoInfo.iv : null,
             archivo_clave: archivoInfo ? archivoInfo.claveParaMi : null,
             archivo_clave_destinatario: archivoInfo ? archivoInfo.claveParaDestinatario : null,
-            archivo_cifrado: archivoInfo ? archivoInfo.cifrado : false,
+            // --- XXX ESTA LINEA PUEDE CAMBIAR ---
+            // archivo_cifrado: archivoInfo ? archivoInfo.cifrado : false,
+            archivo_tipo_original: archivoInfo ? archivoInfo.tipoOriginal : null,
             texto_descifrado: texto, 
             enviado_en: new Date().toISOString(), 
             leido: false 
