@@ -117,12 +117,7 @@ h3 { margin: 12px 0 8px 0; color: #888; font-size: 13px; }
 <p style="font-size: 12px; color: #888; margin-top: 10px; text-align: center;">Vence: <span id="fechaVencimiento" style="color: #fff;"></span></p>
 <!-- <div style="text-align: center;"><span class="security-badge"> Cifrado Híbrido AES+RSA</span></div> -->
 <div class="toggle-container">
-<div>
-<div class="toggle-label" style="font-weight: bold;">🔒 Modo Privado</div>
-<div style="font-size: 11px; color: #888; margin-top: 2px;">Solo recibir de contactos guardados</div>
-</div>
-
-<!-- NUEVO: Panel de Notificaciones -->
+    <!-- NUEVO: Panel de Notificaciones -->
 <div class="pref-item" style="border: 1px solid #007aff;">
 <div class="pref-title">🔔 Notificaciones</div>
 <div class="pref-desc">Configura cómo recibir alertas de nuevos mensajes.</div>
@@ -130,6 +125,10 @@ h3 { margin: 12px 0 8px 0; color: #888; font-size: 13px; }
 <button class="btn btn-secondary btn-small" onclick="solicitarPermisoNotificaciones().then(function(r) { alert(r ? '✅ Permiso concedido' : '❌ Permiso denegado'); })" style="margin-top: 8px;">🔓 Solicitar Permiso</button>
 </div>
     <!-- FIN DE NUEVO: Panel de Notificaciones -->
+<div>
+<div class="toggle-label" style="font-weight: bold;">🔒 Modo Privado</div>
+<div style="font-size: 11px; color: #888; margin-top: 2px;">Solo recibir de contactos guardados</div>
+</div>
 <label class="toggle"><input type="checkbox" id="toggleModoPrivado" onchange="cambiarModoPrivado()"><span class="toggle-slider"></span></label>
 </div>
 <button class="btn btn-info" onclick="mostrarPanelSeguridad()" style="margin-top: 8px;">🛡️ Seguridad Avanzada</button>
