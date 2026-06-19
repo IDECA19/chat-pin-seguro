@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Chat PIN Seguro</title>
+<title>Kerix</title>
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#000000">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://dksmoteiidjpymextrgj.supabase.co; media-src 'self' blob: https://dksmoteiidjpymextrgj.supabase.co; connect-src 'self' https://dksmoteiidjpymextrgj.supabase.co wss://dksmoteiidjpymextrgj.supabase.co https://cdn.jsdelivr.net; font-src 'self';">
@@ -98,7 +98,7 @@ h3 { margin: 12px 0 8px 0; color: #888; font-size: 13px; }
 <div class="container">
 <!-- INICIO -->
 <div id="pantallaInicio" class="hidden">
-<h2>🔒 Chat Anónimo</h2>
+<h2>🔒 Kerix</h2>
 <p style="color: #888; font-size: 13px; margin-bottom: 12px;">Tu PIN es tu identidad</p>
 <div class="card">
 <p style="color: #888; margin: 0; font-size: 12px;">TU PIN</p>
@@ -115,12 +115,21 @@ h3 { margin: 12px 0 8px 0; color: #888; font-size: 13px; }
 <div id="panelChat" class="hidden">
 <button class="btn" onclick="mostrarContactos()">💬 Ir al Chat</button>
 <p style="font-size: 12px; color: #888; margin-top: 10px; text-align: center;">Vence: <span id="fechaVencimiento" style="color: #fff;"></span></p>
-<div style="text-align: center;"><span class="security-badge"> Cifrado Híbrido AES+RSA</span></div>
+<!-- <div style="text-align: center;"><span class="security-badge"> Cifrado Híbrido AES+RSA</span></div> -->
 <div class="toggle-container">
 <div>
 <div class="toggle-label" style="font-weight: bold;">🔒 Modo Privado</div>
 <div style="font-size: 11px; color: #888; margin-top: 2px;">Solo recibir de contactos guardados</div>
 </div>
+
+<!-- NUEVO: Panel de Notificaciones -->
+<div class="pref-item" style="border: 1px solid #007aff;">
+<div class="pref-title">🔔 Notificaciones</div>
+<div class="pref-desc">Configura cómo recibir alertas de nuevos mensajes.</div>
+<button class="btn btn-info btn-small" onclick="mostrarConfigNotificaciones()">️ Configurar Notificaciones</button>
+<button class="btn btn-secondary btn-small" onclick="solicitarPermisoNotificaciones().then(function(r) { alert(r ? '✅ Permiso concedido' : '❌ Permiso denegado'); })" style="margin-top: 8px;">🔓 Solicitar Permiso</button>
+</div>
+    <!-- FIN DE NUEVO: Panel de Notificaciones -->
 <label class="toggle"><input type="checkbox" id="toggleModoPrivado" onchange="cambiarModoPrivado()"><span class="toggle-slider"></span></label>
 </div>
 <button class="btn btn-info" onclick="mostrarPanelSeguridad()" style="margin-top: 8px;">🛡️ Seguridad Avanzada</button>
@@ -234,13 +243,7 @@ h3 { margin: 12px 0 8px 0; color: #888; font-size: 13px; }
 <button class="btn btn-secondary btn-small" onclick="backupClavePrivada()" style="margin-top:8px;"> Backup de clave privada</button>
 <div class="pref-status" id="statusFS">Estado: Desactivado</div>
 </div>
-<!-- NUEVO: Panel de Notificaciones -->
-<div class="pref-item" style="border: 1px solid #007aff;">
-<div class="pref-title">🔔 Notificaciones</div>
-<div class="pref-desc">Configura cómo recibir alertas de nuevos mensajes.</div>
-<button class="btn btn-info btn-small" onclick="mostrarConfigNotificaciones()">️ Configurar Notificaciones</button>
-<button class="btn btn-secondary btn-small" onclick="solicitarPermisoNotificaciones().then(function(r) { alert(r ? '✅ Permiso concedido' : '❌ Permiso denegado'); })" style="margin-top: 8px;">🔓 Solicitar Permiso</button>
-</div>
+
 <!-- NUEVO: Botón Test Storage -->
 <div class="pref-item" style="border: 1px solid #007aff;">
 <div class="pref-title">🧪 Diagnóstico de Storage</div>
