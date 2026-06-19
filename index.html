@@ -328,11 +328,18 @@ async function solicitarPermisoNotificaciones() {
 function mostrarNotificacionNativa(titulo, cuerpo, pinRemitente, tipoMensaje) {
     if (!prefsNotificaciones.nativas) return;
     if (Notification.permission !== 'granted') return;
-    if (document.visibilityState === 'visible' && contactoActual === pinRemitente) return;
+    
+    // Solo suprimir si estás ACTIVAMENTE en el chat del remitente del nuevo mensaje
+    if (document.visibilityState === 'visible' && contactoActual === pinRemitente) {
+        log('🔕 Notificación suprimida: estás en el chat de ' + pinRemitente);
+        return;
+    }
+    
     var icono = '🔒';
     if (tipoMensaje === 'imagen') icono = '🖼️';
     else if (tipoMensaje === 'video') icono = '';
     else if (tipoMensaje === 'documento') icono = '📎';
+    
     var opciones = {
         body: cuerpo,
         icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">' + icono + '</text></svg>',
@@ -342,14 +349,23 @@ function mostrarNotificacionNativa(titulo, cuerpo, pinRemitente, tipoMensaje) {
         silent: !prefsNotificaciones.sonido,
         vibrate: prefsNotificaciones.vibracion ? [200, 100, 200] : undefined
     };
+    
     try {
         var notificacion = new Notification(titulo, opciones);
-        notificacion.onclick = function() { window.focus(); mostrarChat(pinRemitente); notificacion.close(); };
+        notificacion.onclick = function() {
+            window.focus();
+            mostrarChat(pinRemitente);
+            notificacion.close();
+        };
         setTimeout(function() { notificacion.close(); }, 5000);
-    } catch (error) { logError('Error mostrando notificación:', error); }
+        log('🔔 Notificación nativa mostrada para ' + pinRemitente);
+    } catch (error) {
+        logError('Error mostrando notificación:', error);
+    }
 }
 function mostrarNotificacionVisual(titulo, cuerpo, pinRemitente) {
     if (!prefsNotificaciones.visuales) return;
+    
     var contenedor = document.getElementById('notificacionesContainer');
     if (!contenedor) {
         contenedor = document.createElement('div');
@@ -357,10 +373,16 @@ function mostrarNotificacionVisual(titulo, cuerpo, pinRemitente) {
         contenedor.style.cssText = 'position: fixed; top: 20px; right: 20px; z-index: 10000; display: flex; flex-direction: column; gap: 10px; pointer-events: none;';
         document.body.appendChild(contenedor);
     }
+    
     var burbuja = document.createElement('div');
     burbuja.style.cssText = 'background: linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 100%); border: 1px solid #00ff88; border-radius: 12px; padding: 12px 16px; min-width: 250px; max-width: 320px; box-shadow: 0 8px 32px rgba(0, 255, 136, 0.2); animation: slideInRight 0.3s ease-out; pointer-events: auto; cursor: pointer;';
     burbuja.innerHTML = '<div style="display: flex; justify-content: space-between; align-items: start; gap: 8px;"><div style="flex: 1;"><div style="font-weight: bold; color: #00ff88; font-size: 13px; margin-bottom: 4px;">' + titulo + '</div><div style="color: #fff; font-size: 12px; line-height: 1.4;">' + cuerpo + '</div></div><button onclick="this.parentElement.parentElement.remove()" style="background: none; border: none; color: #888; cursor: pointer; font-size: 16px; padding: 0; line-height: 1;">✕</button></div>';
-    burbuja.onclick = function(e) { if (e.target.tagName !== 'BUTTON') { mostrarChat(pinRemitente); burbuja.remove(); } };
+    burbuja.onclick = function(e) {
+        if (e.target.tagName !== 'BUTTON') {
+            mostrarChat(pinRemitente);
+            burbuja.remove();
+        }
+    };
     contenedor.appendChild(burbuja);
     setTimeout(function() {
         if (burbuja.parentElement) {
@@ -368,6 +390,8 @@ function mostrarNotificacionVisual(titulo, cuerpo, pinRemitente) {
             setTimeout(function() { if (burbuja.parentElement) burbuja.remove(); }, 300);
         }
     }, 4000);
+    
+    log(' Notificación visual mostrada para ' + pinRemitente);
 }
 function reproducirSonidoNotificacion() {
     if (!prefsNotificaciones.sonido) return;
@@ -397,15 +421,25 @@ function actualizarBadge() {
 function notificarNuevoMensaje(pinRemitente, texto, tipoMensaje) {
     var titulo = 'Mensaje de ' + pinRemitente;
     var cuerpo = '';
-    if (tipoMensaje === 'imagen') cuerpo = '🖼️ Imagen adjunta';
-    else if (tipoMensaje === 'video') cuerpo = '🎥 Video adjunto';
-    else if (tipoMensaje === 'documento') cuerpo = ' Archivo adjunto';
+    if (tipoMensaje === 'imagen') cuerpo = '️ Imagen adjunta';
+    else if (tipoMensaje === 'video') cuerpo = ' Video adjunto';
+    else if (tipoMensaje === 'documento') cuerpo = '📎 Archivo adjunto';
     else cuerpo = prefsNotificaciones.mostrarContenido ? (texto.substring(0, 50) || 'Mensaje') : 'Nuevo mensaje';
+    
+    // Notificación nativa (siempre, excepto si estás en el chat del remitente)
     mostrarNotificacionNativa(titulo, cuerpo, pinRemitente, tipoMensaje);
+    
+    // Notificación visual (siempre)
     mostrarNotificacionVisual(titulo, cuerpo, pinRemitente);
+    
+    // Sonido y vibración (siempre, independientemente de dónde estés)
     reproducirSonidoNotificacion();
     vibrarDispositivo();
+    
+    // Actualizar badge
     actualizarBadge();
+    
+    log(' Notificaciones enviadas para mensaje de ' + pinRemitente);
 }
 function mostrarConfigNotificaciones() {
     var html = '<div style="background: #1a1a1a; padding: 20px; border-radius: 12px; max-width: 400px; width: 90%;">';
