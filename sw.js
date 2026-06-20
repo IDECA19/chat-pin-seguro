@@ -36,17 +36,13 @@ self.addEventListener('push', function(event) {
     
     var options = {
         body: data.body || 'Nuevo mensaje',
-        icon: data.icon || '/icon.png',
-        badge: data.badge || '/badge.png',
+        icon: '/icon.png',
+        badge: '/badge.png',
         tag: data.tag || 'chat-notification',
         requireInteraction: false,
         data: {
             url: data.url || '/'
-        },
-        actions: [
-            { action: 'open', title: 'Abrir chat' },
-            { action: 'close', title: 'Cerrar' }
-        ]
+        }
     };
     
     event.waitUntil(
@@ -58,27 +54,23 @@ self.addEventListener('push', function(event) {
 self.addEventListener('notificationclick', function(event) {
     event.notification.close();
     
-    if (event.action === 'open' || !event.action) {
-        event.waitUntil(
-            clients.matchAll({ type: 'window', includeUncontrolled: true })
-                .then(function(clientList) {
-                    // Si ya hay una ventana abierta, enfocarla
-                    for (var i = 0; i < clientList.length; i++) {
-                        var client = clientList[i];
-                        if (client.url.includes('kerix') && 'focus' in client) {
-                            return client.focus();
-                        }
+    event.waitUntil(
+        clients.matchAll({ type: 'window', includeUncontrolled: true })
+            .then(function(clientList) {
+                for (var i = 0; i < clientList.length; i++) {
+                    var client = clientList[i];
+                    if (client.url.includes('github.io') && 'focus' in client) {
+                        return client.focus();
                     }
-                    // Si no, abrir nueva ventana
-                    if (clients.openWindow) {
-                        return clients.openWindow(event.notification.data.url || '/');
-                    }
-                })
-        );
-    }
+                }
+                if (clients.openWindow) {
+                    return clients.openWindow('/');
+                }
+            })
+    );
 });
 
-// Fetch handler para caché
+// Fetch handler
 self.addEventListener('fetch', function(event) {
     event.respondWith(
         caches.match(event.request).then(function(response) {
