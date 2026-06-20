@@ -1671,5 +1671,57 @@ window.mostrarNotificacionKerix = mostrarNotificacionKerix;
     }
 }
 </script>
+        <!-- Registrar Service Worker -->
+<script>
+// Registrar Service Worker para notificaciones en background
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function() {
+        navigator.serviceWorker.register('/sw.js')
+            .then(function(registration) {
+                console.log('✅ Service Worker registrado:', registration.scope);
+            })
+            .catch(function(error) {
+                console.log('❌ Error registrando Service Worker:', error);
+            });
+    });
+}
+
+// Función global para solicitar permiso
+window.solicitarPermisoNotificaciones = function() {
+    if (!('Notification' in window)) {
+        alert('❌ Tu navegador no soporta notificaciones');
+        return false;
+    }
+    
+    Notification.requestPermission().then(function(permission) {
+        console.log('Permiso de notificación:', permission);
+        if (permission === 'granted') {
+            alert('✅ Permiso concedido');
+            // Probar notificación
+            new Notification('Kerix - Notificaciones activas', {
+                body: 'Recibirás alertas de nuevos mensajes',
+                icon: '/icon.png',
+                badge: '/badge.png'
+            });
+        } else if (permission === 'denied') {
+            alert('❌ Permiso denegado. Ve a configuración del navegador.');
+        }
+    });
+};
+
+// Función para probar notificación
+window.probarNotificacion = function() {
+    if (Notification.permission === 'granted') {
+        new Notification('Kerix - Prueba', {
+            body: '¡Las notificaciones funcionan! ✅',
+            icon: '/icon.png',
+            badge: '/badge.png'
+        });
+        alert('✅ Notificación enviada');
+    } else {
+        alert('❌ Primero solicita permiso');
+    }
+};
+</script>
 </body>
 </html>
