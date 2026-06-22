@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Kerix</title>
+<title>Kerix - Chat PIN Seguro</title>
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#00a884">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://dksmoteiidjpymextrgj.supabase.co; media-src 'self' blob: https://dksmoteiidjpymextrgj.supabase.co; connect-src 'self' https://dksmoteiidjpymextrgj.supabase.co wss://dksmoteiidjpymextrgj.supabase.co https://cdn.jsdelivr.net; font-src 'self';">
@@ -175,13 +175,13 @@ input:checked + .slider:before { transform: translateX(20px); }
 <div class="bloqueo-card">
 <div class="bloqueo-icono">🔒</div>
 <div class="bloqueo-titulo">Kerix Bloqueado</div>
-<div class="bloqueo-subtitulo">Ingresa tu CLAVE de acceso</div>
+<div class="bloqueo-subtitulo">Ingresa tu PIN de acceso</div>
 <input type="password" id="pinAccesoInput" placeholder="••••" maxlength="6">
 <button class="bloqueo-btn bloqueo-btn-primary" onclick="desbloquearApp()" id="btnDesbloquear">Desbloquear</button>
 <button class="bloqueo-btn bloqueo-btn-secondary" onclick="configurarPIN()" id="btnConfigPIN" style="display:none;">🔑 Configurar PIN</button>
 <button class="bloqueo-btn bloqueo-btn-warning" onclick="recuperarAcceso()" id="btnRecuperar" style="display:none;">Olvidé mi PIN</button>
 <button class="bloqueo-btn bloqueo-btn-danger" onclick="resetEmergencia()" id="btnReset" style="display:none; margin-top:10px;">⚠️ Reset de Emergencia</button>
-<p id="errorPIN">CLAVE incorrecta</p>
+<p id="errorPIN">PIN incorrecto</p>
 </div>
 </div>
 
@@ -427,6 +427,7 @@ Vence: <span id="fechaVencimiento" style="color: #e9edef;"></span>
 <button class="modal-cerrar" onclick="cerrarModalOpcionesChat()">✕</button>
 </div>
 <div class="modal-body">
+<button class="modal-btn modal-btn-secondary" onclick="editarAliasContactoActual()">👤 Editar nombre de contacto</button>
 <button class="modal-btn modal-btn-secondary" onclick="seleccionarModo()">☑️ Seleccionar mensajes</button>
 <button class="modal-btn modal-btn-secondary" onclick="eliminarContactoActual()">🗑️ Eliminar contacto</button>
 <button class="modal-btn modal-btn-secondary" onclick="bloquearContactoActual()">🚫 Bloquear PIN</button>
@@ -830,6 +831,48 @@ document.addEventListener('keydown', function(e) {
 });
 
 // ============================================
+// GESTIÓN DE ALIAS Y NOMBRE DE CONTACTOS (100% LOCAL Y SEGURO)
+// ============================================
+function getAliases() {
+    var a = localStorage.getItem('aliases_' + miPIN);
+    return a ? JSON.parse(a) : {};
+}
+function guardarAliases(a) {
+    localStorage.setItem('aliases_' + miPIN, JSON.stringify(a));
+}
+function obtenerNombreContacto(pin) {
+    var a = getAliases();
+    return a[pin] || pin;
+}
+async function editarAliasContacto(pin) {
+    var actual = obtenerNombreContacto(pin);
+    var actualValor = (actual === pin) ? '' : actual;
+    var nuevoNombre = await customPrompt('👤 Asignar Identificador', 'Escribe un nombre o alias para el PIN: ' + pin, actualValor);
+    if (nuevoNombre === null) return;
+    var a = getAliases();
+    nuevoNombre = nuevoNombre.trim();
+    if (nuevoNombre === '') {
+        delete a[pin];
+    } else {
+        a[pin] = nuevoNombre;
+    }
+    guardarAliases(a);
+    await customAlert('✅ Identificador guardado con éxito localmente.', '✅');
+    if (tabActual === 'chats') renderizarChats();
+    else if (tabActual === 'contactos') renderizarContactos();
+    if (contactoActual === pin) {
+        var subtexto = (nuevoNombre !== '') ? ' (' + pin + ')' : '';
+        document.getElementById('chatNombre').innerHTML = obtenerNombreContacto(pin) + ' <span style="font-size:11px; opacity:0.7; font-weight: normal;">' + subtexto + '</span>';
+        document.getElementById('chatAvatar').innerText = obtenerNombreContacto(pin).substring(0, 2).toUpperCase();
+    }
+}
+async function editarAliasContactoActual() {
+    if (!contactoActual) return;
+    cerrarModalOpcionesChat();
+    await editarAliasContacto(contactoActual);
+}
+
+// ============================================
 // PREFERENCIAS
 // ============================================
 async function cargarPreferencias() {
@@ -898,10 +941,12 @@ function renderizarChats() {
         var badge = mensajesNoLeidos[pin] ? '<div class="chat-badge">' + mensajesNoLeidos[pin] + '</div>' : '';
         var ultimo = 'Toca para abrir la conversación';
         var hora = '';
+        var nombre = obtenerNombreContacto(pin);
+        var subNombre = (nombre !== pin) ? ' (' + pin + ')' : '';
         html += '<div class="chat-item" onclick="abrirChat(\'' + pin + '\')">';
-        html += '<div class="chat-avatar">' + pin.substring(0, 2) + '</div>';
+        html += '<div class="chat-avatar">' + nombre.substring(0, 2).toUpperCase() + '</div>';
         html += '<div class="chat-info">';
-        html += '<div class="chat-info-top"><div class="chat-nombre">' + pin + '</div><div class="chat-hora">' + hora + '</div></div>';
+        html += '<div class="chat-info-top"><div class="chat-nombre">' + nombre + '<span style="font-size:11px; color:#8696a0; font-weight:normal; margin-left:6px;">' + subNombre + '</span></div><div class="chat-hora">' + hora + '</div></div>';
         html += '<div class="chat-info-bottom"><div class="chat-ultimo">' + ultimo + '</div>' + badge + '</div>';
         html += '</div></div>';
     });
@@ -921,9 +966,11 @@ function renderizarContactos() {
     if (contactos.length > 0) {
         html += '<div style="padding: 12px 16px; color: #00a884; font-size: 13px; font-weight: 700;">CONTACTOS (' + contactos.length + ')</div>';
         contactos.forEach(function(pin) {
+            var nombre = obtenerNombreContacto(pin);
+            var subNombre = (nombre !== pin) ? ' (' + pin + ')' : '';
             html += '<div class="chat-item" onclick="abrirChat(\'' + pin + '\')">';
-            html += '<div class="chat-avatar">' + pin.substring(0, 2) + '</div>';
-            html += '<div class="chat-info"><div class="chat-nombre">' + pin + '</div></div>';
+            html += '<div class="chat-avatar">' + nombre.substring(0, 2).toUpperCase() + '</div>';
+            html += '<div class="chat-info"><div class="chat-nombre">' + nombre + '<span style="font-size:11px; color:#8696a0; font-weight:normal; margin-left:6px;">' + subNombre + '</span></div></div>';
             html += '<button class="header-icon" onclick="event.stopPropagation(); mostrarMenuContacto(\'' + pin + '\', event)">⋮</button>';
             html += '</div>';
         });
@@ -931,9 +978,11 @@ function renderizarContactos() {
     if (bloqueados.length > 0) {
         html += '<div style="padding: 12px 16px; color: #ef4444; font-size: 13px; font-weight: 700; margin-top: 12px;">🚫 PINs BLOQUEADOS (' + bloqueados.length + ')</div>';
         bloqueados.forEach(function(pin) {
+            var nombre = obtenerNombreContacto(pin);
+            var subNombre = (nombre !== pin) ? ' (' + pin + ')' : '';
             html += '<div class="chat-item" style="opacity: 0.6;">';
-            html += '<div class="chat-avatar" style="background: linear-gradient(135deg, #ef4444, #991b1b);">' + pin.substring(0, 2) + '</div>';
-            html += '<div class="chat-info"><div class="chat-nombre" style="color: #8696a0;">' + pin + '</div></div>';
+            html += '<div class="chat-avatar" style="background: linear-gradient(135deg, #ef4444, #991b1b);">' + nombre.substring(0, 2).toUpperCase() + '</div>';
+            html += '<div class="chat-info"><div class="chat-nombre" style="color: #8696a0;">' + nombre + '<span style="font-size:11px; color:#8696a0; font-weight:normal; margin-left:6px;">' + subNombre + '</span></div></div>';
             html += '<button class="header-icon" onclick="desbloquearPIN(\'' + pin + '\')">✅</button>';
             html += '</div>';
         });
@@ -943,9 +992,14 @@ function renderizarContactos() {
 
 async function mostrarMenuContacto(pin, event) {
     event.stopPropagation();
-    var confirmado = await customConfirm('¿Deseas eliminar a ' + pin + ' de tus contactos?', '👥');
-    if (confirmado) {
-        eliminarContacto(pin);
+    var accion = await customConfirm('¿Deseas editar el nombre o alias de este PIN (' + pin + ')?\n\n(Presiona "Cancelar" si en su lugar deseas eliminar el contacto)', '👤');
+    if (accion) {
+        await editarAliasContacto(pin);
+    } else {
+        var eliminar = await customConfirm('¿Estás seguro de que deseas eliminar a ' + obtenerNombreContacto(pin) + ' de tus contactos?', '🗑️');
+        if (eliminar) {
+            eliminarContacto(pin);
+        }
     }
 }
 
@@ -965,11 +1019,23 @@ async function agregarContacto() {
     guardarContactos(contactos);
     document.getElementById('nuevoContactoPin').value = '';
     cerrarModalAgregar();
+
+    // Preguntar si quiere asignarle un alias
+    var alias = await customPrompt('👤 Guardar Identificador', '¿Quieres ponerle un nombre o alias a este PIN para reconocerlo localmente? (Opcional):', '');
+    if (alias && alias.trim() !== '') {
+        var a = getAliases();
+        a[pin] = alias.trim();
+        guardarAliases(a);
+    }
+
     cambiarTab('chats');
 }
 
 function eliminarContacto(pin) {
     guardarContactos(getContactos().filter(c => c !== pin));
+    var a = getAliases();
+    delete a[pin];
+    guardarAliases(a);
     renderizarChats();
     renderizarContactos();
 }
@@ -992,7 +1058,7 @@ function desbloquearPIN(pin) {
 
 async function eliminarContactoActual() {
     if (!contactoActual) return;
-    var confirmado = await customConfirm('¿Deseas eliminar a ' + contactoActual + '?', '🗑️');
+    var confirmado = await customConfirm('¿Deseas eliminar a ' + obtenerNombreContacto(contactoActual) + '?', '🗑️');
     if (confirmado) {
         eliminarContacto(contactoActual);
         cerrarChat();
@@ -1020,8 +1086,10 @@ function actualizarBadgeChats() {
 // ============================================
 function abrirChat(pin) {
     contactoActual = pin;
-    document.getElementById('chatNombre').innerText = pin;
-    document.getElementById('chatAvatar').innerText = pin.substring(0, 2);
+    var nombre = obtenerNombreContacto(pin);
+    var subtexto = (nombre !== pin) ? ' (' + pin + ')' : '';
+    document.getElementById('chatNombre').innerHTML = nombre + ' <span style="font-size:11px; opacity:0.7; font-weight: normal;">' + subtexto + '</span>';
+    document.getElementById('chatAvatar').innerText = nombre.substring(0, 2).toUpperCase();
     document.getElementById('pantallaChatIndividual').style.display = 'block';
     modoSeleccion = false;
     mensajesSeleccionados = [];
@@ -1505,9 +1573,10 @@ async function generarBackupMensajes() {
         var html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Kerix Backup - ' + miPIN + '</title><style>body{font-family:Arial;background:#1a1a1a;color:#fff;padding:20px;max-width:600px;margin:0 auto;}.chat{margin:20px 0;padding:15px;background:#222;border-radius:10px;}.msg{padding:8px 12px;margin:6px 0;border-radius:12px;max-width:80%;}.enviado{background:#00a884;color:#000;margin-left:auto;}.recibido{background:#2a2a2a;color:#fff;}</style></head><body>';
         html += '<h1>🔒 Backup Local de Mensajes</h1><p>PIN de Usuario: <strong>' + miPIN + '</strong></p><p>Creado el: ' + new Date().toLocaleString('es-ES') + '</p><hr>';
         for (var pin of contactos) {
+            var nombre = obtenerNombreContacto(pin);
             var { data: mensajes } = await clienteSupabase.from('mensajes').select('*').or('and(pin_remitente.eq.' + miPIN + ',pin_destinatario.eq.' + pin + '),and(pin_remitente.eq.' + pin + ',pin_destinatario.eq.' + miPIN + ')').order('enviado_en', { ascending: true });
             if (!mensajes || mensajes.length === 0) continue;
-            html += '<div class="chat"><h2>💬 Conversación con: ' + pin + '</h2>';
+            html += '<div class="chat"><h2>💬 Conversación con: ' + nombre + ' (' + pin + ')</h2>';
             for (var msg of mensajes) {
                 var texto = '';
                 try { if (msg.mensaje_cifrado) texto = await descifrarMensaje(msg.mensaje_cifrado); } catch (e) { texto = '[Ilegible / Clave Rotada]'; }
@@ -1632,7 +1701,8 @@ function vibrarDispositivo() {
     if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
 }
 function notificarNuevoMensaje(pinRemitente, texto, tipoMensaje) {
-    var titulo = 'Mensaje de ' + pinRemitente;
+    var nombre = obtenerNombreContacto(pinRemitente);
+    var titulo = 'Mensaje de ' + nombre;
     var cuerpo = '';
     if (tipoMensaje === 'imagen') cuerpo = '🖼️ Imagen adjunta';
     else if (tipoMensaje === 'video') cuerpo = '🎥 Video adjunto';
