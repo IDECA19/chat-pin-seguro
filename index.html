@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Kerix - Chat PIN Seguro</title>
+<title>Kerix</title>
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#00a884">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://dksmoteiidjpymextrgj.supabase.co; media-src 'self' blob: https://dksmoteiidjpymextrgj.supabase.co; connect-src 'self' https://dksmoteiidjpymextrgj.supabase.co wss://dksmoteiidjpymextrgj.supabase.co https://cdn.jsdelivr.net; font-src 'self';">
@@ -175,13 +175,13 @@ input:checked + .slider:before { transform: translateX(20px); }
 <div class="bloqueo-card">
 <div class="bloqueo-icono">🔒</div>
 <div class="bloqueo-titulo">Kerix Bloqueado</div>
-<div class="bloqueo-subtitulo">Ingresa tu PIN de acceso</div>
+<div class="bloqueo-subtitulo">Ingresa tu CLAVE de acceso</div>
 <input type="password" id="pinAccesoInput" placeholder="••••" maxlength="6">
 <button class="bloqueo-btn bloqueo-btn-primary" onclick="desbloquearApp()" id="btnDesbloquear">Desbloquear</button>
 <button class="bloqueo-btn bloqueo-btn-secondary" onclick="configurarPIN()" id="btnConfigPIN" style="display:none;">🔑 Configurar PIN</button>
 <button class="bloqueo-btn bloqueo-btn-warning" onclick="recuperarAcceso()" id="btnRecuperar" style="display:none;">Olvidé mi PIN</button>
 <button class="bloqueo-btn bloqueo-btn-danger" onclick="resetEmergencia()" id="btnReset" style="display:none; margin-top:10px;">⚠️ Reset de Emergencia</button>
-<p id="errorPIN">PIN incorrecto</p>
+<p id="errorPIN">CLAVE incorrecta</p>
 </div>
 </div>
 
