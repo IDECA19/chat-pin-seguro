@@ -1,4 +1,3 @@
-// sw.js - Service Worker para Kerix Chat
 var CACHE_NAME = 'kerix-cache-v1';
 
 self.addEventListener('install', function(event) {
