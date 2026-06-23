@@ -1556,6 +1556,83 @@ async function activar() {
 function copiarPIN() { navigator.clipboard.writeText(miPIN).then(() => customAlert('Tu PIN ' + miPIN + ' ha sido copiado al portapapeles.', '')); }
 
 // ============================================
+// VERIFICAR SOPORTE WEBRTC
+// ============================================
+function verificarSoporteWebRTC() {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    return { soportado: false, error: 'Tu navegador no soporta acceso a dispositivos multimedia.' };
+  }
+  if (typeof RTCPeerConnection === 'undefined') {
+    return { soportado: false, error: 'Tu navegador no soporta WebRTC.' };
+  }
+  return { soportado: true, error: null };
+}
+
+// Sonido de llamada saliente (tono de marcación)
+var sonidoLlamadaSaliente = null;
+function reproducirSonidoLlamadaSaliente() {
+  try {
+    var audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    var oscillator = audioCtx.createOscillator();
+    var gainNode = audioCtx.createGain();
+    oscillator.connect(gainNode);
+    gainNode.connect(audioCtx.destination);
+    oscillator.type = 'sine';
+    oscillator.frequency.setValueAtTime(440, audioCtx.currentTime);
+    gainNode.gain.setValueAtTime(0.15, audioCtx.currentTime);
+    // Tono intermitente
+    gainNode.gain.setValueAtTime(0, audioCtx.currentTime + 1);
+    gainNode.gain.setValueAtTime(0.15, audioCtx.currentTime + 1.5);
+    gainNode.gain.setValueAtTime(0, audioCtx.currentTime + 2.5);
+    oscillator.start(audioCtx.currentTime);
+    oscillator.stop(audioCtx.currentTime + 3);
+    sonidoLlamadaSaliente = oscillator;
+  } catch (error) {
+    logError('Error sonido saliente:', error);
+  }
+}
+
+function detenerSonidoLlamadaSaliente() {
+  try {
+    if (sonidoLlamadaSaliente) {
+      sonidoLlamadaSaliente.stop();
+      sonidoLlamadaSaliente = null;
+    }
+  } catch (e) {
+    sonidoLlamadaSaliente = null;
+  }
+}
+
+// Limpiar llamadas antiguas de la base de datos (más de 24 horas)
+async function limpiarLlamadasAntiguas() {
+  try {
+    var hace24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    await clienteSupabase.from('llamadas')
+      .delete()
+      .or('pin_remitente.eq.' + miPIN + ',pin_destinatario.eq.' + miPIN)
+      .lt('inicio', hace24h);
+    log(' Llamadas antiguas limpiadas');
+  } catch (error) {
+    logError('Error limpiando llamadas:', error);
+  }
+}
+
+// Manejar visibilidad de la página durante llamada
+document.addEventListener('visibilitychange', function() {
+  if (llamadaActiva && document.hidden) {
+    actualizarEstadoLlamada('En segundo plano');
+  } else if (llamadaActiva && !document.hidden) {
+    actualizarEstadoLlamada('Conectado');
+  }
+});
+
+// Manejar cierre de pestaña durante llamada
+window.addEventListener('beforeunload', function() {
+  if (llamadaActiva) {
+    colgarLlamada();
+  }
+});
+// ============================================
 // BACKUP Y FORWARD SECRECY
 // ============================================
 async function exportarClave() {
@@ -1940,6 +2017,7 @@ async function inicializarTodo() {
     await cargarPreferencias();
     cargarPrefsNotificaciones();
     await suscribirseALlamadas();
+    await limpiarLlamadasAntiguas(); // Limpiar llamadas de más de 24h
     return true;
   } catch (error) { logError('Error:', error); return false; }
 }
@@ -2032,8 +2110,14 @@ async function obtenerStreamMedia(esVideo) {
   }
 }
 
-// 📞 INICIAR LLAMADA (voz o video)
 async function iniciarLlamada(tipo) {
+  // Verificar soporte WebRTC
+  var soporte = verificarSoporteWebRTC();
+  if (!soporte.soportado) {
+    await customAlert('❌ No se puede iniciar la llamada.\n\n' + soporte.error + '\n\nNecesitas Chrome, Firefox o Edge actualizado.', '');
+    return;
+  }
+
   if (!contactoActual) {
     await customAlert('❌ Debes estar en un chat para iniciar una llamada.', '❌');
     return;
@@ -2065,7 +2149,8 @@ async function iniciarLlamada(tipo) {
   
   // Mostrar pantalla de llamada
   mostrarPantallaLlamada(pinLlamadaActual, 'Llamando...', tipo);
-  
+    // Reproducir tono de marcación
+  reproducirSonidoLlamadaSaliente();
   // Crear conexión WebRTC
   peerConnection = new RTCPeerConnection(rtcConfig);
   
@@ -2100,6 +2185,7 @@ async function iniciarLlamada(tipo) {
     }
     
     actualizarEstadoLlamada('Conectado');
+     detenerSonidoLlamadaSaliente();
     iniciarTimerLlamada();
   };
   
@@ -2172,6 +2258,22 @@ async function recibirLlamada(pinRemitente, oferta, tipo) {
   // Si ya hay llamada activa, rechazar automáticamente
   if (llamadaActiva) {
     log('Llamada rechazada automáticamente (ya hay una activa)');
+    // Notificar al remitente que estamos ocupados
+    try {
+      await clienteSupabase.from('llamadas').update({
+        estado: 'rechazada',
+        fin: new Date().toISOString()
+      }).eq('pin_remitente', pinRemitente)
+        .eq('pin_destinatario', miPIN)
+        .eq('estado', 'llamando');
+    } catch (e) { logError('Error rechazando auto:', e); }
+    return;
+  }
+  
+  // Verificar soporte WebRTC
+  var soporte = verificarSoporteWebRTC();
+  if (!soporte.soportado) {
+    log('WebRTC no soportado, rechazando llamada');
     return;
   }
   
@@ -2187,7 +2289,26 @@ async function recibirLlamada(pinRemitente, oferta, tipo) {
   document.getElementById('modalLlamadaEntrante').classList.add('active');
   
   // Sonido de llamada entrante
+  // Sonido de llamada entrante
   reproducirSonidoLlamadaEntrante();
+  
+  // Notificación nativa del sistema
+  if (Notification.permission === 'granted') {
+    var tipoTexto = tipoLlamadaActual === 'video' ? '📹 Videollamada' : '📞 Llamada de voz';
+    var notifLlamada = new Notification(tipoTexto + ' entrante', {
+      body: obtenerNombreContacto(pinRemitente) + ' te está llamando',
+      icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">📞</text></svg>',
+      tag: 'llamada-entrante-' + pinRemitente,
+      requireInteraction: true,
+      vibrate: [500, 200, 500, 200, 500]
+    });
+    
+    notifLlamada.onclick = function() {
+      window.focus();
+      aceptarLlamada();
+      notifLlamada.close();
+    };
+  }
 }
 
 // Reproducir sonido de llamada entrante
@@ -2218,6 +2339,14 @@ function reproducirSonidoLlamadaEntrante() {
 async function aceptarLlamada() {
   document.getElementById('modalLlamadaEntrante').classList.remove('active');
   
+  // Cerrar notificación nativa si existe
+  if (Notification.permission === 'granted') {
+    // Cerrar todas las notificaciones de llamada
+    try {
+      var notifs = await self.registration.getNotifications({ tag: 'llamada-entrante-' + pinLlamadaActual });
+      notifs.forEach(function(n) { n.close(); });
+    } catch(e) {}
+  }
   // Obtener stream local
   streamLocal = await obtenerStreamMedia(tipoLlamadaActual === 'video');
   if (!streamLocal) {
@@ -2261,6 +2390,7 @@ async function aceptarLlamada() {
     }
     
     actualizarEstadoLlamada('Conectado');
+    detenerSonidoLlamadaSaliente();
     iniciarTimerLlamada();
   };
   
@@ -2321,6 +2451,11 @@ async function aceptarLlamada() {
 async function rechazarLlamada() {
   document.getElementById('modalLlamadaEntrante').classList.remove('active');
   
+  // Cerrar notificación nativa
+  try {
+    var notifs = await self.registration.getNotifications({ tag: 'llamada-entrante-' + pinLlamadaActual });
+    notifs.forEach(function(n) { n.close(); });
+  } catch(e) {}
   try {
     await clienteSupabase.from('llamadas').update({
       estado: 'rechazada',
@@ -2384,9 +2519,18 @@ async function colgarLlamada() {
     }
   }
   
-  llamadaActiva = false;
+llamadaActiva = false;
   pinLlamadaActual = '';
   segundosLlamada = 0;
+  
+  // Detener sonidos
+  detenerSonidoLlamadaSaliente();
+  
+  // Cerrar canal de llamadas
+  if (canalLlamada) {
+    clienteSupabase.removeChannel(canalLlamada);
+    canalLlamada = null;
+  }
   
   log('📞 Llamada finalizada');
 }
