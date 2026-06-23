@@ -1,277 +1,970 @@
 // ============================================
-// 🌍 SISTEMA MULTI-IDIOMA - KERIX CHAT
+//  SISTEMA MULTI-IDIOMA - KERIX CHAT
+// Archivo: translations.js
+// Idiomas soportados: Español (es), English (en), Português (pt)
 // ============================================
 
 var translations = {
   es: {
     // Pantalla de bloqueo
-    'chat_bloqueado': 'Kerix Bloqueado',
-    'ingresa_pin': 'Ingresa tu PIN de acceso',
+    'kerix_bloqueado': 'Kerix Bloqueado',
+    'ingresa_pin_acceso': 'Ingresa tu PIN de acceso',
     'desbloquear': 'Desbloquear',
-    'configurar_pin': 'Configurar PIN',
+    'configurar_pin': '🔑 Configurar PIN',
     'olvide_pin': 'Olvidé mi PIN',
-    'reset_emergencia': 'Reset de Emergencia',
+    'reset_emergencia': '⚠️ Reset de Emergencia',
     'pin_incorrecto': 'PIN incorrecto',
-    
-    // Pantalla principal
-    'chat_anonimo': 'Chat Anónimo',
-    'tu_pin_identidad': 'Tu PIN es tu identidad',
-    'tu_pin': 'TU PIN',
-    'copiar_pin': 'Copiar mi PIN',
-    'servicio_activo': '✅ Servicio Activo',
-    'servicio_inactivo': '⚠️ Servicio Inactivo',
-    'sin_conexion': '⚠️ Sin conexión',
-    'codigo_activacion': 'Código de Activación:',
-    'activar': 'Activar',
-    'ir_chat': 'Ir al Chat',
-    'vence': 'Vence:',
-    'cifrado_hibrido': '🔐 Cifrado Híbrido AES+RSA',
-    'modo_privado': 'Modo Privado',
-    'solo_contactos': 'Solo recibir de contactos guardados',
-    'mensajes_desconocidos_rechazados': 'Los mensajes de PINs desconocidos se rechazarán',
-    'seguridad_avanzada': 'Seguridad Avanzada',
-    'backup_claves': 'Backup de Claves',
-    'cambiar_pin_acceso': 'Cambiar PIN de acceso',
-    'diagnostico_storage': 'Diagnóstico de Storage',
-    
-    // Contactos
-    'mis_contactos': 'Mis Contactos',
-    'volver': 'Volver',
-    'agregar_contacto': 'Agregar contacto',
-    'nuevo_contacto': 'Agregar nuevo contacto',
-    'pin_contacto': 'PIN del contacto (8 caracteres)',
-    'agregar': 'Agregar',
-    'no_contactos': 'No tienes contactos aún',
-    'pins_bloqueados': '🚫 PINs Bloqueados',
-    'mensajes_desconocidos': '📨 Mensajes de desconocidos',
-    'desbloquear': 'Desbloquear',
-    
-    // Chat
-    'chat_con': 'Chat con',
-    'en_linea': 'en línea',
-    'no_mensajes': 'No hay mensajes aún',
-    'escribe_mensaje': 'Escribe un mensaje...',
-    'adjuntar': 'Adjuntar',
-    'enviar': 'Enviar',
-    'seleccionados': 'seleccionados',
-    'cancelar': 'Cancelar',
-    'borrar': 'Borrar',
-    
-    // Tabs
+
+    // App principal
+    'kerix_chat': 'Kerix Chat',
+    'menu': '☰',
     'chats': 'Chats',
     'contactos': 'Contactos',
     'ajustes': 'Ajustes',
-    
+    'modo_privado': '🔒 Modo Privado',
+    'solo_contactos': 'Solo recibir de contactos guardados',
+    'mensajes_desconocidos_rechazados': 'Los mensajes de PINs desconocidos se rechazarán',
+    'estado_servicio': '📡 Estado del servicio',
+    'cargando': 'Cargando...',
+    'codigo_activacion': 'Código de Activación:',
+    'placeholder_codigo': 'Ej: ACT-45D-XXXX',
+    'activar': 'Activar',
+    'vence': 'Vence:',
+    'agregar_contacto_fab': '+',
+
+    // Chat individual
+    'en_linea': 'en línea',
+    'no_mensajes_aun': 'No hay mensajes aún',
+    'placeholder_mensaje': 'Escribe un mensaje...',
+    'llamada_voz': '',
+    'videollamada': '📹',
+    'opciones': '⋮',
+
     // Menú lateral
     'tu_pin_kerix': 'Tu PIN de Kerix',
-    'copiar': 'Copiar',
-    'ajustes_generales': 'Ajustes generales',
-    'cambiar_pin': 'Cambiar PIN de acceso',
-    
-    // Mensajes de sistema
+    'copiar': '📋 Copiar',
+    'ajustes_generales': '⚙️ Ajustes generales',
+    'seguridad_avanzada': '🛡️ Seguridad Avanzada',
+    'notificaciones': ' Notificaciones',
+    'backup_claves': '🔑 Backup de Claves',
+    'cambiar_pin_acceso': '🔐 Cambiar PIN de acceso',
+    'diagnostico_storage': '🧪 Diagnóstico de Storage',
+
+    // Modal agregar contacto
+    'agregar_contacto_titulo': '👥 Agregar contacto',
+    'ingresa_pin_contacto': 'Ingresa el PIN de 8 caracteres de tu contacto',
+    'placeholder_pin': 'Ej: 15B9661D',
+    'agregar_contacto_btn': 'Agregar contacto',
+
+    // Modal seguridad avanzada
+    'seguridad_avanzada_titulo': '🛡️ Seguridad Avanzada',
+    'auto_destruccion': '⏱️ Auto-destrucción de mensajes',
+    'auto_destruccion_desc': 'Los mensajes se borran automáticamente después del tiempo seleccionado.',
+    'desactivado': 'Desactivado',
+    'dias_7': '7 días',
+    'dias_30': '30 días',
+    'dias_90': '90 días',
+    'anio_1': '1 año',
+    'rotacion_claves': '🔑 Rotación automática de claves',
+    'rotacion_claves_desc': 'Genera nuevas claves periódicamente. Los mensajes anteriores quedarán ilegibles.',
+    'cada_30': 'Cada 30 días',
+    'cada_90': 'Cada 90 días',
+    'cada_6': 'Cada 6 meses',
+    'ocultar_mensajes': '👁️ Ocultar mensajes al cambiar de pestaña',
+    'ocultar_mensajes_desc': 'Desenfoca los mensajes cuando la app pierde el foco.',
+    'borrado_seguro': '🗑️ Borrado seguro de datos',
+    'borrado_seguro_desc': 'Sobrescribe los datos antes de borrarlos.',
+    'doble_factor': '🔐 Doble factor para backup',
+    'doble_factor_desc': 'Requiere código adicional al exportar/importar claves.',
+    'limpieza_metadatos': '🧹 Limpieza de metadatos',
+    'limpieza_metadatos_desc': 'Borra mensajes leídos después de 7 días.',
+    'forward_secrecy': ' Forward Secrecy',
+    'forward_secrecy_desc': 'Cuando roten las claves, los mensajes antiguos quedarán ilegibles en el servidor. ⚠️ Requiere "Rotación de claves" activada.',
+    'activar_fs': '🔒 Activar',
+    'desactivar_fs': 'Desactivar',
+    'backup_mensajes': '📦 Backup de mensajes',
+    'backup_clave_privada': '🔑 Backup de clave privada',
+
+    // Modal notificaciones
+    'notificaciones_titulo': '🔔 Notificaciones',
+    'notificaciones_desc': 'Configura cómo recibir alertas de nuevos mensajes.',
+    'notif_nativas': 'Notificaciones del navegador',
+    'notif_visuales': 'Burbujas dentro de la app',
+    'notif_sonido': 'Sonido al recibir',
+    'notif_vibracion': 'Vibración',
+    'notif_contenido': 'Mostrar contenido del mensaje',
+    'guardar_config': 'Guardar configuración',
+    'solicitar_permiso': ' Solicitar Permiso del Navegador',
+    'probar_notificacion': '🧪 Probar Notificación',
+
+    // Modal backup
+    'backup_titulo': '🔑 Backup de Claves',
+    'backup_desc': 'Exporta o importa tu clave privada cifrada.',
+    'exportar_clave': '📤 Exportar clave',
+    'importar_clave': ' Importar clave',
+
+    // Modal opciones chat
+    'opciones_chat_titulo': '️ Opciones del chat',
+    'editar_nombre': '👤 Editar nombre de contacto',
+    'seleccionar_mensajes': '☑️ Seleccionar mensajes',
+    'eliminar_contacto': '🗑️ Eliminar contacto',
+    'bloquear_pin': '🚫 Bloquear PIN',
+    'limpiar_chat': '⚠️ Limpiar todo el chat',
+
+    // Modales personalizados
+    'alerta_titulo': '⚠️',
+    'alerta_default': 'Notificación',
+    'entendido': 'Entendido',
+    'confirmar_titulo': '❓',
+    'confirmar_default': '¿Estás seguro?',
+    'cancelar': 'Cancelar',
+    'confirmar': 'Confirmar',
+    'prompt_titulo': 'Entrada requerida',
+    'prompt_default': 'Escribe el valor:',
+    'aceptar': 'Aceptar',
+
+    // Mensajes de sistema (alertas y confirmaciones)
     'espera_momento': '⏱️ Espera un momento antes de enviar otro mensaje.',
     'pin_invalido': 'PIN inválido (debe contener entre 4 y 6 números).',
     'pins_no_coinciden': 'Los PINs ingresados no coinciden.',
-    'guarda_codigo': '⚠️ GUARDA ESTE CÓDIGO DE RECUPERACIÓN:',
-    'si_olvidas_pin': 'Si olvidas tu PIN, lo necesitarás obligatoriamente para no perder el acceso.',
-    'ya_copiaste': '¿Ya lo copiaste y guardaste en un lugar seguro?',
+    'guarda_codigo_recuperacion': '⚠️ GUARDA ESTE CÓDIGO DE RECUPERACIÓN:\n{codigo}\nSi olvidas tu PIN, lo necesitarás obligatoriamente para no perder el acceso.\n¿Ya lo copiaste y guardaste en un lugar seguro?',
     'operacion_cancelada': 'Operación cancelada. Debes guardar el código de recuperación.',
     'pin_configurado': '✅ PIN configurado exitosamente.',
-    'codigo_recuperacion': 'Ingresa tu código de recuperación (formato XXXX-XXXX-...):',
-    'nuevo_pin': 'Ingresa tu nuevo PIN de acceso (4-6 dígitos):',
-    'confirma_pin': 'Confirma tu nuevo PIN:',
+    'titulo_recuperacion': '🔑 Recuperación',
+    'ingresa_codigo_recuperacion': 'Ingresa tu código de recuperación (formato XXXX-XXXX-...):',
+    'titulo_nuevo_pin': '🔑 Nuevo PIN',
+    'ingresa_nuevo_pin': 'Ingresa tu nuevo PIN de acceso (4-6 dígitos):',
+    'titulo_confirma_pin': '🔑 Confirmar PIN',
+    'confirma_nuevo_pin': 'Confirma tu nuevo PIN:',
     'pin_restablecido': '✅ Tu PIN ha sido restablecido exitosamente.',
     'codigo_incorrecto': '❌ El código de recuperación ingresado es incorrecto.',
     'reset_confirmacion1': '⚠️ RESET DE EMERGENCIA\n• Eliminará tu PIN\n• Eliminará tu código de recuperación\n• Eliminará tu clave privada local\n• ¡NO podrás volver a descifrar mensajes antiguos!\n¿Deseas continuar bajo tu propio riesgo?',
     'reset_confirmacion2': 'ÚLTIMA ADVERTENCIA\n¿Estás absolutamente seguro de que deseas proceder?',
-    'confirmacion_final': 'Para confirmar el borrado completo, escribe la palabra "RESET":',
-    'cancelado': '❌ Cancelado. No se realizaron cambios.',
+    'titulo_confirmacion_final': 'Confirmación final',
+    'confirmacion_final_texto': 'Para confirmar el borrado completo, escribe la palabra "RESET":',
+    'cancelado_sin_cambios': '❌ Cancelado. No se realizaron cambios.',
     'reset_completado': '✅ Reset completado. La aplicación se reiniciará.',
     'no_pin_configurado': 'No tienes un PIN de acceso configurado.\n¿Deseas configurar uno ahora?',
-    'pin_actual': 'Ingresa tu PIN actual:',
+    'titulo_cambiar_pin': '🔐 Cambiar PIN',
+    'ingresa_pin_actual': 'Ingresa tu PIN actual:',
+    'titulo_nuevo_pin_cambio': '🔐 Nuevo PIN',
+    'ingresa_nuevo_pin_cambio': 'Ingresa tu nuevo PIN (4-6 dígitos):',
+    'titulo_confirma_pin_cambio': ' Confirmar PIN',
+    'confirma_nuevo_pin_cambio': 'Confirma tu nuevo PIN:',
+    'pin_incorrecto_cambio': ' PIN incorrecto.',
     'pin_modificado': '✅ Tu PIN ha sido modificado correctamente.',
+    'titulo_asignar_id': ' Asignar Identificador',
+    'escribe_nombre_alias': 'Escribe un nombre o alias para el PIN: ',
     'identificador_guardado': '✅ Identificador guardado con éxito localmente.',
-    'asignar_identificador': '👤 Asignar Identificador',
-    'escribe_nombre': 'Escribe un nombre o alias para el PIN:',
-    'error_prefs': 'Error prefs:',
-    'error': 'Error:',
-    'fallo_actualizar': 'Fallo al actualizar el modo privado.',
+    'fallo_actualizar_privado': 'Fallo al actualizar el modo privado.',
     'no_chats_activos': 'No tienes chats activos',
-    'usa_boton': 'Usa el botón "+" abajo para agregar un contacto',
-    'toca_abrir': 'Toca para abrir la conversación',
-    'tienes_mensajes': '📨 Tienes mensajes sin leer',
-    'lista_vacia': 'Tu lista de contactos está vacía',
-    'agrega_contactos': 'Agrega contactos compartiendo sus PINs de Kerix',
-    'editar_alias': '¿Deseas editar el nombre o alias de este PIN?',
-    'presiona_cancelar': '(Presiona "Cancelar" si en su lugar deseas eliminar el contacto)',
-    'eliminar_confirmacion': '¿Estás seguro de que deseas eliminar a',
-    'de_tus_contactos': 'de tus contactos?',
-    'pin_kerix_invalido': 'El PIN de Kerix debe tener exactamente 8 caracteres hexadecimales.',
+    'usa_boton_agregar': 'Usa el botón "+" abajo para agregar un contacto',
+    'tienes_mensajes_sin_leer': '📨 Tienes mensajes sin leer',
+    'toca_abrir_conversacion': 'Toca para abrir la conversación',
+    'lista_contactos_vacia': 'Tu lista de contactos está vacía',
+    'agrega_contactos_compartiendo': 'Agrega contactos compartiendo sus PINs de Kerix',
+    'contactos_header': 'CONTACTOS (',
+    'pins_bloqueados_header': '🚫 PINs BLOQUEADOS (',
+    'editar_alias_pregunta': '¿Deseas editar el nombre o alias de este PIN (',
+    'presiona_cancelar_eliminar': ')?\n(Presiona "Cancelar" si en su lugar deseas eliminar el contacto)',
+    'seguro_eliminar': '¿Estás seguro de que deseas eliminar a ',
+    'de_tus_contactos': ' de tus contactos?',
+    'pin_8_caracteres': 'El PIN de Kerix debe tener exactamente 8 caracteres hexadecimales.',
     'no_puedes_agregarte': 'No puedes agregarte a ti mismo.',
-    'ya_en_lista': 'Este contacto ya se encuentra en tu lista.',
-    'pin_bloqueado': 'Este PIN está bloqueado. ¿Deseas desbloquearlo y agregarlo?',
-    'guardar_identificador': '👤 Guardar Identificador',
-    'quieres_nombre': '¿Quieres ponerle un nombre o alias a este PIN para reconocerlo localmente? (Opcional):',
-    'bloquear_confirmacion': '¿Deseas bloquear de forma definitiva el PIN',
+    'contacto_ya_existe': 'Este contacto ya se encuentra en tu lista.',
+    'pin_bloqueado_desbloquear': 'Este PIN está bloqueado. ¿Deseas desbloquearlo y agregarlo?',
+    'titulo_guardar_id': ' Guardar Identificador',
+    'quieres_nombre_alias': '¿Quieres ponerle un nombre o alias a este PIN para reconocerlo localmente? (Opcional):',
+    'bloquear_definitivo': '¿Deseas bloquear de forma definitiva el PIN ',
     'no_recibir_mensajes': '? No podrás recibir sus mensajes.',
-    'eliminar_actual': '¿Deseas eliminar a',
-    'seleccionar_mensajes_info': 'Toca los mensajes para seleccionarlos individualmente. Usa la papelera para borrarlos.',
+    'deseas_eliminar': '¿Deseas eliminar a ',
+    'seleccionar_info': 'Toca los mensajes para seleccionarlos individualmente. Usa la papelera para borrarlos.',
     'no_seleccionados': 'No has seleccionado ningún mensaje.',
-    'borrar_irreversible': '¿Deseas borrar de forma irreversible los',
-    'mensajes_seleccionados': 'mensajes seleccionados?',
+    'borrar_irreversible': '¿Deseas borrar de forma irreversible los ',
+    'mensajes_seleccionados': ' mensajes seleccionados?',
     'mensajes_borrados': '✅ Mensajes borrados.',
-    'borrar_todo_chat': '⚠️ ¿Deseas borrar TODO el historial de este chat? Esta acción es irreversible.',
-    'chat_vaciado': '✅ Historial de chat vaciado.',
-    'archivo_listo': '📎 Archivo listo para enviar:',
-    'tamaño_maximo': 'El tamaño máximo de archivo admitido es de 50 MB.',
+    'borrar_todo_historial': '⚠️ ¿Deseas borrar TODO el historial de este chat? Esta acción es irreversible.',
+    'historial_vaciado': '✅ Historial de chat vaciado.',
+    'tamaño_maximo_50mb': 'El tamaño máximo de archivo admitido es de 50 MB.',
+    'archivo_listo': '📎 Archivo listo para enviar: ',
+    'mensaje_vacio': 'No puedes enviar un mensaje vacío.',
     'no_verificar_llave': '⚠️ No se pudo verificar la llave de cifrado del contacto.',
-    'error_cifrar': 'Error al intentar cifrar el mensaje.',
-    'error_subir': 'Error al subir el archivo adjunto:',
-    'error_insertar': 'Error al insertar el mensaje en la red.',
-    'no_mensaje_vacio': 'No puedes enviar un mensaje vacío.',
+    'error_cifrar_mensaje': 'Error al intentar cifrar el mensaje.',
+    'error_subir_archivo': 'Error al subir el archivo adjunto: ',
+    'error_insertar_mensaje': 'Error al insertar el mensaje en la red.',
     'descifrando_adjunto': '🔐 Descifrando adjunto seguro...',
-    'error_ruta': '⚠️ Error: Ruta corrupta',
-    'no_descifrar': '⚠️ No se pudo descifrar este archivo',
-    'codigo_invalido': 'Código de activación inválido.',
+    'error_ruta_corrupta': '⚠️ Error: Ruta corrupta',
+    'no_descifrar_archivo': '️ No se pudo descifrar este archivo',
+    'codigo_activacion_invalido': 'Código de activación inválido.',
     'procesando': 'Procesando...',
-    'servicio_activado': '¡Servicio activado! Vence el:',
-    'error_activacion': 'Error:',
-    'codigo_usado': 'Código ya utilizado o inválido.',
-    'fallo_conexion': 'Fallo de conexión:',
-    'pin_copiado': 'Tu PIN',
-    'ha_copiado': 'ha sido copiado al portapapeles.',
-    'exportar_llave': '🔒 Exportar Llave',
-    'contraseña_respaldo': 'Crea una contraseña para cifrar el respaldo (mínimo 4 caracteres):',
-    'contraseña_minima': 'La contraseña de respaldo debe ser de al menos 4 caracteres.',
-    'codigo_2fa': '🔑 Tu código de seguridad 2FA es:',
-    'escrbelo': 'Escríbelo para poder restaurarlo más tarde.',
+    'servicio_activado': '¡Servicio activado! Vence el: ',
+    'codigo_usado_invalido': 'Código ya utilizado o inválido.',
+    'fallo_conexion': 'Fallo de conexión: ',
+    'pin_copiado_inicio': 'Tu PIN ',
+    'pin_copiado_fin': ' ha sido copiado al portapapeles.',
+    'titulo_exportar_llave': '🔒 Exportar Llave',
+    'crear_contrasena_respaldo': 'Crea una contraseña para cifrar el respaldo (mínimo 4 caracteres):',
+    'contrasena_minima': 'La contraseña de respaldo debe ser de al menos 4 caracteres.',
+    'codigo_2fa_inicio': '🔑 Tu código de seguridad 2FA es:\n',
+    'escribelo_restaurar': '\nEscríbelo para poder restaurarlo más tarde.',
     'primero_desbloquea': 'Primero desbloquea la aplicación.',
     'respaldo_copiado': '✅ Respaldo copiado al portapapeles correctamente.',
-    '2fa_obligatorio': '2FA obligatorio:',
-    'error_empaquetado': 'Error de empaquetado:',
-    'importar_llave': '📥 Importar Llave',
+    '2fa_obligatorio': '\n2FA obligatorio: ',
+    'error_empaquetado': 'Error de empaquetado: ',
+    'titulo_importar_llave': '📥 Importar Llave',
     'pega_respaldo': 'Pega aquí el contenido cifrado del respaldo:',
-    'contraseña': 'Contraseña',
-    'ingresa_contraseña': 'Ingresa la contraseña con la que cifraste el respaldo:',
-    'doble_factor': '🔐 Doble Factor',
+    'titulo_contrasena': '📥 Contraseña',
+    'ingresa_contrasena': 'Ingresa la contraseña con la que cifraste el respaldo:',
+    'titulo_doble_factor': ' Doble Factor',
     'ingresa_codigo_2fa': 'Ingresa el código de seguridad 2FA que se generó al exportar:',
     'codigo_2fa_incorrecto': '❌ El código 2FA ingresado es incorrecto.',
     'clave_importada': '✅ Clave de respaldo importada con éxito.',
     'respaldo_corrupto': '❌ Respaldo corrupto o contraseña incorrecta.',
-    'advertencia_fs': '⚠️ ALERTA DE SEGURIDAD\nTodos los mensajes antiguos quedarán completamente ILEGIBLES una vez que roten tus llaves.\n¿Quieres activar esta funcionalidad?',
-    'backup_descifrado': '¿Quieres descargar un backup descifrado en HTML de todos tus chats antes de activar esto?',
-    'activar_fs': '🔐 ¿Activar Perfect Forward Secrecy ahora?',
+    'activar_rotacion_primero': '⚠️ Debes activar primero la opción "Rotación de claves".',
+    'alerta_seguridad_fs': '⚠️ ALERTA DE SEGURIDAD\nTodos los mensajes antiguos quedarán completamente ILEGIBLES una vez que roten tus llaves.\n¿Quieres activar esta funcionalidad?',
+    'backup_descifrado_pregunta': '¿Quieres descargar un backup descifrado en HTML de todos tus chats antes de activar esto?',
+    'activar_fs_pregunta': '🔐 ¿Activar Perfect Forward Secrecy ahora?',
     'fs_activado': '✅ Forward Secrecy activado.',
-    'desactivar_fs': '¿Desactivar la propiedad de Forward Secrecy?',
+    'desactivar_fs_pregunta': '¿Desactivar la propiedad de Forward Secrecy?',
     'funcionalidad_desactivada': '✅ Funcionalidad desactivada.',
-    'backup_descargado': '✅ El archivo de respaldo se ha descargado de manera segura.',
-    'error_exportar': '❌ Error al exportar:',
-    'desbloquea_app': 'Por favor, desbloquea la aplicación.',
-    'backup_descargado_plano': '✅ Clave de respaldo descargada en texto plano.',
-    'error_generar_backup': 'Error al generar el backup:',
+    'backup_titulo_html': ' Backup Local de Mensajes',
+    'pin_usuario': 'PIN de Usuario: ',
+    'creado_el': 'Creado el: ',
+    'conversacion_con': ' Conversación con: ',
+    'ilegible_clave_rotada': '[Ilegible / Clave Rotada]',
+    'respaldo_descargado': '✅ El archivo de respaldo se ha descargado de manera segura.',
+    'error_exportar': '❌ Error al exportar: ',
+    'por_favor_desbloquea': 'Por favor, desbloquea la aplicación.',
+    'backup_claves_titulo': '🔑 Kerix Backup de Claves',
+    'texto_plano_alerta': '⚠️ TEXTO PLANO - Guarda este archivo con estricto secreto.',
+    'clave_privada_label': 'Clave Privada (RSA-OAEP Decrypt):',
+    'clave_publica_label': 'Clave Pública (RSA-OAEP Encrypt):',
+    'clave_descargada_plano': '✅ Clave de respaldo descargada en texto plano.',
+    'error_generar_backup': 'Error al generar el backup: ',
     'no_soporta_notificaciones': '❌ Tu navegador no soporta notificaciones nativas.',
     'notificaciones_autorizadas': '✅ Las notificaciones ya están autorizadas.',
     'permisos_denegados': '❌ Permisos denegados. Debes habilitarlos manualmente desde el candado de la barra del navegador.',
     'permiso_concedido': '✅ Permiso de notificación concedido.',
     'notificaciones_activadas': 'Notificaciones activadas con éxito. ✅',
+    'error_solicitar_permiso': 'Error solicitando permiso:',
+    'mensaje_de': 'Mensaje de ',
+    'imagen_adjunta': '🖼️ Imagen adjunta',
+    'video_adjunto': '🎥 Video adjunto',
+    'archivo_adjunto': '📎 Archivo adjunto',
+    'mensaje_default': 'Mensaje',
+    'nuevo_mensaje_default': 'Nuevo mensaje',
     'preferencias_aplicadas': '✅ Preferencias de notificación aplicadas con éxito.',
-    'notificacion_prueba': 'Kerix Chat - Prueba',
+    'notificacion_prueba_titulo': 'Kerix Chat - Prueba',
     'notificaciones_ejecutando': 'Las notificaciones nativas se están ejecutando. ✅',
     'notificacion_disparada': '✅ Notificación de prueba disparada.',
     'no_permisos_aprobados': '❌ No hay permisos aprobados para notificaciones aún.',
-    'error_inicializacion': '⚠️ Error durante la inicialización de módulos:',
+    'error_inicializacion': '⚠️ Error durante la inicialización de módulos: ',
     'storage_funciona': '✅ Storage y buckets de Supabase funcionan correctamente!',
-    'error_conexion_storage': 'Error de conexión con Storage:',
-    'error_listando': '❌ Error listando buckets:',
+    'error_conexion_storage': 'Error de conexión con Storage: ',
     'bucket_no_existe': '❌ El bucket "chat-files" no existe en la instancia de Supabase.',
-    'error_subir_prueba': '❌ Error al subir archivo de prueba:',
-    'error_url_firmada': '❌ Error creando URL firmada:',
-    
+    'error_subir_prueba': '❌ Error al subir archivo de prueba: ',
+    'error_url_firmada': '❌ Error creando URL firmada: ',
+
+    // Llamadas WebRTC
+    'debes_estar_en_chat': '❌ Debes estar en un chat para llamar.',
+    'llamada_activa': '⚠️ Ya tienes una llamada activa.',
+    'iniciar_llamada_pregunta': '📞 ¿Iniciar ',
+    'videollamada_texto': 'videollamada',
+    'llamada_voz_texto': 'llamada de voz',
+    'con_contacto': ' con ',
+    'no_acceso_media': '❌ No se pudo acceder al ',
+    'microfono_y_camara': 'micrófono y cámara',
+    'microfono': 'micrófono',
+    'verifica_permisos': '.\nVerifica los permisos del navegador.',
+    'llamando': ' Llamando...',
+    'conectado': '✅ Conectado',
+    'desconectado': '❌ Desconectado',
+    'error_iniciar_llamada': '❌ Error al iniciar la llamada.',
+    'videollamada_entrante': ' Videollamada entrante',
+    'llamada_voz_entrante': '📞 Llamada de voz entrante',
+    'te_esta_llamando': ' te está llamando',
+    'conectando': ' Conectando...',
+    'no_encontro_oferta': '❌ No se encontró la oferta.',
+    'llamada_rechazada': '📞 La llamada fue rechazada.',
+    'llamada_finalizada': '📞 La llamada ha finalizado.',
+    'segundo_plano': ' En segundo plano',
+
     // Selector de idioma
-    'idioma': 'Idioma',
+    'idioma': '🌍 Idioma / Language',
     'espanol': 'Español',
     'ingles': 'English',
     'portugues': 'Português'
   },
-  
+
   en: {
-    // Agrega aquí las traducciones al inglés
-    'chat_bloqueado': 'Kerix Locked',
-    'ingresa_pin': 'Enter your access PIN',
+    // Lock screen
+    'kerix_bloqueado': 'Kerix Locked',
+    'ingresa_pin_acceso': 'Enter your access PIN',
     'desbloquear': 'Unlock',
-    // ... más traducciones
+    'configurar_pin': '🔑 Configure PIN',
+    'olvide_pin': 'I forgot my PIN',
+    'reset_emergencia': '⚠️ Emergency Reset',
+    'pin_incorrecto': 'Incorrect PIN',
+
+    // Main app
+    'kerix_chat': 'Kerix Chat',
+    'menu': '☰',
+    'chats': 'Chats',
+    'contactos': 'Contacts',
+    'ajustes': 'Settings',
+    'modo_privado': '🔒 Private Mode',
+    'solo_contactos': 'Only receive from saved contacts',
+    'mensajes_desconocidos_rechazados': 'Messages from unknown PINs will be rejected',
+    'estado_servicio': '📡 Service Status',
+    'cargando': 'Loading...',
+    'codigo_activacion': 'Activation Code:',
+    'placeholder_codigo': 'Ex: ACT-45D-XXXX',
+    'activar': 'Activate',
+    'vence': 'Expires:',
+    'agregar_contacto_fab': '+',
+
+    // Individual chat
+    'en_linea': 'online',
+    'no_mensajes_aun': 'No messages yet',
+    'placeholder_mensaje': 'Type a message...',
+    'llamada_voz': '📞',
+    'videollamada': '',
+    'opciones': '',
+
+    // Side menu
+    'tu_pin_kerix': 'Your Kerix PIN',
+    'copiar': '📋 Copy',
+    'ajustes_generales': '⚙️ General Settings',
+    'seguridad_avanzada': '🛡️ Advanced Security',
+    'notificaciones': '🔔 Notifications',
+    'backup_claves': '🔑 Keys Backup',
+    'cambiar_pin_acceso': '🔐 Change access PIN',
+    'diagnostico_storage': '🧪 Storage Diagnostic',
+
+    // Add contact modal
+    'agregar_contacto_titulo': '👥 Add contact',
+    'ingresa_pin_contacto': 'Enter your contact\'s 8-character PIN',
+    'placeholder_pin': 'Ex: 15B9661D',
+    'agregar_contacto_btn': 'Add contact',
+
+    // Advanced security modal
+    'seguridad_avanzada_titulo': '🛡️ Advanced Security',
+    'auto_destruccion': '⏱️ Message auto-destruction',
+    'auto_destruccion_desc': 'Messages are automatically deleted after the selected time.',
+    'desactivado': 'Disabled',
+    'dias_7': '7 days',
+    'dias_30': '30 days',
+    'dias_90': '90 days',
+    'anio_1': '1 year',
+    'rotacion_claves': ' Automatic key rotation',
+    'rotacion_claves_desc': 'Generates new keys periodically. Previous messages will become unreadable.',
+    'cada_30': 'Every 30 days',
+    'cada_90': 'Every 90 days',
+    'cada_6': 'Every 6 months',
+    'ocultar_mensajes': '👁️ Hide messages when changing tabs',
+    'ocultar_mensajes_desc': 'Blurs messages when the app loses focus.',
+    'borrado_seguro': '🗑️ Secure data deletion',
+    'borrado_seguro_desc': 'Overwrites data before deleting.',
+    'doble_factor': '🔐 Two-factor for backup',
+    'doble_factor_desc': 'Requires additional code when exporting/importing keys.',
+    'limpieza_metadatos': '🧹 Metadata cleanup',
+    'limpieza_metadatos_desc': 'Deletes read messages after 7 days.',
+    'forward_secrecy': '🔐 Forward Secrecy',
+    'forward_secrecy_desc': 'When keys rotate, old messages will become unreadable on the server. ⚠️ Requires "Key rotation" enabled.',
+    'activar_fs': '🔒 Activate',
+    'desactivar_fs': 'Deactivate',
+    'backup_mensajes': ' Messages backup',
+    'backup_clave_privada': '🔑 Private key backup',
+
+    // Notifications modal
+    'notificaciones_titulo': '🔔 Notifications',
+    'notificaciones_desc': 'Configure how to receive new message alerts.',
+    'notif_nativas': 'Browser notifications',
+    'notif_visuales': 'Bubbles inside the app',
+    'notif_sonido': 'Sound on receive',
+    'notif_vibracion': 'Vibration',
+    'notif_contenido': 'Show message content',
+    'guardar_config': 'Save configuration',
+    'solicitar_permiso': '🔓 Request Browser Permission',
+    'probar_notificacion': '🧪 Test Notification',
+
+    // Backup modal
+    'backup_titulo': '🔑 Keys Backup',
+    'backup_desc': 'Export or import your encrypted private key.',
+    'exportar_clave': '📤 Export key',
+    'importar_clave': ' Import key',
+
+    // Chat options modal
+    'opciones_chat_titulo': '️ Chat options',
+    'editar_nombre': '👤 Edit contact name',
+    'seleccionar_mensajes': '☑️ Select messages',
+    'eliminar_contacto': '️ Delete contact',
+    'bloquear_pin': '🚫 Block PIN',
+    'limpiar_chat': '⚠️ Clear entire chat',
+
+    // Custom modals
+    'alerta_titulo': '⚠️',
+    'alerta_default': 'Notification',
+    'entendido': 'Understood',
+    'confirmar_titulo': '❓',
+    'confirmar_default': 'Are you sure?',
+    'cancelar': 'Cancel',
+    'confirmar': 'Confirm',
+    'prompt_titulo': 'Input required',
+    'prompt_default': 'Enter the value:',
+    'aceptar': 'Accept',
+
+    // System messages
+    'espera_momento': '⏱️ Wait a moment before sending another message.',
+    'pin_invalido': 'Invalid PIN (must contain between 4 and 6 numbers).',
+    'pins_no_coinciden': 'The entered PINs do not match.',
+    'guarda_codigo_recuperacion': '⚠️ SAVE THIS RECOVERY CODE:\n{codigo}\nIf you forget your PIN, you will obligatorily need this to not lose access.\nDid you copy it and save it in a safe place?',
+    'operacion_cancelada': 'Operation canceled. You must save the recovery code.',
+    'pin_configurado': '✅ PIN configured successfully.',
+    'titulo_recuperacion': '🔑 Recovery',
+    'ingresa_codigo_recuperacion': 'Enter your recovery code (format XXXX-XXXX-...):',
+    'titulo_nuevo_pin': '🔑 New PIN',
+    'ingresa_nuevo_pin': 'Enter your new access PIN (4-6 digits):',
+    'titulo_confirma_pin': '🔑 Confirm PIN',
+    'confirma_nuevo_pin': 'Confirm your new PIN:',
+    'pin_restablecido': '✅ Your PIN has been successfully reset.',
+    'codigo_incorrecto': '❌ The entered recovery code is incorrect.',
+    'reset_confirmacion1': '⚠️ EMERGENCY RESET\n• Will delete your PIN\n• Will delete your recovery code\n• Will delete your private key locally\n• You will NOT be able to decrypt old messages!\nDo you want to continue at your own risk?',
+    'reset_confirmacion2': 'FINAL WARNING\nAre you absolutely sure you want to proceed?',
+    'titulo_confirmacion_final': 'Final confirmation',
+    'confirmacion_final_texto': 'To confirm complete deletion, type the word "RESET":',
+    'cancelado_sin_cambios': '❌ Canceled. No changes were made.',
+    'reset_completado': '✅ Reset completed. The application will restart.',
+    'no_pin_configurado': 'You do not have an access PIN configured.\nDo you want to configure one now?',
+    'titulo_cambiar_pin': ' Change PIN',
+    'ingresa_pin_actual': 'Enter your current PIN:',
+    'titulo_nuevo_pin_cambio': '🔐 New PIN',
+    'ingresa_nuevo_pin_cambio': 'Enter your new PIN (4-6 digits):',
+    'titulo_confirma_pin_cambio': '🔐 Confirm PIN',
+    'confirma_nuevo_pin_cambio': 'Confirm your new PIN:',
+    'pin_incorrecto_cambio': '❌ Incorrect PIN.',
+    'pin_modificado': '✅ Your PIN has been modified correctly.',
+    'titulo_asignar_id': '👤 Assign Identifier',
+    'escribe_nombre_alias': 'Write a name or alias for the PIN: ',
+    'identificador_guardado': '✅ Identifier saved successfully locally.',
+    'fallo_actualizar_privado': 'Failed to update private mode.',
+    'no_chats_activos': 'You have no active chats',
+    'usa_boton_agregar': 'Use the "+" button below to add a contact',
+    'tienes_mensajes_sin_leer': '📨 You have unread messages',
+    'toca_abrir_conversacion': 'Tap to open conversation',
+    'lista_contactos_vacia': 'Your contact list is empty',
+    'agrega_contactos_compartiendo': 'Add contacts by sharing their Kerix PINs',
+    'contactos_header': 'CONTACTS (',
+    'pins_bloqueados_header': '🚫 BLOCKED PINS (',
+    'editar_alias_pregunta': 'Do you want to edit the name or alias of this PIN (',
+    'presiona_cancelar_eliminar': ')?\n(Press "Cancel" if instead you want to delete the contact)',
+    'seguro_eliminar': 'Are you sure you want to delete ',
+    'de_tus_contactos': ' from your contacts?',
+    'pin_8_caracteres': 'The Kerix PIN must have exactly 8 hexadecimal characters.',
+    'no_puedes_agregarte': 'You cannot add yourself.',
+    'contacto_ya_existe': 'This contact is already in your list.',
+    'pin_bloqueado_desbloquear': 'This PIN is blocked. Do you want to unblock and add it?',
+    'titulo_guardar_id': '👤 Save Identifier',
+    'quieres_nombre_alias': 'Do you want to give it a name or alias to recognize it locally? (Optional):',
+    'bloquear_definitivo': 'Do you want to definitively block the PIN ',
+    'no_recibir_mensajes': '? You will not be able to receive their messages.',
+    'deseas_eliminar': 'Do you want to delete ',
+    'seleccionar_info': 'Tap messages to select them individually. Use the trash to delete them.',
+    'no_seleccionados': 'You have not selected any messages.',
+    'borrar_irreversible': 'Do you want to irreversibly delete the ',
+    'mensajes_seleccionados': ' selected messages?',
+    'mensajes_borrados': '✅ Messages deleted.',
+    'borrar_todo_historial': '⚠️ Do you want to delete ALL chat history? This action is irreversible.',
+    'historial_vaciado': '✅ Chat history cleared.',
+    'tamaño_maximo_50mb': 'The maximum file size allowed is 50 MB.',
+    'archivo_listo': '📎 File ready to send: ',
+    'mensaje_vacio': 'You cannot send an empty message.',
+    'no_verificar_llave': '⚠️ Could not verify the contact encryption key.',
+    'error_cifrar_mensaje': 'Error trying to encrypt the message.',
+    'error_subir_archivo': 'Error uploading attached file: ',
+    'error_insertar_mensaje': 'Error inserting message into network.',
+    'descifrando_adjunto': '🔐 Decrypting secure attachment...',
+    'error_ruta_corrupta': '️ Error: Corrupt path',
+    'no_descifrar_archivo': '⚠️ Could not decrypt this file',
+    'codigo_activacion_invalido': 'Invalid activation code.',
+    'procesando': 'Processing...',
+    'servicio_activado': 'Service activated! Expires: ',
+    'codigo_usado_invalido': 'Code already used or invalid.',
+    'fallo_conexion': 'Connection failure: ',
+    'pin_copiado_inicio': 'Your PIN ',
+    'pin_copiado_fin': ' has been copied to clipboard.',
+    'titulo_exportar_llave': '🔒 Export Key',
+    'crear_contrasena_respaldo': 'Create a password to encrypt the backup (minimum 4 characters):',
+    'contrasena_minima': 'The backup password must be at least 4 characters.',
+    'codigo_2fa_inicio': '🔑 Your 2FA security code is:\n',
+    'escribelo_restaurar': '\nWrite it down to restore it later.',
+    'primero_desbloquea': 'First unlock the application.',
+    'respaldo_copiado': '✅ Backup copied to clipboard correctly.',
+    '2fa_obligatorio': '\n2FA mandatory: ',
+    'error_empaquetado': 'Packaging error: ',
+    'titulo_importar_llave': '📥 Import Key',
+    'pega_respaldo': 'Paste the encrypted backup content here:',
+    'titulo_contrasena': '📥 Password',
+    'ingresa_contrasena': 'Enter the password you used to encrypt the backup:',
+    'titulo_doble_factor': '🔐 Two-Factor',
+    'ingresa_codigo_2fa': 'Enter the 2FA security code that was generated when exporting:',
+    'codigo_2fa_incorrecto': '❌ The entered 2FA code is incorrect.',
+    'clave_importada': '✅ Backup key imported successfully.',
+    'respaldo_corrupto': '❌ Corrupt backup or incorrect password.',
+    'activar_rotacion_primero': '⚠️ You must first activate the "Key rotation" option.',
+    'alerta_seguridad_fs': '️ SECURITY ALERT\nAll old messages will become completely UNREADABLE once your keys rotate.\nDo you want to activate this functionality?',
+    'backup_descifrado_pregunta': 'Do you want to download a decrypted HTML backup of all your chats before activating this?',
+    'activar_fs_pregunta': '🔐 Activate Perfect Forward Secrecy now?',
+    'fs_activado': '✅ Forward Secrecy activated.',
+    'desactivar_fs_pregunta': 'Deactivate Forward Secrecy property?',
+    'funcionalidad_desactivada': '✅ Functionality deactivated.',
+    'backup_titulo_html': ' Local Messages Backup',
+    'pin_usuario': 'User PIN: ',
+    'creado_el': 'Created on: ',
+    'conversacion_con': '💬 Conversation with: ',
+    'ilegible_clave_rotada': '[Unreadable / Rotated Key]',
+    'respaldo_descargado': '✅ Backup file downloaded securely.',
+    'error_exportar': '❌ Error exporting: ',
+    'por_favor_desbloquea': 'Please unlock the application.',
+    'backup_claves_titulo': '🔑 Kerix Keys Backup',
+    'texto_plano_alerta': '⚠️ PLAIN TEXT - Save this file with strict secrecy.',
+    'clave_privada_label': 'Private Key (RSA-OAEP Decrypt):',
+    'clave_publica_label': 'Public Key (RSA-OAEP Encrypt):',
+    'clave_descargada_plano': '✅ Backup key downloaded in plain text.',
+    'error_generar_backup': 'Error generating backup: ',
+    'no_soporta_notificaciones': '❌ Your browser does not support native notifications.',
+    'notificaciones_autorizadas': '✅ Notifications are already authorized.',
+    'permisos_denegados': '❌ Permissions denied. You must enable them manually from the browser lock icon.',
+    'permiso_concedido': '✅ Notification permission granted.',
+    'notificaciones_activadas': 'Notifications activated successfully. ✅',
+    'error_solicitar_permiso': 'Error requesting permission:',
+    'mensaje_de': 'Message from ',
+    'imagen_adjunta': '🖼️ Attached image',
+    'video_adjunto': '🎥 Attached video',
+    'archivo_adjunto': ' Attached file',
+    'mensaje_default': 'Message',
+    'nuevo_mensaje_default': 'New message',
+    'preferencias_aplicadas': '✅ Notification preferences applied successfully.',
+    'notificacion_prueba_titulo': 'Kerix Chat - Test',
+    'notificaciones_ejecutando': 'Native notifications are running. ✅',
+    'notificacion_disparada': '✅ Test notification triggered.',
+    'no_permisos_aprobados': '❌ No permissions approved for notifications yet.',
+    'error_inicializacion': '⚠️ Error during module initialization: ',
+    'storage_funciona': '✅ Supabase Storage and buckets working correctly!',
+    'error_conexion_storage': 'Connection error with Storage: ',
+    'bucket_no_existe': '❌ The "chat-files" bucket does not exist in the Supabase instance.',
+    'error_subir_prueba': '❌ Error uploading test file: ',
+    'error_url_firmada': ' Error creating signed URL: ',
+
+    // WebRTC Calls
+    'debes_estar_en_chat': '❌ You must be in a chat to call.',
+    'llamada_activa': '⚠️ You already have an active call.',
+    'iniciar_llamada_pregunta': '📞 Start ',
+    'videollamada_texto': 'video call',
+    'llamada_voz_texto': 'voice call',
+    'con_contacto': ' with ',
+    'no_acceso_media': '❌ Could not access ',
+    'microfono_y_camara': 'microphone and camera',
+    'microfono': 'microphone',
+    'verifica_permisos': '.\nCheck browser permissions.',
+    'llamando': ' Calling...',
+    'conectado': '✅ Connected',
+    'desconectado': '❌ Disconnected',
+    'error_iniciar_llamada': '❌ Error starting the call.',
+    'videollamada_entrante': '📹 Incoming video call',
+    'llamada_voz_entrante': '📞 Incoming voice call',
+    'te_esta_llamando': ' is calling you',
+    'conectando': '🔄 Connecting...',
+    'no_encontro_oferta': '❌ Offer not found.',
+    'llamada_rechazada': '📞 The call was rejected.',
+    'llamada_finalizada': '📞 The call has ended.',
+    'segundo_plano': '🌙 In background',
+
+    // Language selector
+    'idioma': '🌍 Language / Idioma',
+    'espanol': 'Spanish',
+    'ingles': 'English',
+    'portugues': 'Portuguese'
   },
-  
+
   pt: {
-    // Agrega aquí las traducciones al portugués
-    'chat_bloqueado': 'Kerix Bloqueado',
-    'ingresa_pin': 'Digite seu PIN de acesso',
+    // Tela de bloqueio
+    'kerix_bloqueado': 'Kerix Bloqueado',
+    'ingresa_pin_acceso': 'Digite seu PIN de acesso',
     'desbloquear': 'Desbloquear',
-    // ... más traducciones
+    'configurar_pin': '🔑 Configurar PIN',
+    'olvide_pin': 'Esqueci meu PIN',
+    'reset_emergencia': '️ Redefinição de Emergência',
+    'pin_incorrecto': 'PIN incorreto',
+
+    // App principal
+    'kerix_chat': 'Kerix Chat',
+    'menu': '☰',
+    'chats': 'Chats',
+    'contactos': 'Contatos',
+    'ajustes': 'Configurações',
+    'modo_privado': ' Modo Privado',
+    'solo_contactos': 'Apenas receber de contatos salvos',
+    'mensajes_desconocidos_rechazados': 'Mensagens de PINs desconhecidos serão rejeitadas',
+    'estado_servicio': '📡 Status do serviço',
+    'cargando': 'Carregando...',
+    'codigo_activacion': 'Código de Ativação:',
+    'placeholder_codigo': 'Ex: ACT-45D-XXXX',
+    'activar': 'Ativar',
+    'vence': 'Vence:',
+    'agregar_contacto_fab': '+',
+
+    // Chat individual
+    'en_linea': 'online',
+    'no_mensajes_aun': 'Ainda não há mensagens',
+    'placeholder_mensaje': 'Digite uma mensagem...',
+    'llamada_voz': '📞',
+    'videollamada': '📹',
+    'opciones': '⋮',
+
+    // Menu lateral
+    'tu_pin_kerix': 'Seu PIN Kerix',
+    'copiar': '📋 Copiar',
+    'ajustes_generales': '⚙️ Configurações gerais',
+    'seguridad_avanzada': '🛡️ Segurança Avançada',
+    'notificaciones': '🔔 Notificações',
+    'backup_claves': '🔑 Backup de Chaves',
+    'cambiar_pin_acceso': ' Alterar PIN de acesso',
+    'diagnostico_storage': '🧪 Diagnóstico de Armazenamento',
+
+    // Modal adicionar contato
+    'agregar_contacto_titulo': '👥 Adicionar contato',
+    'ingresa_pin_contacto': 'Digite o PIN de 8 caracteres do seu contato',
+    'placeholder_pin': 'Ex: 15B9661D',
+    'agregar_contacto_btn': 'Adicionar contato',
+
+    // Modal segurança avançada
+    'seguridad_avanzada_titulo': '🛡️ Segurança Avançada',
+    'auto_destruccion': '⏱️ Auto-destruição de mensagens',
+    'auto_destruccion_desc': 'As mensagens são excluídas automaticamente após o tempo selecionado.',
+    'desactivado': 'Desativado',
+    'dias_7': '7 dias',
+    'dias_30': '30 dias',
+    'dias_90': '90 dias',
+    'anio_1': '1 ano',
+    'rotacion_claves': '🔑 Rotação automática de chaves',
+    'rotacion_claves_desc': 'Gera novas chaves periodicamente. Mensagens anteriores ficarão ilegíveis.',
+    'cada_30': 'A cada 30 dias',
+    'cada_90': 'A cada 90 dias',
+    'cada_6': 'A cada 6 meses',
+    'ocultar_mensajes': '👁️ Ocultar mensagens ao mudar de aba',
+    'ocultar_mensajes_desc': 'Desfoca as mensagens quando o app perde o foco.',
+    'borrado_seguro': '🗑️ Exclusão segura de dados',
+    'borrado_seguro_desc': 'Sobrescreve os dados antes de excluir.',
+    'doble_factor': '🔐 Duplo fator para backup',
+    'doble_factor_desc': 'Requer código adicional ao exportar/importar chaves.',
+    'limpieza_metadatos': '🧹 Limpeza de metadados',
+    'limpieza_metadatos_desc': 'Exclui mensagens lidas após 7 dias.',
+    'forward_secrecy': '🔐 Forward Secrecy',
+    'forward_secrecy_desc': 'Quando as chaves rotacionarem, mensagens antigas ficarão ilegíveis no servidor. ⚠️ Requer "Rotação de chaves" ativada.',
+    'activar_fs': '🔒 Ativar',
+    'desactivar_fs': 'Desativar',
+    'backup_mensajes': ' Backup de mensagens',
+    'backup_clave_privada': '🔑 Backup de chave privada',
+
+    // Modal notificações
+    'notificaciones_titulo': '🔔 Notificações',
+    'notificaciones_desc': 'Configure como receber alertas de novas mensagens.',
+    'notif_nativas': 'Notificações do navegador',
+    'notif_visuales': 'Bolhas dentro do app',
+    'notif_sonido': 'Som ao receber',
+    'notif_vibracion': 'Vibração',
+    'notif_contenido': 'Mostrar conteúdo da mensagem',
+    'guardar_config': 'Salvar configuração',
+    'solicitar_permiso': '🔓 Solicitar Permissão do Navegador',
+    'probar_notificacion': '🧪 Testar Notificação',
+
+    // Modal backup
+    'backup_titulo': '🔑 Backup de Chaves',
+    'backup_desc': 'Exporte ou importe sua chave privada criptografada.',
+    'exportar_clave': '📤 Exportar chave',
+    'importar_clave': '📥 Importar chave',
+
+    // Modal opções chat
+    'opciones_chat_titulo': '⚙️ Opções do chat',
+    'editar_nombre': '👤 Editar nome do contato',
+    'seleccionar_mensajes': '☑️ Selecionar mensagens',
+    'eliminar_contacto': '🗑️ Excluir contato',
+    'bloquear_pin': '🚫 Bloquear PIN',
+    'limpiar_chat': '⚠️ Limpar todo o chat',
+
+    // Modais personalizados
+    'alerta_titulo': '⚠️',
+    'alerta_default': 'Notificação',
+    'entendido': 'Entendido',
+    'confirmar_titulo': '❓',
+    'confirmar_default': 'Tem certeza?',
+    'cancelar': 'Cancelar',
+    'confirmar': 'Confirmar',
+    'prompt_titulo': 'Entrada requerida',
+    'prompt_default': 'Digite o valor:',
+    'aceptar': 'Aceitar',
+
+    // Mensagens do sistema
+    'espera_momento': '️ Aguarde um momento antes de enviar outra mensagem.',
+    'pin_invalido': 'PIN inválido (deve conter entre 4 e 6 números).',
+    'pins_no_coinciden': 'Os PINs inseridos não coincidem.',
+    'guarda_codigo_recuperacion': '⚠️ GUARDE ESTE CÓDIGO DE RECUPERAÇÃO:\n{codigo}\nSe você esquecer seu PIN, precisará obrigatoriamente disto para não perder o acesso.\nVocê já copiou e salvou em um local seguro?',
+    'operacion_cancelada': 'Operação cancelada. Você deve guardar o código de recuperação.',
+    'pin_configurado': '✅ PIN configurado com sucesso.',
+    'titulo_recuperacion': '🔑 Recuperação',
+    'ingresa_codigo_recuperacion': 'Digite seu código de recuperação (formato XXXX-XXXX-...):',
+    'titulo_nuevo_pin': '🔑 Novo PIN',
+    'ingresa_nuevo_pin': 'Digite seu novo PIN de acesso (4-6 dígitos):',
+    'titulo_confirma_pin': '🔑 Confirmar PIN',
+    'confirma_nuevo_pin': 'Confirme seu novo PIN:',
+    'pin_restablecido': '✅ Seu PIN foi redefinido com sucesso.',
+    'codigo_incorrecto': '❌ O código de recuperação inserido está incorreto.',
+    'reset_confirmacion1': '⚠️ REDEFINIÇÃO DE EMERGÊNCIA\n• Excluirá seu PIN\n• Excluirá seu código de recuperação\n• Excluirá sua chave privada localmente\n• Você NÃO poderá descriptografar mensagens antigas!\nDeseja continuar por sua conta e risco?',
+    'reset_confirmacion2': 'AVISO FINAL\nVocê tem absoluta certeza de que deseja prosseguir?',
+    'titulo_confirmacion_final': 'Confirmação final',
+    'confirmacion_final_texto': 'Para confirmar a exclusão completa, digite a palavra "RESET":',
+    'cancelado_sin_cambios': '❌ Cancelado. Nenhuma alteração foi feita.',
+    'reset_completado': '✅ Redefinição concluída. O aplicativo será reiniciado.',
+    'no_pin_configurado': 'Você não tem um PIN de acesso configurado.\nDeseja configurar um agora?',
+    'titulo_cambiar_pin': '🔐 Alterar PIN',
+    'ingresa_pin_actual': 'Digite seu PIN atual:',
+    'titulo_nuevo_pin_cambio': '🔐 Novo PIN',
+    'ingresa_nuevo_pin_cambio': 'Digite seu novo PIN (4-6 dígitos):',
+    'titulo_confirma_pin_cambio': ' Confirmar PIN',
+    'confirma_nuevo_pin_cambio': 'Confirme seu novo PIN:',
+    'pin_incorrecto_cambio': '❌ PIN incorreto.',
+    'pin_modificado': '✅ Seu PIN foi modificado corretamente.',
+    'titulo_asignar_id': ' Atribuir Identificador',
+    'escribe_nombre_alias': 'Escreva um nome ou apelido para o PIN: ',
+    'identificador_guardado': '✅ Identificador salvo com sucesso localmente.',
+    'fallo_actualizar_privado': 'Falha ao atualizar modo privado.',
+    'no_chats_activos': 'Você não tem chats ativos',
+    'usa_boton_agregar': 'Use o botão "+" abaixo para adicionar um contato',
+    'tienes_mensajes_sin_leer': '📨 Você tem mensagens não lidas',
+    'toca_abrir_conversacion': 'Toque para abrir conversa',
+    'lista_contactos_vacia': 'Sua lista de contatos está vazia',
+    'agrega_contactos_compartiendo': 'Adicione contatos compartilhando seus PINs Kerix',
+    'contactos_header': 'CONTATOS (',
+    'pins_bloqueados_header': '🚫 PINS BLOQUEADOS (',
+    'editar_alias_pregunta': 'Deseja editar o nome ou apelido deste PIN (',
+    'presiona_cancelar_eliminar': ')?\n(Pressione "Cancelar" se em vez disso deseja excluir o contato)',
+    'seguro_eliminar': 'Tem certeza de que deseja excluir ',
+    'de_tus_contactos': ' de seus contatos?',
+    'pin_8_caracteres': 'O PIN Kerix deve ter exatamente 8 caracteres hexadecimais.',
+    'no_puedes_agregarte': 'Você não pode adicionar a si mesmo.',
+    'contacto_ya_existe': 'Este contato já está em sua lista.',
+    'pin_bloqueado_desbloquear': 'Este PIN está bloqueado. Deseja desbloquear e adicionar?',
+    'titulo_guardar_id': '👤 Salvar Identificador',
+    'quieres_nombre_alias': 'Deseja dar um nome ou apelido para reconhecê-lo localmente? (Opcional):',
+    'bloquear_definitivo': 'Deseja bloquear definitivamente o PIN ',
+    'no_recibir_mensajes': '? Você não poderá receber suas mensagens.',
+    'deseas_eliminar': 'Deseja excluir ',
+    'seleccionar_info': 'Toque nas mensagens para selecioná-las individualmente. Use a lixeira para excluí-las.',
+    'no_seleccionados': 'Você não selecionou nenhuma mensagem.',
+    'borrar_irreversible': 'Deseja excluir irreversivelmente as ',
+    'mensajes_seleccionados': ' mensagens selecionadas?',
+    'mensajes_borrados': '✅ Mensagens excluídas.',
+    'borrar_todo_historial': '⚠️ Deseja excluir TODO o histórico do chat? Esta ação é irreversível.',
+    'historial_vaciado': '✅ Histórico do chat limpo.',
+    'tamaño_maximo_50mb': 'O tamanho máximo de arquivo permitido é 50 MB.',
+    'archivo_listo': '📎 Arquivo pronto para enviar: ',
+    'mensaje_vacio': 'Você não pode enviar uma mensagem vazia.',
+    'no_verificar_llave': '⚠️ Não foi possível verificar a chave de criptografia do contato.',
+    'error_cifrar_mensaje': 'Erro ao tentar criptografar a mensagem.',
+    'error_subir_archivo': 'Erro ao fazer upload do arquivo anexado: ',
+    'error_insertar_mensaje': 'Erro ao inserir mensagem na rede.',
+    'descifrando_adjunto': '🔐 Descriptografando anexo seguro...',
+    'error_ruta_corrupta': '⚠️ Erro: Caminho corrompido',
+    'no_descifrar_archivo': '️ Não foi possível descriptografar este arquivo',
+    'codigo_activacion_invalido': 'Código de ativação inválido.',
+    'procesando': 'Processando...',
+    'servicio_activado': 'Serviço ativado! Vence: ',
+    'codigo_usado_invalido': 'Código já usado ou inválido.',
+    'fallo_conexion': 'Falha de conexão: ',
+    'pin_copiado_inicio': 'Seu PIN ',
+    'pin_copiado_fin': ' foi copiado para a área de transferência.',
+    'titulo_exportar_llave': '🔒 Exportar Chave',
+    'crear_contrasena_respaldo': 'Crie uma senha para criptografar o backup (mínimo 4 caracteres):',
+    'contrasena_minima': 'A senha do backup deve ter pelo menos 4 caracteres.',
+    'codigo_2fa_inicio': '🔑 Seu código de segurança 2FA é:\n',
+    'escribelo_restaurar': '\nAnote-o para restaurá-lo mais tarde.',
+    'primero_desbloquea': 'Primeiro desbloqueie o aplicativo.',
+    'respaldo_copiado': '✅ Backup copiado para a área de transferência corretamente.',
+    '2fa_obligatorio': '\n2FA obrigatório: ',
+    'error_empaquetado': 'Erro de empacotamento: ',
+    'titulo_importar_llave': '📥 Importar Chave',
+    'pega_respaldo': 'Cole aqui o conteúdo criptografado do backup:',
+    'titulo_contrasena': '📥 Senha',
+    'ingresa_contrasena': 'Digite a senha que você usou para criptografar o backup:',
+    'titulo_doble_factor': '🔐 Duplo Fator',
+    'ingresa_codigo_2fa': 'Digite o código de segurança 2FA que foi gerado ao exportar:',
+    'codigo_2fa_incorrecto': '❌ O código 2FA inserido está incorreto.',
+    'clave_importada': '✅ Chave de backup importada com sucesso.',
+    'respaldo_corrupto': '❌ Backup corrompido ou senha incorreta.',
+    'activar_rotacion_primero': '⚠️ Você deve ativar primeiro a opção "Rotação de chaves".',
+    'alerta_seguridad_fs': '⚠️ ALERTA DE SEGURANÇA\nTodas as mensagens antigas ficarão completamente ILEGÍVEIS assim que suas chaves rotacionarem.\nDeseja ativar esta funcionalidade?',
+    'backup_descifrado_pregunta': 'Deseja baixar um backup descriptografado em HTML de todos os seus chats antes de ativar isto?',
+    'activar_fs_pregunta': '🔐 Ativar Perfect Forward Secrecy agora?',
+    'fs_activado': '✅ Forward Secrecy ativado.',
+    'desactivar_fs_pregunta': 'Desativar propriedade Forward Secrecy?',
+    'funcionalidad_desactivada': '✅ Funcionalidade desativada.',
+    'backup_titulo_html': '🔒 Backup Local de Mensagens',
+    'pin_usuario': 'PIN do Usuário: ',
+    'creado_el': 'Criado em: ',
+    'conversacion_con': '💬 Conversa com: ',
+    'ilegible_clave_rotada': '[Ilegível / Chave Rotacionada]',
+    'respaldo_descargado': '✅ Arquivo de backup baixado com segurança.',
+    'error_exportar': '❌ Erro ao exportar: ',
+    'por_favor_desbloquea': 'Por favor, desbloqueie o aplicativo.',
+    'backup_claves_titulo': '🔑 Kerix Backup de Chaves',
+    'texto_plano_alerta': '⚠️ TEXTO PLANO - Guarde este arquivo com estrito sigilo.',
+    'clave_privada_label': 'Chave Privada (RSA-OAEP Decrypt):',
+    'clave_publica_label': 'Chave Pública (RSA-OAEP Encrypt):',
+    'clave_descargada_plano': '✅ Chave de backup baixada em texto simples.',
+    'error_generar_backup': 'Erro ao gerar backup: ',
+    'no_soporta_notificaciones': '❌ Seu navegador não suporta notificações nativas.',
+    'notificaciones_autorizadas': '✅ Notificações já estão autorizadas.',
+    'permisos_denegados': '❌ Permissões negadas. Você deve habilitá-las manualmente no ícone de cadeado do navegador.',
+    'permiso_concedido': '✅ Permissão de notificação concedida.',
+    'notificaciones_activadas': 'Notificações ativadas com sucesso. ✅',
+    'error_solicitar_permiso': 'Erro ao solicitar permissão:',
+    'mensaje_de': 'Mensagem de ',
+    'imagen_adjunta': '🖼️ Imagem anexada',
+    'video_adjunto': '🎥 Vídeo anexado',
+    'archivo_adjunto': ' Arquivo anexado',
+    'mensaje_default': 'Mensagem',
+    'nuevo_mensaje_default': 'Nova mensagem',
+    'preferencias_aplicadas': '✅ Preferências de notificação aplicadas com sucesso.',
+    'notificacion_prueba_titulo': 'Kerix Chat - Teste',
+    'notificaciones_ejecutando': 'Notificações nativas estão funcionando. ✅',
+    'notificacion_disparada': '✅ Notificação de teste disparada.',
+    'no_permisos_aprobados': '❌ Nenhuma permissão aprovada para notificações ainda.',
+    'error_inicializacion': '⚠️ Erro durante a inicialização dos módulos: ',
+    'storage_funciona': '✅ Armazenamento Supabase e buckets funcionando corretamente!',
+    'error_conexion_storage': 'Erro de conexão com Armazenamento: ',
+    'bucket_no_existe': '❌ O bucket "chat-files" não existe na instância do Supabase.',
+    'error_subir_prueba': '❌ Erro ao fazer upload do arquivo de teste: ',
+    'error_url_firmada': '❌ Erro ao criar URL assinada: ',
+
+    // Chamadas WebRTC
+    'debes_estar_en_chat': '❌ Você deve estar em um chat para ligar.',
+    'llamada_activa': '⚠️ Você já tem uma chamada ativa.',
+    'iniciar_llamada_pregunta': ' Iniciar ',
+    'videollamada_texto': 'videochamada',
+    'llamada_voz_texto': 'chamada de voz',
+    'con_contacto': ' com ',
+    'no_acceso_media': '❌ Não foi possível acessar o ',
+    'microfono_y_camara': 'microfone e câmera',
+    'microfono': 'microfone',
+    'verifica_permisos': '.\nVerifique as permissões do navegador.',
+    'llamando': '📞 Chamando...',
+    'conectado': '✅ Conectado',
+    'desconectado': '❌ Desconectado',
+    'error_iniciar_llamada': '❌ Erro ao iniciar a chamada.',
+    'videollamada_entrante': ' Videochamada recebida',
+    'llamada_voz_entrante': ' Chamada de voz recebida',
+    'te_esta_llamando': ' está te ligando',
+    'conectando': '🔄 Conectando...',
+    'no_encontro_oferta': '❌ Oferta não encontrada.',
+    'llamada_rechazada': '📞 A chamada foi rejeitada.',
+    'llamada_finalizada': '📞 A chamada foi encerrada.',
+    'segundo_plano': '🌙 Em segundo plano',
+
+    // Seletor de idioma
+    'idioma': ' Idioma / Language',
+    'espanol': 'Espanhol',
+    'ingles': 'Inglês',
+    'portugues': 'Português'
   }
 };
 
-// Idioma actual (por defecto español)
+// ============================================
+// 🌍 FUNÇÕES DO SISTEMA DE TRADUÇÃO
+// ============================================
+
+// Idioma atual (por padrão espanhol, ou o salvo no localStorage)
 var idiomaActual = localStorage.getItem('kerix_idioma') || 'es';
 
-// Función para obtener traducción
-function t(key) {
+// Função para obter tradução
+function t(key, params) {
+  // Busca no idioma atual
   if (translations[idiomaActual] && translations[idiomaActual][key]) {
-    return translations[idiomaActual][key];
+    var traduccion = translations[idiomaActual][key];
+    // Substitui placeholders como {codigo}
+    if (params && typeof traduccion === 'string') {
+      Object.keys(params).forEach(function(param) {
+        traduccion = traduccion.replace('{' + param + '}', params[param]);
+      });
+    }
+    return traduccion;
   }
-  // Fallback a español si no existe la traducción
-  if (translations['es'][key]) {
+  // Fallback para espanhol
+  if (translations['es'] && translations['es'][key]) {
     return translations['es'][key];
   }
-  // Si no existe en ningún idioma, devuelve la clave
+  // Se não existe em nenhum idioma, retorna a chave
   return key;
 }
 
-// Función para cambiar idioma
+// Função para mudar idioma
 function cambiarIdioma(nuevoIdioma) {
   if (!translations[nuevoIdioma]) {
-    console.error('Idioma no soportado:', nuevoIdioma);
+    console.error('Idioma não suportado:', nuevoIdioma);
     return;
   }
-  
+
   idiomaActual = nuevoIdioma;
   localStorage.setItem('kerix_idioma', nuevoIdioma);
-  
-  // Actualizar todos los elementos con data-i18n
+
+  // Atualiza todos os elementos com data-i18n
   document.querySelectorAll('[data-i18n]').forEach(function(element) {
     var key = element.getAttribute('data-i18n');
     var traduccion = t(key);
-    
+
     if (element.tagName === 'INPUT' || element.tagName === 'TEXTAREA') {
       if (element.hasAttribute('placeholder')) {
         element.placeholder = traduccion;
       } else {
         element.value = traduccion;
       }
-    } else if (element.tagName === 'BUTTON' || element.tagName === 'SPAN' || element.tagName === 'DIV' || element.tagName === 'H2' || element.tagName === 'P') {
+    } else if (element.tagName === 'BUTTON' || element.tagName === 'SPAN' || element.tagName === 'DIV' || element.tagName === 'H2' || element.tagName === 'P' || element.tagName === 'H3' || element.tagName === 'LABEL') {
+      // Preserva ícones/emojis que estejam no início
       element.innerText = traduccion;
     }
   });
-  
-  // Actualizar select de idioma si existe
+
+  // Atualiza select de idioma se existir
   var selectIdioma = document.getElementById('selectorIdioma');
   if (selectIdioma) {
     selectIdioma.value = idiomaActual;
   }
-  
-  console.log('Idioma cambiado a:', idiomaActual);
+
+  // Atualiza o título da página
+  actualizarBadgeChats();
+
+  console.log('Idioma alterado para:', idiomaActual);
 }
 
-// Función para inicializar el sistema de idiomas
-function inicializarIdioma() {
-  // Cargar idioma guardado o usar español por defecto
+// Função para aplicar traduções em elementos específicos por ID
+function traducirElemento(idElemento, clave) {
+  var el = document.getElementById(idElemento);
+  if (el) {
+    el.innerText = t(clave);
+  }
+}
+
+// Inicializa o sistema de idiomas automaticamente
+(function inicializarIdioma() {
   idiomaActual = localStorage.getItem('kerix_idioma') || 'es';
-  
-  // Aplicar traducciones al cargar
-  document.addEventListener('DOMContentLoaded', function() {
+  // Agrega listener para aplicar traduções quando o DOM estiver pronto
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function() {
+      cambiarIdioma(idiomaActual);
+    });
+  } else {
     cambiarIdioma(idiomaActual);
-  });
-}
+  }
+})();
 
-// Inicializar automáticamente
-inicializarIdioma();
+console.log(' Sistema multi-idioma Kerix carregado. Idioma atual:', idiomaActual);
