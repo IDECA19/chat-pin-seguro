@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>Kerix - Chat PIN Seguro</title>
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#00a884">
@@ -98,7 +98,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .mensaje img, .mensaje video { max-width: 100%; border-radius: 8px; margin-top: 4px; }
 .mensaje .check-leido { color: #53bdeb; }
 .chat-input-container { background: #1f2c34; padding: 10px; display: flex; align-items: center; gap: 8px; position: sticky; bottom: 0; }
-.chat-input { flex: 1; background: #2a3942; border: none; border-radius: 24px; padding: 12px 16px; color: #e9edef; font-size: 15px; resize: none; max-height: 120px; font-family: inherit; }
+.chat-input { flex: 1; background: #2a3942; border: none; border-radius: 24px; padding: 12px 16px; color: #e9edef; font-size: 15px; resize: none; max-height: 120px; font-family: inherit; min-height: 44px; overflow-y: auto; }
 .chat-input:focus { outline: none; }
 .chat-btn { width: 44px; height: 44px; border-radius: 50%; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 20px; transition: all 0.2s; }
 .chat-btn-adjuntar { background: #2a3942; color: #8696a0; }
@@ -198,7 +198,7 @@ input:checked + .slider:before { transform: translateX(20px); }
 <!-- PANTALLA DE BLOQUEO -->
 <div id="pantallaBloqueo">
 <div class="bloqueo-card">
-<div class="bloqueo-icono"></div>
+<div class="bloqueo-icono">🔒</div>
 <div class="bloqueo-titulo">Kerix Bloqueado</div>
 <div class="bloqueo-subtitulo">Ingresa tu PIN de acceso</div>
 <input type="password" id="pinAccesoInput" placeholder="••••" maxlength="6">
@@ -271,7 +271,7 @@ Vence: <span id="fechaVencimiento" style="color: #e9edef;"></span>
 <p style="color: #8696a0; text-align: center; padding: 40px 20px;">No hay mensajes aún</p>
 </div>
 <div class="chat-input-container">
-<button class="chat-btn chat-btn-adjuntar" onclick="document.getElementById('archivoInput').click()"></button>
+<button class="chat-btn chat-btn-adjuntar" onclick="document.getElementById('archivoInput').click()">📎</button>
 <textarea class="chat-input" id="nuevoMensaje" placeholder="Escribe un mensaje..." rows="1"></textarea>
 <button class="chat-btn chat-btn-enviar" onclick="enviarMensaje()">➤</button>
 </div>
@@ -335,7 +335,7 @@ Vence: <span id="fechaVencimiento" style="color: #e9edef;"></span>
 <div class="modal-overlay" id="modalSeguridad">
 <div class="modal" style="max-width: 500px;">
 <div class="modal-header">
-<div class="modal-titulo">️ Seguridad Avanzada</div>
+<div class="modal-titulo">🛡️ Seguridad Avanzada</div>
 <button class="modal-cerrar" onclick="cerrarModalSeguridad()">✕</button>
 </div>
 <div class="modal-body" style="padding: 0;">
@@ -501,6 +501,7 @@ var pinActualTemporal = null;
 var modoSeleccion = false;
 var mensajesSeleccionados = [];
 var tabActual = 'chats';
+var cacheArchivosDescifrados = {}; // Carga optimizada de memoria para adjuntos
 var prefs = {
   auto_destruccion_dias: 0, rotacion_claves_dias: 0, ocultar_al_cambiar: false,
   borrado_seguro: false, dosfa_backup: false, limpieza_metadatos: false, forward_secrecy: false
@@ -510,7 +511,7 @@ var prefsNotificaciones = { nativas: true, visuales: true, sonido: true, vibraci
 // ============================================
 // SISTEMA DE DIÁLOGOS PERSONALIZADOS
 // ============================================
-function customAlert(mensaje, icono = '️') {
+function customAlert(mensaje, icono = '⚠️') {
   return new Promise((resolve) => {
     const modal = document.getElementById('customAlert');
     document.getElementById('customAlertTexto').innerText = mensaje;
@@ -687,7 +688,7 @@ async function configurarPIN() {
   var pin2 = await customPrompt('🔐 Confirmar PIN', 'Confirma tu PIN de acceso ingresándolo nuevamente:', '••••', 'password');
   if (pin1 !== pin2) { await customAlert('Los PINs ingresados no coinciden.'); return; }
   var codigoRecuperacion = generarCodigoRecuperacion();
-  var confirmado = await customConfirm('️ GUARDA ESTE CÓDIGO DE RECUPERACIÓN:\n' + codigoRecuperacion + '\nSi olvidas tu PIN, lo necesitarás obligatoriamente para no perder el acceso.\n¿Ya lo copiaste y guardaste en un lugar seguro?', '🔑');
+  var confirmado = await customConfirm('⚠️ GUARDA ESTE CÓDIGO DE RECUPERACIÓN:\n' + codigoRecuperacion + '\nSi olvidas tu PIN, lo necesitarás obligatoriamente para no perder el acceso.\n¿Ya lo copiaste y guardaste en un lugar seguro?', '🔑');
   if (!confirmado) { await customAlert('Operación cancelada. Debes guardar el código de recuperación.'); return; }
   pinAccesoHash = await hashPIN(pin1);
   codigoRecuperacionHash = await hashCodigo(codigoRecuperacion);
@@ -732,7 +733,7 @@ async function recuperarAcceso() {
 async function resetEmergencia() {
   var confirmado1 = await customConfirm('⚠️ RESET DE EMERGENCIA\n• Eliminará tu PIN\n• Eliminará tu código de recuperación\n• Eliminará tu clave privada local\n• ¡NO podrás volver a descifrar mensajes antiguos!\n¿Deseas continuar bajo tu propio riesgo?', '⚠️');
   if (!confirmado1) return;
-  var confirmado2 = await customConfirm('ÚLTIMA ADVERTENCIA\n¿Estás absolutamente seguro de que deseas proceder?', '️');
+  var confirmado2 = await customConfirm('ÚLTIMA ADVERTENCIA\n¿Estás absolutamente seguro de que deseas proceder?', '⚠️');
   if (!confirmado2) return;
   var texto = await customPrompt('Confirmación final', 'Para confirmar el borrado completo, escribe la palabra "RESET":', 'RESET');
   if (texto !== 'RESET') { await customAlert('❌ Cancelado. No se realizaron cambios.', ''); return; }
@@ -782,7 +783,13 @@ async function desbloquearApp() {
     document.getElementById('pantallaBloqueo').style.display = 'none';
     document.getElementById('pinAccesoInput').value = '';
     document.getElementById('errorPIN').style.display = 'none';
-    try { await cargarClavePrivadaSegura(pinIngresado); } catch (error) { logError('Error:', error); await generarClaves(); }
+    try { 
+      await cargarClavePrivadaSegura(pinIngresado); 
+    } catch (error) { 
+      logError('Error al desbloquear las claves:', error); 
+      await customAlert('⚠️ No se pudieron cargar las llaves de cifrado para este PIN.');
+      return;
+    }
     document.getElementById('appPrincipal').style.display = 'block';
     try { await verificarEstado(); } catch (error) { logError('Error:', error); }
     await cargarMensajesNoLeidos();
@@ -803,13 +810,25 @@ async function cargarClavePrivadaSegura(pin) {
   } else { privBase64 = desofuscarClave(claveCifrada); }
   var privBuf = Uint8Array.from(atob(privBase64), c => c.charCodeAt(0));
   miClavePrivada = await crypto.subtle.importKey("pkcs8", privBuf, { name: "RSA-OAEP", hash: "SHA-256" }, true, ["decrypt"]);
-  var { data } = await clienteSupabase.from('usuarios').select('clave_publica').eq('pin', miPIN).single();
+  
+  var { data } = await clienteSupabase.from('usuarios').select('clave_publica').eq('pin', miPIN).maybeSingle();
   if (data && data.clave_publica) {
     var pubBuf = Uint8Array.from(atob(data.clave_publica), c => c.charCodeAt(0));
     miClavePublica = await crypto.subtle.importKey("spki", pubBuf, { name: "RSA-OAEP", hash: "SHA-256" }, true, ["encrypt"]);
   } else {
-    var pubExp = await crypto.subtle.exportKey("spki", miClavePublica);
-    await subirClavePublica(btoa(String.fromCharCode.apply(null, new Uint8Array(pubExp))));
+    // Solución al problema de Clave Pública Huérfana (Autoreconstrucción desde Clave Privada JWK)
+    try {
+      var jwk = await crypto.subtle.exportKey("jwk", miClavePrivada);
+      var { d, p, q, dp, dq, qi, ...publicJwk } = jwk;
+      publicJwk.key_ops = ["encrypt"];
+      miClavePublica = await crypto.subtle.importKey("jwk", publicJwk, { name: "RSA-OAEP", hash: "SHA-256" }, true, ["encrypt"]);
+      var pubExp = await crypto.subtle.exportKey("spki", miClavePublica);
+      var pubBase64 = btoa(String.fromCharCode.apply(null, new Uint8Array(pubExp)));
+      await subirClavePublica(pubBase64);
+    } catch (e) {
+      logError('No se pudo derivar clave pública desde la privada. Regenerando...', e);
+      await generarClaves();
+    }
   }
 }
 async function cambiarPIN() {
@@ -976,7 +995,7 @@ function renderizarContactos() {
   var cont = document.getElementById('contenidoContactos');
   var html = '';
   if (contactos.length === 0 && bloqueados.length === 0) {
-    cont.innerHTML = '<div class="estado-vacio"><div class="estado-vacio-icono"></div><div class="estado-vacio-texto">Tu lista de contactos está vacía</div><div class="estado-vacio-sub">Agrega contactos compartiendo sus PINs de Kerix</div></div>';
+    cont.innerHTML = '<div class="estado-vacio"><div class="estado-vacio-icono">👤</div><div class="estado-vacio-texto">Tu lista de contactos está vacía</div><div class="estado-vacio-sub">Agrega contactos compartiendo sus PINs de Kerix</div></div>';
     return;
   }
   if (contactos.length > 0) {
@@ -1011,7 +1030,7 @@ async function mostrarMenuContacto(pin, event) {
   var accion = await customConfirm('¿Deseas editar el nombre o alias de este PIN (' + pin + ')?\n(Presiona "Cancelar" si en su lugar deseas eliminar el contacto)', '👤');
   if (accion) { await editarAliasContacto(pin); }
   else {
-    var eliminar = await customConfirm('¿Estás seguro de que deseas eliminar a ' + obtenerNombreContacto(pin) + ' de tus contactos?', '️');
+    var eliminar = await customConfirm('¿Estás seguro de que deseas eliminar a ' + obtenerNombreContacto(pin) + ' de tus contactos?', '⚠️');
     if (eliminar) { eliminarContacto(pin); }
   }
 }
@@ -1170,7 +1189,7 @@ async function cargarMensajes() {
     contenedor.innerHTML = html;
     contenedor.scrollTop = contenedor.scrollHeight;
     mensajes.forEach(function(msg) { if (msg.archivo_url) cargarYDescifrarAdjunto(msg); });
-  } catch (error) { logError('Error cargando mensajes:', error); }
+  } catch (error) { logError('Error loading messages:', error); }
 }
 
 function construirContenidoMensaje(msg) {
@@ -1199,7 +1218,7 @@ async function enviarMensaje() {
   var mensajeCifrado = '';
   if (texto) {
     var clavePub = await obtenerClavePublica(contactoActual);
-    if (!clavePub) { await customAlert('️ No se pudo verificar la llave de cifrado del contacto.'); return; }
+    if (!clavePub) { await customAlert('⚠️ No se pudo verificar la llave de cifrado del contacto.'); return; }
     try { mensajeCifrado = await cifrarMensaje(texto, clavePub); } catch (error) { await customAlert('Error al intentar cifrar el mensaje.'); return; }
   }
   if (archivoSeleccionado) {
@@ -1237,6 +1256,7 @@ async function enviarMensaje() {
     var localContainer = document.getElementById('media-container-' + tempId);
     if (localContainer) {
       var localUrl = URL.createObjectURL(archivoSeleccionado);
+      cacheArchivosDescifrados[archivoInfo.url] = localUrl; // Guardamos en memoria cache local
       localContainer.setAttribute('data-loaded', 'true');
       if (tipoMensaje === 'imagen') localContainer.innerHTML = '<img src="' + localUrl + '" style="max-width: 100%; border-radius: 8px;">';
       else if (tipoMensaje === 'video') localContainer.innerHTML = '<video controls style="max-width: 100%; border-radius: 8px;"><source src="' + localUrl + '"></video>';
@@ -1253,6 +1273,7 @@ async function enviarMensaje() {
     });
     if (error) throw error;
     document.getElementById('nuevoMensaje').value = '';
+    document.getElementById('nuevoMensaje').style.height = 'auto'; // Ajuste reset altura
     cancelarArchivo();
     cargarMensajes();
   } catch (error) { await customAlert('Error al insertar el mensaje en la red.'); divTemp.style.opacity = '0.5'; }
@@ -1450,28 +1471,37 @@ async function cargarYDescifrarAdjunto(msg) {
   try {
     var path = obtenerPathDesdeUrl(msg.archivo_url) || msg.archivo_url;
     if (!path) { container.innerHTML = '<span style="color: #ef4444; font-size: 11px;">⚠️ Error: Ruta corrupta</span>'; return; }
-    var { data: blob, error } = await clienteSupabase.storage.from('chat-files').download(path);
-    if (error) {
-      var { data: signedData, error: signedError } = await clienteSupabase.storage.from('chat-files').createSignedUrl(path, 300);
-      if (signedError || !signedData) throw new Error('Descarga de archivo bloqueada.');
-      var resp = await fetch(signedData.signedUrl);
-      blob = await resp.blob();
+    
+    var objectUrl = '';
+    // Optimización de Carga Redundante: Buscar primero en caché de memoria local
+    if (cacheArchivosDescifrados[msg.archivo_url]) {
+      objectUrl = cacheArchivosDescifrados[msg.archivo_url];
+    } else {
+      var { data: blob, error } = await clienteSupabase.storage.from('chat-files').download(path);
+      if (error) {
+        var { data: signedData, error: signedError } = await clienteSupabase.storage.from('chat-files').createSignedUrl(path, 300);
+        if (signedError || !signedData) throw new Error('Descarga de archivo bloqueada.');
+        var resp = await fetch(signedData.signedUrl);
+        blob = await resp.blob();
+      }
+      if (!blob) throw new Error('Tamaño del archivo es nulo.');
+      var decryptedBlob;
+      if (msg.archivo_cifrado) {
+        var arrayBuffer = await blob.arrayBuffer();
+        var decryptedBuffer = await descifrarArchivo(arrayBuffer, msg.archivo_iv, msg.archivo_clave, msg.archivo_clave_destinatario);
+        var tipoMime = msg.tipoOriginal || (msg.tipo_mensaje === 'imagen' ? 'image/*' : msg.tipo_mensaje === 'video' ? 'video/*' : 'application/octet-stream');
+        decryptedBlob = new Blob([decryptedBuffer], { type: tipoMime });
+      } else { decryptedBlob = blob; }
+      objectUrl = URL.createObjectURL(decryptedBlob);
+      cacheArchivosDescifrados[msg.archivo_url] = objectUrl; // Almacenamos en caché
     }
-    if (!blob) throw new Error('Tamaño del archivo es nulo.');
-    var decryptedBlob;
-    if (msg.archivo_cifrado) {
-      var arrayBuffer = await blob.arrayBuffer();
-      var decryptedBuffer = await descifrarArchivo(arrayBuffer, msg.archivo_iv, msg.archivo_clave, msg.archivo_clave_destinatario);
-      var tipoMime = msg.tipoOriginal || (msg.tipo_mensaje === 'imagen' ? 'image/*' : msg.tipo_mensaje === 'video' ? 'video/*' : 'application/octet-stream');
-      decryptedBlob = new Blob([decryptedBuffer], { type: tipoMime });
-    } else { decryptedBlob = blob; }
-    var objectUrl = URL.createObjectURL(decryptedBlob);
+    
     container.setAttribute('data-loaded', 'true');
     if (msg.tipo_mensaje === 'imagen') container.innerHTML = '<img src="' + objectUrl + '" style="max-width: 100%; border-radius: 8px;" onclick="window.open(\'' + objectUrl + '\')">';
     else if (msg.tipo_mensaje === 'video') container.innerHTML = '<video controls style="max-width: 100%; border-radius: 8px;"><source src="' + objectUrl + '"></video>';
     else {
       var tamStr = msg.archivo_tamaño ? ' (' + formatBytes(msg.archivo_tamaño) + ')' : '';
-      container.innerHTML = '<a href="' + objectUrl + '" download="' + (msg.archivo_nombre || 'archivo') + '" style="color: #00a884;"> ' + (msg.archivo_nombre || 'Descargar') + tamStr + '</a>';
+      container.innerHTML = '<a href="' + objectUrl + '" download="' + (msg.archivo_nombre || 'archivo') + '" style="color: #00a884;">📎 ' + (msg.archivo_nombre || 'Descargar') + tamStr + '</a>';
     }
   } catch (err) {
     logError('❌ Error descifrando adjunto:', err);
@@ -1744,7 +1774,7 @@ function notificarNuevoMensaje(pinRemitente, texto, tipoMensaje) {
   var nombre = obtenerNombreContacto(pinRemitente);
   var titulo = 'Mensaje de ' + nombre;
   var cuerpo = '';
-  if (tipoMensaje === 'imagen') cuerpo = '️ Imagen adjunta';
+  if (tipoMensaje === 'imagen') cuerpo = '🖼️ Imagen adjunta';
   else if (tipoMensaje === 'video') cuerpo = '🎥 Video adjunto';
   else if (tipoMensaje === 'documento') cuerpo = '📎 Archivo adjunto';
   else cuerpo = prefsNotificaciones.mostrarContenido ? (texto.substring(0, 50) || 'Mensaje') : 'Nuevo mensaje';
@@ -1801,7 +1831,7 @@ async function generarClaves() {
     var aGuardar = (pinAccesoHash && pinTemporal) ? await cifrarClaveConPIN(privBase64, pinTemporal) : ofuscarClave(privBase64);
     localStorage.setItem('clave_privada_' + miPIN, aGuardar);
     await subirClavePublica(pubBase64);
-  } catch (error) { logError('Error:', error); }
+  } catch (error) { logError('Error generating keys:', error); }
 }
 async function subirClavePublica(pubBase64) {
   if (!clienteSupabase) return;
@@ -1833,11 +1863,12 @@ async function inicializarTodo() {
     await cargarModoPrivado();
     await cargarPreferencias();
     cargarPrefsNotificaciones();
-    await suscribirseALlamadas();
+    suscribirseALlamadas(); // Modificación canal WebRTC centralizado
     await limpiarLlamadasAntiguas();
     return true;
   } catch (error) { logError('Error:', error); return false; }
-}async function testearStorage() {
+}
+async function testearStorage() {
   try {
     var { data: buckets, error: bucketsError } = await clienteSupabase.storage.listBuckets();
     if (bucketsError) { logError('❌ Error listando buckets:', bucketsError); return; }
@@ -1859,6 +1890,15 @@ window.addEventListener('DOMContentLoaded', async function() {
     generarPIN();
     await inicializarTodo();
     await verificarPINConfigurado();
+    
+    // Auto-crecimiento responsivo para el input del chat individual
+    const textInput = document.getElementById('nuevoMensaje');
+    if (textInput) {
+      textInput.addEventListener('input', function() {
+        this.style.height = 'auto';
+        this.style.height = (this.scrollHeight) + 'px';
+      });
+    }
   } catch (error) {
     logError('Error:', error);
     document.getElementById('pantallaBloqueo').style.display = 'none';
@@ -1866,8 +1906,9 @@ window.addEventListener('DOMContentLoaded', async function() {
     await customAlert('⚠️ Error durante la inicialización de módulos: ' + error.message);
   }
 });
-  // ============================================
-// 📞 FUNCIONES WEBRTC - LLAMADAS Y VIDEO
+
+// ============================================
+// 📞 FUNCIONES WEBRTC - LLAMADAS Y VIDEO (REDISEÑADO)
 // ============================================
 var peerConnection = null;
 var streamLocal = null;
@@ -2122,7 +2163,7 @@ async function aceptarLlamada() {
   
   peerConnection.onconnectionstatechange = function() {
     if (peerConnection.connectionState === 'disconnected' || peerConnection.connectionState === 'failed') {
-      actualizarEstadoLlamada(' Desconectado');
+      actualizarEstadoLlamada('❌ Desconectado');
       setTimeout(colgarLlamada, 2000);
     }
   };
@@ -2183,8 +2224,6 @@ async function colgarLlamada() {
     } catch (e) {}
   }
   
-  if (canalLlamada) { clienteSupabase.removeChannel(canalLlamada); canalLlamada = null; }
-  
   llamadaActiva = false;
   pinLlamadaActual = '';
   segundosLlamada = 0;
@@ -2218,28 +2257,46 @@ function actualizarEstadoLlamada(estado) {
   document.getElementById('llamadaEstadoGrande').innerText = estado;
 }
 
+// Canal centralizado de WebRTC para sincronización mutua
 function suscribirseALlamadas() {
-  if (canalLlamada) clienteSupabase.removeChannel(canalLlamada);
+  if (canalLlamada) { clienteSupabase.removeChannel(canalLlamada); canalLlamada = null; }
   
-  canalLlamada = clienteSupabase.channel('llamadas_' + miPIN)
-    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'llamadas', filter: 'pin_destinatario=eq.' + miPIN }, async function(payload) {
+  canalLlamada = clienteSupabase.channel('llamadas_cambios')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'llamadas' }, async function(payload) {
       var nuevo = payload.new;
-      if (nuevo.respuesta && nuevo.estado === 'conectando' && esIniciador) {
-        try {
-          var answer = JSON.parse(nuevo.respuesta);
-          await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
-          actualizarEstadoLlamada('🔄 Conectando...');
-        } catch (error) { logError('Error procesando respuesta:', error); }
+      if (!nuevo) return;
+      
+      // Filtrado dinámico en frontend de los roles de emisor/receptor
+      if (nuevo.pin_remitente !== miPIN && nuevo.pin_destinatario !== miPIN) return;
+      
+      // Actualizaciones para el iniciador de la llamada
+      if (nuevo.pin_remitente === miPIN) {
+        if (nuevo.respuesta && nuevo.estado === 'conectando' && esIniciador) {
+          try {
+            var answer = JSON.parse(nuevo.respuesta);
+            if (peerConnection && peerConnection.signalingState !== 'stable') {
+              await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
+              actualizarEstadoLlamada('🔄 Conectando...');
+            }
+          } catch (error) { logError('Error procesando respuesta:', error); }
+        }
+        if (nuevo.estado === 'rechazada') {
+          await customAlert('📞 La llamada fue rechazada.', '📞');
+          colgarLlamada();
+        }
       }
-      if (nuevo.estado === 'rechazada') {
-        await customAlert('📞 La llamada fue rechazada.', '📞');
+      
+      // Actualizaciones para el receptor
+      if (nuevo.pin_destinatario === miPIN) {
+        if (nuevo.estado === 'llamando' && nuevo.oferta && !llamadaActiva) {
+          await recibirLlamada(nuevo.pin_remitente, nuevo.oferta, nuevo.tipo);
+        }
+      }
+      
+      // Sincronización mutua para colgar llamadas activas
+      if (nuevo.estado === 'finalizada' && llamadaActiva) {
+        await customAlert('📞 La llamada ha finalizado.', '📞');
         colgarLlamada();
-      }
-    })
-    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'llamadas', filter: 'pin_destinatario=eq.' + miPIN }, async function(payload) {
-      var nuevo = payload.new;
-      if (nuevo.estado === 'llamando' && nuevo.oferta && !llamadaActiva) {
-        await recibirLlamada(nuevo.pin_remitente, nuevo.oferta, nuevo.tipo);
       }
     })
     .subscribe();
@@ -2251,7 +2308,7 @@ function toggleSilenciar() {
   if (audioTrack) {
     audioTrack.enabled = !audioTrack.enabled;
     var btn = document.getElementById('btnSilenciar');
-    btn.innerText = audioTrack.enabled ? '🎤' : '';
+    btn.innerText = audioTrack.enabled ? '🎤' : '🔇';
     btn.style.background = audioTrack.enabled ? '#2a3942' : '#ef4444';
   }
 }
@@ -2271,8 +2328,14 @@ function toggleAltavoz() {
   var audioRemoto = document.getElementById('audioRemoto');
   var btn = document.getElementById('btnAltavoz');
   if (audioRemoto) {
-    if (audioRemoto.volume === 1) { audioRemoto.volume = 0.5; btn.innerText = ''; }
-    else { audioRemoto.volume = 1; btn.innerText = '🔊'; }
+    if (audioRemoto.volume === 1) { 
+      audioRemoto.volume = 0.5; 
+      btn.innerText = '🔉'; 
+    }
+    else { 
+      audioRemoto.volume = 1; 
+      btn.innerText = '🔊'; 
+    }
   }
 }
 
@@ -2295,7 +2358,7 @@ window.addEventListener('beforeunload', function() {
   if (llamadaActiva) colgarLlamada();
 });
 </script> 
-  <!-- ============================================ -->
+<!-- ============================================ -->
 <!-- PANTALLA DE LLAMADA WEBRTC -->
 <!-- ============================================ -->
 <div id="pantallaLlamada" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:#0b141a; z-index:2000; flex-direction:column;">
@@ -2326,7 +2389,7 @@ window.addEventListener('beforeunload', function() {
   <div style="background:#1f2c34; padding:20px; display:flex; justify-content:center; gap:20px; border-top:1px solid #2a3942;">
     <button id="btnSilenciar" onclick="toggleSilenciar()" style="width:60px; height:60px; border-radius:50%; background:#2a3942; border:none; color:#e9edef; font-size:24px; cursor:pointer;">🎤</button>
     <button id="btnCamara" onclick="toggleCamara()" style="width:60px; height:60px; border-radius:50%; background:#2a3942; border:none; color:#e9edef; font-size:24px; cursor:pointer; display:none;">📷</button>
-    <button id="btnAltavoz" onclick="toggleAltavoz()" style="width:60px; height:60px; border-radius:50%; background:#2a3942; border:none; color:#e9edef; font-size:24px; cursor:pointer;"></button>
+    <button id="btnAltavoz" onclick="toggleAltavoz()" style="width:60px; height:60px; border-radius:50%; background:#2a3942; border:none; color:#e9edef; font-size:24px; cursor:pointer;">🔊</button>
     <button onclick="colgarLlamada()" style="width:70px; height:70px; border-radius:50%; background:#ef4444; border:none; color:#fff; font-size:28px; cursor:pointer;">📞</button>
   </div>
 </div>
@@ -2347,4 +2410,3 @@ window.addEventListener('beforeunload', function() {
 </div>
 </body>
 </html>
-  
