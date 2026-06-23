@@ -199,7 +199,7 @@ input:checked + .slider:before { transform: translateX(20px); }
 <div id="pantallaBloqueo">
 <div class="bloqueo-card">
 <div class="bloqueo-icono">🔒</div>
-<div class="bloqueo-titulo">Kerix Bloqueado</div>
+<div class="bloqueo-titulo" data-i18n="chat_bloqueado">Kerix Bloqueado</div>
 <div class="bloqueo-subtitulo">Ingresa tu PIN de acceso</div>
 <input type="password" id="pinAccesoInput" placeholder="••••" maxlength="6">
 <button class="bloqueo-btn bloqueo-btn-primary" onclick="desbloquearApp()" id="btnDesbloquear">Desbloquear</button>
@@ -250,6 +250,15 @@ Vence: <span id="fechaVencimiento" style="color: #e9edef;"></span>
 </div>
 </div>
 <button class="fab" onclick="mostrarModalAgregar()" id="fabAgregar" title="Agregar contacto">+</button>
+</div>
+  <!-- IDIOMA EN AJUSTES -->
+  <div class="config-seccion" style="border-top: 1px solid #2a3942; margin-top: 20px;">
+  <div class="config-titulo">🌍 Idioma / Language</div>
+  <select id="selectorIdioma" class="config-select" onchange="cambiarIdioma(this.value)">
+    <option value="es">Español</option>
+    <option value="en">English</option>
+    <option value="pt">Português</option>
+  </select>
 </div>
 
 <!-- PANTALLA DE CHAT INDIVIDUAL -->
@@ -462,6 +471,8 @@ Vence: <span id="fechaVencimiento" style="color: #e9edef;"></span>
 </div>
 </div>
 </div>
+  <!-- 🌍 SISTEMA MULTI-IDIOMA -->
+<script src="translations.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 var SUPABASE_URL = 'https://dksmoteiidjpymextrgj.supabase.co';
