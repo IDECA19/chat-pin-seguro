@@ -954,34 +954,41 @@ function guardarBloqueados(b) { localStorage.setItem('bloqueados_' + miPIN, JSON
 // 🔔 RENDERIZAR CHATS CON INDICADORES VISUALES
 // ============================================
 function renderizarChats() {
-  var contactos = getContactos();
-  var cont = document.getElementById('contenidoChats');
-  if (contactos.length === 0) {
-    cont.innerHTML = '<div class="estado-vacio"><div class="estado-vacio-icono">💬</div><div class="estado-vacio-texto">No tienes chats activos</div><div class="estado-vacio-sub">Usa el botón "+" abajo para agregar un contacto</div></div>';
-    return;
-  }
-  var html = '';
-  contactos.forEach(function(pin) {
-    var noLeidos = mensajesNoLeidos[pin] || 0;
-    var badge = noLeidos > 0 ? '<div class="chat-badge">' + noLeidos + '</div>' : '';
-    // NUEVO: Texto diferente si hay mensajes sin leer
-    var ultimo = noLeidos > 0 ? '📨 Tienes mensajes sin leer' : 'Toca para abrir la conversación';
-    var hora = '';
-    var nombre = obtenerNombreContacto(pin);
-    var subNombre = (nombre !== pin) ? ' <span style="font-size:11px; color:#8696a0; font-weight:normal;">(' + pin + ')</span>' : '';
-    // NUEVO: Agregar clase 'no-leido' para resaltar visualmente
-    var claseExtra = noLeidos > 0 ? ' no-leido' : '';
-    html += '<div class="chat-item' + claseExtra + '" onclick="abrirChat(\'' + pin + '\')">';
-    html += '<div class="chat-avatar">' + nombre.substring(0, 2).toUpperCase() + '</div>';
-    html += '<div class="chat-info">';
-    html += '<div class="chat-info-top"><div class="chat-nombre">' + nombre + subNombre + '</div><div class="chat-hora">' + hora + '</div></div>';
-    html += '<div class="chat-info-bottom"><div class="chat-ultimo">' + ultimo + '</div>' + badge + '</div>';
-    html += '</div></div>';
-  });
-  cont.innerHTML = html;
-  actualizarBadgeChats();
-}
+    var contactos = getContactos();
+    var cont = document.getElementById('contenidoChats');
+    
+    if (!cont) return; // Seguridad
 
+    if (contactos.length === 0) {
+        cont.innerHTML = '<div class="estado-vacio"><div class="estado-vacio-icono">💬</div><div class="estado-vacio-texto">No tienes chats activos</div><div class="estado-vacio-sub">Usa el botón "+" abajo para agregar un contacto</div></div>';
+        return;
+    }
+
+    var html = '';
+    contactos.forEach(function(pin) {
+        var noLeidos = mensajesNoLeidos[pin] || 0;
+        var badge = noLeidos > 0 ? '<div class="chat-badge">' + noLeidos + '</div>' : '';
+        
+        // Texto dinámico según si hay mensajes sin leer
+        var ultimo = noLeidos > 0 ? '📨 Tienes mensajes sin leer' : 'Toca para abrir la conversación';
+        var hora = '';
+        
+        var nombre = obtenerNombreContacto(pin);
+        var subNombre = (nombre !== pin) ? ' <span style="font-size:11px; color:#8696a0; font-weight:normal;">(' + pin + ')</span>' : '';
+        
+        // Clase extra para resaltar el fondo
+        var claseExtra = noLeidos > 0 ? ' no-leido' : '';
+        
+        html += '<div class="chat-item' + claseExtra + '" onclick="abrirChat(\'' + pin + '\')">';
+        html += '<div class="chat-avatar">' + nombre.substring(0, 2).toUpperCase() + '</div>';
+        html += '<div class="chat-info">';
+        html += '<div class="chat-info-top"><div class="chat-nombre">' + nombre + subNombre + '</div><div class="chat-hora">' + hora + '</div></div>';
+        html += '<div class="chat-info-bottom"><div class="chat-ultimo">' + ultimo + '</div>' + badge + '</div>';
+        html += '</div></div>';
+    });
+    
+    cont.innerHTML = html;
+}
 function renderizarContactos() {
   var contactos = getContactos();
   var bloqueados = getBloqueados();
@@ -1662,17 +1669,43 @@ function cargarPrefsNotificaciones() {
 function guardarPrefsNotificaciones() { localStorage.setItem('prefs_notificaciones_' + miPIN, JSON.stringify(prefsNotificaciones)); }
 
 async function solicitarPermisoNotificaciones() {
-  if (!('Notification' in window)) { await customAlert('❌ Tu navegador no soporta notificaciones nativas.', '❌'); return false; }
-  if (Notification.permission === 'granted') { await customAlert('✅ Las notificaciones ya están autorizadas.', '✅'); return true; }
-  if (Notification.permission === 'denied') { await customAlert(' Permisos denegados. Debes habilitarlos manualmente desde el candado de la barra del navegador.', '❌'); return false; }
-  try {
-    var permiso = await Notification.requestPermission();
-    if (permiso === 'granted') {
-      await customAlert('✅ Permiso de notificación concedido.', '✅');
-      new Notification('Kerix Chat', { body: 'Notificaciones activadas con éxito. ✅' });
+    // 1. Verificar soporte
+    if (!('Notification' in window)) {
+        await customAlert('❌ Tu navegador no soporta notificaciones nativas.', '❌');
+        return false;
     }
-    return permiso === 'granted';
-  } catch (error) { logError('Error solicitando permiso:', error); return false; }
+
+    // 2. Si ya está concedido, no pedir de nuevo
+    if (Notification.permission === 'granted') {
+        await customAlert('✅ Las notificaciones ya están activas y funcionando.', '✅');
+        return true;
+    }
+
+    // 3. Si fue denegado previamente, informar al usuario
+    if (Notification.permission === 'denied') {
+        await customAlert('❌ Permiso denegado anteriormente.\n\nPara activarlo:\n1. Toca el candado 🔒 en la barra de dirección.\n2. Ve a "Permisos" o "Configuración del sitio".\n3. Cambia "Notificaciones" a "Permitir".', '');
+        return false;
+    }
+
+    // 4. Solicitar permiso (esto abre el diálogo nativo)
+    try {
+        console.log('🔔 Solicitando permiso de notificación...');
+        const permission = await Notification.requestPermission();
+        
+        if (permission === 'granted') {
+            await customAlert('✅ ¡Permiso concedido!\nAhora recibirás alertas incluso si la app está cerrada (en Android requiere instalación como PWA).', '✅');
+            // Probar una notificación inmediata
+            new Notification('Kerix Chat', { body: 'Notificaciones activadas correctamente. ✅' });
+            return true;
+        } else {
+            await customAlert('️ Permiso no concedido. No recibirás alertas.', '⚠️');
+            return false;
+        }
+    } catch (error) {
+        console.error('Error al pedir permiso:', error);
+        await customAlert('❌ Error al solicitar permiso: ' + error.message, '❌');
+        return false;
+    }
 }
 
 function mostrarNotificacionNativa(titulo, cuerpo, pinRemitente, tipoMensaje) {
@@ -1746,21 +1779,61 @@ function vibrarDispositivo() {
 // ============================================
 //  NOTIFICAR SIEMPRE (sin importar dónde estés)
 // ============================================
+//  FUNCIÓN CORREGIDA: Notificar siempre que llega un mensaje nuevo
 function notificarNuevoMensaje(pinRemitente, texto, tipoMensaje) {
-  var nombre = obtenerNombreContacto(pinRemitente);
-  var titulo = 'Mensaje de ' + nombre;
-  var cuerpo = '';
-  if (tipoMensaje === 'imagen') cuerpo = '🖼️ Imagen adjunta';
-  else if (tipoMensaje === 'video') cuerpo = '🎥 Video adjunto';
-  else if (tipoMensaje === 'documento') cuerpo = '📎 Archivo adjunto';
-  else cuerpo = prefsNotificaciones.mostrarContenido ? (texto.substring(0, 50) || 'Mensaje') : 'Nuevo mensaje';
-  
-  // Notificar SIEMPRE (sin importar dónde estés)
-  mostrarNotificacionNativa(titulo, cuerpo, pinRemitente, tipoMensaje);
-  mostrarNotificacionVisual(titulo, cuerpo, pinRemitente);
-  reproducirSonidoNotificacion();
-  vibrarDispositivo();
-  actualizarBadgeChats();
+    var nombre = obtenerNombreContacto(pinRemitente);
+    var titulo = 'Mensaje de ' + nombre;
+    var cuerpo = '';
+    
+    if (tipoMensaje === 'imagen') cuerpo = '️ Imagen adjunta';
+    else if (tipoMensaje === 'video') cuerpo = '🎥 Video adjunto';
+    else if (tipoMensaje === 'documento') cuerpo = '📎 Archivo adjunto';
+    else cuerpo = prefsNotificaciones.mostrarContenido ? (texto.substring(0, 50) || 'Nuevo mensaje') : 'Nuevo mensaje';
+    
+    // 1. Notificación Nativa (Solo si hay permiso)
+    if (Notification.permission === 'granted' && prefsNotificaciones.nativas) {
+        try {
+            new Notification(titulo, {
+                body: cuerpo,
+                icon: 'https://ideca19.github.io/icon-192x192.png', // Asegúrate de que esta URL exista
+                tag: 'msg-' + pinRemitente + '-' + Date.now(), // Tag único para evitar colapsar
+                vibrate: [200, 100, 200],
+                data: { url: '/' }
+            });
+        } catch (e) {
+            console.error('Error creando notificación:', e);
+        }
+    }
+    
+    // 2. Notificación Visual en App (Burbuja)
+    mostrarNotificacionVisual(titulo, cuerpo, pinRemitente);
+    
+    // 3. Sonido y Vibración
+    if (prefsNotificaciones.sonido) reproducirSonidoNotificacion();
+    if (prefsNotificaciones.vibracion && navigator.vibrate) navigator.vibrate([200, 100, 200]);
+    
+    // 4. Actualizar UI (Badge y Lista)
+    actualizarBadgeChats();
+}
+
+// 🔔 FUNCIÓN CORREGIDA: Actualizar título y badge visual
+function actualizarBadgeChats() {
+    var total = 0;
+    Object.keys(mensajesNoLeidos).forEach(function(k) { total += mensajesNoLeidos[k]; });
+    
+    // Actualizar título de la pestaña
+    document.title = total > 0 ? '(' + total + ') Kerix Chat' : 'Kerix Chat';
+    
+    // Actualizar badge en la pestaña "Chats"
+    var badge = document.getElementById('badgeChats');
+    if (badge) {
+        if (total > 0) {
+            badge.style.display = 'inline';
+            badge.innerText = total;
+        } else {
+            badge.style.display = 'none';
+        }
+    }
 }
 
 async function guardarConfigNotificaciones() {
