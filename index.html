@@ -1947,5 +1947,87 @@ window.addEventListener('DOMContentLoaded', async function() {
   }
 });
 </script>
+
+<!-- ============================================ -->
+<!-- PANTALLA DE LLAMADA WEBRTC -->
+<!-- ============================================ -->
+<div id="pantallaLlamada" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:#0b141a; z-index:2000; flex-direction:column;">
+  
+  <!-- Header de llamada -->
+  <div style="background:#1f2c34; padding:16px; display:flex; align-items:center; gap:12px; border-bottom:1px solid #2a3942;">
+    <button onclick="colgarLlamada()" style="background:none; border:none; color:#e9edef; font-size:20px; cursor:pointer;">←</button>
+    <div style="flex:1;">
+      <div id="llamadaNombre" style="font-weight:700; font-size:16px; color:#e9edef;">Contacto</div>
+      <div id="llamadaEstado" style="font-size:12px; color:#8696a0;">Llamando...</div>
+    </div>
+    <div id="llamadaTimer" style="font-size:14px; color:#00a884; font-family:monospace;">00:00</div>
+  </div>
+
+  <!-- Área de video (oculta en llamadas de voz) -->
+  <div id="videoContainer" style="flex:1; display:none; position:relative; background:#000;">
+    <!-- Video remoto (grande) -->
+    <video id="videoRemoto" autoplay playsinline style="width:100%; height:100%; object-fit:cover;"></video>
+    
+    <!-- Video local (pequeño, esquina) -->
+    <video id="videoLocal" autoplay playsinline muted style="position:absolute; bottom:20px; right:20px; width:120px; height:160px; object-fit:cover; border-radius:12px; border:2px solid #00a884; background:#1f2c34;"></video>
+  </div>
+
+  <!-- Área de audio (visible en llamadas de voz) -->
+  <div id="audioContainer" style="flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:20px;">
+    <div id="llamadaAvatar" style="width:120px; height:120px; border-radius:50%; background:linear-gradient(135deg, #00a884, #075e54); display:flex; align-items:center; justify-content:center; font-size:48px; font-weight:700; color:#fff; font-family:'Courier New', monospace;">?</div>
+    <div style="text-align:center;">
+      <div id="llamadaNombreGrande" style="font-size:24px; font-weight:700; color:#e9edef; margin-bottom:8px;">Contacto</div>
+      <div id="llamadaEstadoGrande" style="font-size:14px; color:#8696a0;">Llamando...</div>
+    </div>
+  </div>
+
+  <!-- Audio remoto (siempre presente) -->
+  <audio id="audioRemoto" autoplay playsinline></audio>
+
+  <!-- Controles de llamada -->
+  <div style="background:#1f2c34; padding:20px; display:flex; justify-content:center; gap:20px; border-top:1px solid #2a3942;">
+    
+    <!-- Botón silenciar -->
+    <button id="btnSilenciar" onclick="toggleSilenciar()" style="width:60px; height:60px; border-radius:50%; background:#2a3942; border:none; color:#e9edef; font-size:24px; cursor:pointer; display:flex; align-items:center; justify-content:center;">
+      🎤
+    </button>
+
+    <!-- Botón cámara (solo video) -->
+    <button id="btnCamara" onclick="toggleCamara()" style="width:60px; height:60px; border-radius:50%; background:#2a3942; border:none; color:#e9edef; font-size:24px; cursor:pointer; display:none; align-items:center; justify-content:center;">
+      📷
+    </button>
+
+    <!-- Botón altavoz -->
+    <button id="btnAltavoz" onclick="toggleAltavoz()" style="width:60px; height:60px; border-radius:50%; background:#2a3942; border:none; color:#e9edef; font-size:24px; cursor:pointer; display:flex; align-items:center; justify-content:center;">
+      🔊
+    </button>
+
+    <!-- Botón colgar -->
+    <button onclick="colgarLlamada()" style="width:70px; height:70px; border-radius:50%; background:#ef4444; border:none; color:#fff; font-size:28px; cursor:pointer; display:flex; align-items:center; justify-content:center;">
+      📞
+    </button>
+  </div>
+</div>
+
+<!-- Modal de llamada entrante -->
+<div id="modalLlamadaEntrante" class="modal-overlay">
+  <div class="modal" style="max-width:340px;">
+    <div class="modal-body" style="text-align:center; padding:30px;">
+      <div id="llamadaEntranteAvatar" style="width:80px; height:80px; border-radius:50%; background:linear-gradient(135deg, #00a884, #075e54); display:flex; align-items:center; justify-content:center; font-size:32px; font-weight:700; color:#fff; font-family:'Courier New', monospace; margin:0 auto 16px;">?</div>
+      <div id="llamadaEntranteNombre" style="font-size:20px; font-weight:700; color:#e9edef; margin-bottom:8px;">Contacto</div>
+      <div id="llamadaEntranteTipo" style="font-size:14px; color:#8696a0; margin-bottom:24px;">Llamada de voz entrante</div>
+      
+      <div style="display:flex; gap:16px; justify-content:center;">
+        <button onclick="rechazarLlamada()" style="width:70px; height:70px; border-radius:50%; background:#ef4444; border:none; color:#fff; font-size:28px; cursor:pointer;">
+          📞
+        </button>
+        <button onclick="aceptarLlamada()" style="width:70px; height:70px; border-radius:50%; background:#00a884; border:none; color:#fff; font-size:28px; cursor:pointer;">
+          📞
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+  
 </body>
 </html>
