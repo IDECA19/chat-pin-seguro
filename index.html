@@ -3,21 +3,21 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Kerix</title>
+<title>Kerix - Chat PIN Seguro</title>
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#00a884">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://dksmoteiidjpymextrgj.supabase.co; media-src 'self' blob: https://dksmoteiidjpymextrgj.supabase.co; connect-src 'self' https://dksmoteiidjpymextrgj.supabase.co wss://dksmoteiidjpymextrgj.supabase.co https://cdn.jsdelivr.net; font-src 'self';">
 
-<!-- 🔔 REGISTRO DEL SERVICE WORKER (necesario para notificaciones en background) -->
+<!-- REGISTRO DEL SERVICE WORKER -->
 <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function() {
     navigator.serviceWorker.register('/sw.js').then(function(registration) {
       console.log('✅ Service Worker registrado:', registration.scope);
     }).catch(function(error) {
-      console.log('⚠️ SW no registrado (normal si aún no existe sw.js):', error);
+      console.log('⚠️ SW no registrado:', error);
     });
   });
 }
@@ -27,7 +27,6 @@ if ('serviceWorker' in navigator) {
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
 body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0b141a; color: #e9edef; min-height: 100vh; overflow-x: hidden; }
 
-/* ============ PANTALLA DE BLOQUEO ============ */
 #pantallaBloqueo { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(135deg, #00a884 0%, #075e54 100%); z-index: 9999; display: none; flex-direction: column; justify-content: center; align-items: center; padding: 20px; }
 .bloqueo-card { background: rgba(255,255,255,0.1); backdrop-filter: blur(20px); padding: 40px 30px; border-radius: 20px; max-width: 340px; width: 100%; text-align: center; border: 1px solid rgba(255,255,255,0.2); }
 .bloqueo-icono { font-size: 64px; margin-bottom: 20px; }
@@ -43,7 +42,6 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .bloqueo-btn-danger { background: #ef4444; color: #fff; }
 #errorPIN { color: #fca5a5; font-size: 13px; margin-top: 10px; display: none; }
 
-/* ============ APP PRINCIPAL ============ */
 .app-container { max-width: 480px; margin: 0 auto; min-height: 100vh; background: #0b141a; position: relative; }
 .header-main { background: #1f2c34; padding: 12px 16px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #2a3942; position: sticky; top: 0; z-index: 100; }
 .header-titulo { font-size: 20px; font-weight: 700; color: #e9edef; font-family: 'Courier New', monospace; }
@@ -56,10 +54,8 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .tab-badge { background: #00a884; color: #fff; border-radius: 10px; padding: 2px 6px; font-size: 11px; margin-left: 4px; }
 .lista-chats { background: #0b141a; }
 
-/* ============ ITEMS DE CHAT CON INDICADORES VISUALES ============ */
 .chat-item { display: flex; align-items: center; padding: 12px 16px; cursor: pointer; border-bottom: 1px solid #222d34; transition: background 0.2s; }
 .chat-item:hover { background: #1f2c34; }
-/* NUEVO: Estilo para contactos con mensajes sin leer */
 .chat-item.no-leido { background: rgba(0, 168, 132, 0.08); border-left: 3px solid #00a884; }
 .chat-item.no-leido .chat-nombre { color: #fff; font-weight: 700; }
 .chat-item.no-leido .chat-ultimo { color: #e9edef; font-weight: 500; }
@@ -72,7 +68,6 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .chat-info-bottom { display: flex; justify-content: space-between; align-items: center; }
 .chat-ultimo { font-size: 14px; color: #8696a0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 200px; }
 
-/* NUEVO: Badge animado con efecto pulse */
 .chat-badge { background: #00a884; color: #fff; border-radius: 10px; padding: 2px 8px; font-size: 12px; font-weight: 700; min-width: 20px; text-align: center; animation: pulseBadge 2s infinite; }
 @keyframes pulseBadge {
   0%, 100% { transform: scale(1); opacity: 1; }
@@ -86,7 +81,6 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .fab { position: fixed; bottom: 24px; right: 24px; width: 56px; height: 56px; border-radius: 50%; background: #00a884; color: #fff; border: none; font-size: 24px; cursor: pointer; box-shadow: 0 4px 12px rgba(0,168,132,0.4); z-index: 50; transition: all 0.2s; display: flex; align-items: center; justify-content: center; }
 .fab:hover { background: #008f72; transform: scale(1.05); }
 
-/* ============ CHAT INDIVIDUAL ============ */
 .chat-header { background: #1f2c34; padding: 10px 12px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid #2a3942; position: sticky; top: 0; z-index: 100; }
 .chat-header-back { background: none; border: none; color: #e9edef; font-size: 20px; cursor: pointer; padding: 8px; }
 .chat-header-avatar { width: 40px; height: 40px; border-radius: 50%; background: linear-gradient(135deg, #00a884, #075e54); display: flex; align-items: center; justify-content: center; font-weight: 700; color: #fff; font-family: 'Courier New', monospace; }
@@ -94,7 +88,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .chat-header-nombre { font-weight: 600; font-size: 16px; color: #e9edef; font-family: 'Courier New', monospace; }
 .chat-header-estado { font-size: 12px; color: #8696a0; }
 .chat-header-acciones { display: flex; gap: 4px; }
-.chat-mensajes { background: #0b141a; padding: 16px; min-height: calc(100vh - 180px); max-height: calc(100vh - 180px); overflow-y: auto; background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%231f2c34' fill-opacity='0.3'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E"); }
+.chat-mensajes { background: #0b141a; padding: 16px; min-height: calc(100vh - 180px); max-height: calc(100vh - 180px); overflow-y: auto; }
 .mensaje { max-width: 80%; padding: 8px 12px; border-radius: 12px; margin-bottom: 8px; position: relative; word-wrap: break-word; animation: fadeIn 0.2s ease-out; }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 .mensaje-enviado { background: #005c4b; color: #e9edef; margin-left: auto; border-bottom-right-radius: 4px; }
@@ -111,7 +105,6 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .chat-btn-enviar { background: #00a884; color: #fff; }
 .chat-btn:hover { opacity: 0.9; }
 
-/* ============ MENÚ LATERAL ============ */
 .menu-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 200; display: none; }
 .menu-overlay.active { display: block; }
 .menu-lateral { position: fixed; top: 0; right: -300px; width: 280px; height: 100%; background: #1f2c34; z-index: 201; transition: right 0.3s ease; overflow-y: auto; }
@@ -125,7 +118,6 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .menu-item-text { flex: 1; font-size: 15px; color: #e9edef; }
 .menu-item.danger .menu-item-text { color: #ef4444; }
 
-/* ============ MODALES ============ */
 .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 300; display: none; align-items: center; justify-content: center; padding: 20px; }
 .modal-overlay.active { display: flex; }
 .modal { background: #1f2c34; border-radius: 16px; max-width: 400px; width: 100%; max-height: 90vh; overflow-y: auto; border: 1px solid #2a3942; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
@@ -139,7 +131,6 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .modal-btn-primary { background: #00a884; color: #fff; }
 .modal-btn-secondary { background: #2a3942; color: #e9edef; }
 
-/* ============ CONFIGURACIÓN ============ */
 .config-seccion { padding: 20px; border-bottom: 1px solid #2a3942; }
 .config-titulo { font-size: 16px; font-weight: 700; color: #00a884; margin-bottom: 12px; }
 .config-label { font-size: 14px; color: #e9edef; margin-bottom: 6px; font-weight: 600; }
@@ -153,19 +144,16 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .slider:before { content: ""; position: absolute; height: 18px; width: 18px; left: 3px; bottom: 3px; background: white; border-radius: 50%; transition: 0.3s; }
 input:checked + .slider { background: #00a884; }
 input:checked + .slider:before { transform: translateX(20px); }
-
 .hidden { display: none !important; }
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: #2a3942; border-radius: 3px; }
-
 @keyframes slideInRight { from { transform: translateX(400px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
 @keyframes slideOutRight { from { transform: translateX(0); opacity: 1; } to { transform: translateX(400px); opacity: 0; } }
 </style>
 </head>
 <body>
-
-<!-- MODAL DE ALERTA PERSONALIZADO -->
+<!-- MODAL DE ALERTA -->
 <div id="customAlert" class="modal-overlay">
 <div class="modal" style="max-width: 340px;">
 <div class="modal-body" style="text-align: center; padding: 24px;">
@@ -176,7 +164,7 @@ input:checked + .slider:before { transform: translateX(20px); }
 </div>
 </div>
 
-<!-- MODAL DE CONFIRMACIÓN PERSONALIZADO -->
+<!-- MODAL DE CONFIRMACIÓN -->
 <div id="customConfirm" class="modal-overlay">
 <div class="modal" style="max-width: 340px;">
 <div class="modal-body" style="text-align: center; padding: 24px;">
@@ -190,7 +178,7 @@ input:checked + .slider:before { transform: translateX(20px); }
 </div>
 </div>
 
-<!-- MODAL DE PROMPT PERSONALIZADO -->
+<!-- MODAL DE PROMPT -->
 <div id="customPrompt" class="modal-overlay">
 <div class="modal" style="max-width: 360px;">
 <div class="modal-header">
@@ -210,14 +198,14 @@ input:checked + .slider:before { transform: translateX(20px); }
 <!-- PANTALLA DE BLOQUEO -->
 <div id="pantallaBloqueo">
 <div class="bloqueo-card">
-<div class="bloqueo-icono">🔒</div>
+<div class="bloqueo-icono"></div>
 <div class="bloqueo-titulo">Kerix Bloqueado</div>
 <div class="bloqueo-subtitulo">Ingresa tu PIN de acceso</div>
 <input type="password" id="pinAccesoInput" placeholder="••••" maxlength="6">
 <button class="bloqueo-btn bloqueo-btn-primary" onclick="desbloquearApp()" id="btnDesbloquear">Desbloquear</button>
-<button class="bloqueo-btn bloqueo-btn-secondary" onclick="configurarPIN()" id="btnConfigPIN" style="display:none;"> Configurar PIN</button>
+<button class="bloqueo-btn bloqueo-btn-secondary" onclick="configurarPIN()" id="btnConfigPIN" style="display:none;">🔑 Configurar PIN</button>
 <button class="bloqueo-btn bloqueo-btn-warning" onclick="recuperarAcceso()" id="btnRecuperar" style="display:none;">Olvidé mi PIN</button>
-<button class="bloqueo-btn bloqueo-btn-danger" onclick="resetEmergencia()" id="btnReset" style="display:none; margin-top:10px;">️ Reset de Emergencia</button>
+<button class="bloqueo-btn bloqueo-btn-danger" onclick="resetEmergencia()" id="btnReset" style="display:none; margin-top:10px;">⚠️ Reset de Emergencia</button>
 <p id="errorPIN">PIN incorrecto</p>
 </div>
 </div>
@@ -274,16 +262,14 @@ Vence: <span id="fechaVencimiento" style="color: #e9edef;"></span>
 <div class="chat-header-estado" id="chatEstado">en línea</div>
 </div>
 <div class="chat-header-acciones">
-<button class="header-icon" onclick="iniciarLlamada('voz')" title="Llamada de voz">📞</button>
-<button class="header-icon" onclick="iniciarLlamada('video')" title="Videollamada">📹</button>
-<button class="header-icon" onclick="mostrarOpcionesChat()"></button>
+<button class="header-icon" onclick="mostrarOpcionesChat()">⋮</button>
 </div>
 </div>
 <div class="chat-mensajes" id="chatMensajes">
 <p style="color: #8696a0; text-align: center; padding: 40px 20px;">No hay mensajes aún</p>
 </div>
 <div class="chat-input-container">
-<button class="chat-btn chat-btn-adjuntar" onclick="document.getElementById('archivoInput').click()">📎</button>
+<button class="chat-btn chat-btn-adjuntar" onclick="document.getElementById('archivoInput').click()"></button>
 <textarea class="chat-input" id="nuevoMensaje" placeholder="Escribe un mensaje..." rows="1"></textarea>
 <button class="chat-btn chat-btn-enviar" onclick="enviarMensaje()">➤</button>
 </div>
@@ -319,7 +305,7 @@ Vence: <span id="fechaVencimiento" style="color: #e9edef;"></span>
 <span class="menu-item-text">Cambiar PIN de acceso</span>
 </div>
 <div class="menu-item" onclick="testearStorage(); cerrarMenu();">
-<span class="menu-item-icon"></span>
+<span class="menu-item-icon">🧪</span>
 <span class="menu-item-text">Diagnóstico de Storage</span>
 </div>
 <div class="menu-item danger" onclick="resetEmergencia(); cerrarMenu();">
@@ -347,12 +333,12 @@ Vence: <span id="fechaVencimiento" style="color: #e9edef;"></span>
 <div class="modal-overlay" id="modalSeguridad">
 <div class="modal" style="max-width: 500px;">
 <div class="modal-header">
-<div class="modal-titulo">🛡️ Seguridad Avanzada</div>
+<div class="modal-titulo">️ Seguridad Avanzada</div>
 <button class="modal-cerrar" onclick="cerrarModalSeguridad()">✕</button>
 </div>
 <div class="modal-body" style="padding: 0;">
 <div class="config-seccion">
-<div class="config-titulo">️ Auto-destrucción de mensajes</div>
+<div class="config-titulo">⏱️ Auto-destrucción de mensajes</div>
 <div class="config-desc">Los mensajes se borran automáticamente después del tiempo seleccionado.</div>
 <select id="prefAutoDestruccion" class="config-select" onchange="guardarPreferencia('auto_destruccion_dias', this.value)">
 <option value="0">Desactivado</option><option value="7">7 días</option><option value="30">30 días</option><option value="90">90 días</option><option value="365">1 año</option>
@@ -401,7 +387,7 @@ Vence: <span id="fechaVencimiento" style="color: #e9edef;"></span>
 <button class="modal-btn modal-btn-secondary" onclick="desactivarForwardSecrecy()" id="btnDesactivarFS" style="flex: 1; margin: 0; display: none;">Desactivar</button>
 </div>
 <button class="modal-btn modal-btn-secondary" onclick="generarBackupMensajes()" style="margin-top: 8px;"> Backup de mensajes</button>
-<button class="modal-btn modal-btn-secondary" onclick="backupClavePrivada()">🔑 Backup de clave privada</button>
+<button class="modal-btn modal-btn-secondary" onclick="backupClavePrivada()" style="margin-top: 8px;"> Backup de clave privada</button>
 </div>
 </div>
 </div>
@@ -438,7 +424,7 @@ Vence: <span id="fechaVencimiento" style="color: #e9edef;"></span>
 </div>
 <button class="modal-btn modal-btn-primary" onclick="guardarConfigNotificaciones()" style="margin-top: 12px;">Guardar configuración</button>
 <button class="modal-btn modal-btn-secondary" onclick="solicitarPermisoNotificaciones()">🔓 Solicitar Permiso del Navegador</button>
-<button class="modal-btn modal-btn-secondary" onclick="probarNotificacion()">🧪 Probar Notificación</button>
+<button class="modal-btn modal-btn-secondary" onclick="probarNotificacion()"> Probar Notificación</button>
 </div>
 </div>
 </div>
@@ -474,7 +460,6 @@ Vence: <span id="fechaVencimiento" style="color: #e9edef;"></span>
 </div>
 </div>
 </div>
-
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 var SUPABASE_URL = 'https://dksmoteiidjpymextrgj.supabase.co';
@@ -519,34 +504,11 @@ var prefs = {
   borrado_seguro: false, dosfa_backup: false, limpieza_metadatos: false, forward_secrecy: false
 };
 var prefsNotificaciones = { nativas: true, visuales: true, sonido: true, vibracion: true, mostrarContenido: true };
-// ============================================
-// VARIABLES GLOBALES WEBRTC
-// ============================================
-var peerConnection = null;
-var streamLocal = null;
-var streamRemoto = null;
-var llamadaActiva = false;
-var tipoLlamadaActual = 'voz'; // 'voz' o 'video'
-var pinLlamadaActual = '';
-var esIniciador = false;
-var timerLlamada = null;
-var segundosLlamada = 0;
-var canalLlamada = null;
 
-// Configuración STUN (servidores gratuitos de Google)
-var rtcConfig = {
-  iceServers: [
-    { urls: 'stun:stun.l.google.com:19302' },
-    { urls: 'stun:stun1.l.google.com:19302' },
-    { urls: 'stun:stun2.l.google.com:19302' },
-    { urls: 'stun:stun3.l.google.com:19302' },
-    { urls: 'stun:stun4.l.google.com:19302' }
-  ]
-};
 // ============================================
 // SISTEMA DE DIÁLOGOS PERSONALIZADOS
 // ============================================
-function customAlert(mensaje, icono = '⚠️') {
+function customAlert(mensaje, icono = '️') {
   return new Promise((resolve) => {
     const modal = document.getElementById('customAlert');
     document.getElementById('customAlertTexto').innerText = mensaje;
@@ -704,6 +666,7 @@ async function verificarPINConfigurado() {
     document.getElementById('appPrincipal').style.display = 'block';
     try { await cargarClavePrivadaSegura(null); } catch (e) { logError('Error:', e); }
     await verificarEstado();
+    await cargarMensajesNoLeidos();
     cambiarTab('chats');
   } else {
     pantalla.style.display = 'flex';
@@ -722,7 +685,7 @@ async function configurarPIN() {
   var pin2 = await customPrompt('🔐 Confirmar PIN', 'Confirma tu PIN de acceso ingresándolo nuevamente:', '••••', 'password');
   if (pin1 !== pin2) { await customAlert('Los PINs ingresados no coinciden.'); return; }
   var codigoRecuperacion = generarCodigoRecuperacion();
-  var confirmado = await customConfirm('⚠️ GUARDA ESTE CÓDIGO DE RECUPERACIÓN:\n' + codigoRecuperacion + '\nSi olvidas tu PIN, lo necesitarás obligatoriamente para no perder el acceso.\n¿Ya lo copiaste y guardaste en un lugar seguro?', '🔑');
+  var confirmado = await customConfirm('️ GUARDA ESTE CÓDIGO DE RECUPERACIÓN:\n' + codigoRecuperacion + '\nSi olvidas tu PIN, lo necesitarás obligatoriamente para no perder el acceso.\n¿Ya lo copiaste y guardaste en un lugar seguro?', '🔑');
   if (!confirmado) { await customAlert('Operación cancelada. Debes guardar el código de recuperación.'); return; }
   pinAccesoHash = await hashPIN(pin1);
   codigoRecuperacionHash = await hashCodigo(codigoRecuperacion);
@@ -767,10 +730,10 @@ async function recuperarAcceso() {
 async function resetEmergencia() {
   var confirmado1 = await customConfirm('⚠️ RESET DE EMERGENCIA\n• Eliminará tu PIN\n• Eliminará tu código de recuperación\n• Eliminará tu clave privada local\n• ¡NO podrás volver a descifrar mensajes antiguos!\n¿Deseas continuar bajo tu propio riesgo?', '⚠️');
   if (!confirmado1) return;
-  var confirmado2 = await customConfirm('ÚLTIMA ADVERTENCIA\n¿Estás absolutamente seguro de que deseas proceder?', '⚠️');
+  var confirmado2 = await customConfirm('ÚLTIMA ADVERTENCIA\n¿Estás absolutamente seguro de que deseas proceder?', '️');
   if (!confirmado2) return;
   var texto = await customPrompt('Confirmación final', 'Para confirmar el borrado completo, escribe la palabra "RESET":', 'RESET');
-  if (texto !== 'RESET') { await customAlert('❌ Cancelado. No se realizaron cambios.', '❌'); return; }
+  if (texto !== 'RESET') { await customAlert('❌ Cancelado. No se realizaron cambios.', ''); return; }
   localStorage.removeItem('pin_hash_' + miPIN);
   localStorage.removeItem('codigo_recuperacion_hash_' + miPIN);
   localStorage.removeItem('clave_privada_' + miPIN);
@@ -820,6 +783,7 @@ async function desbloquearApp() {
     try { await cargarClavePrivadaSegura(pinIngresado); } catch (error) { logError('Error:', error); await generarClaves(); }
     document.getElementById('appPrincipal').style.display = 'block';
     try { await verificarEstado(); } catch (error) { logError('Error:', error); }
+    await cargarMensajesNoLeidos();
     cambiarTab('chats');
   } else {
     document.getElementById('errorPIN').style.display = 'block';
@@ -916,8 +880,7 @@ async function editarAliasContactoActual() {
   if (!contactoActual) return;
   cerrarModalOpcionesChat();
   await editarAliasContacto(contactoActual);
-}
-
+} 
 // ============================================
 // PREFERENCIAS
 // ============================================
@@ -979,48 +942,39 @@ function guardarBloqueados(b) { localStorage.setItem('bloqueados_' + miPIN, JSON
 // 🔔 RENDERIZAR CHATS CON INDICADORES VISUALES
 // ============================================
 function renderizarChats() {
-    var contactos = getContactos();
-    var cont = document.getElementById('contenidoChats');
-    
-    if (!cont) return; // Seguridad
-
-    if (contactos.length === 0) {
-        cont.innerHTML = '<div class="estado-vacio"><div class="estado-vacio-icono">💬</div><div class="estado-vacio-texto">No tienes chats activos</div><div class="estado-vacio-sub">Usa el botón "+" abajo para agregar un contacto</div></div>';
-        return;
-    }
-
-    var html = '';
-    contactos.forEach(function(pin) {
-        var noLeidos = mensajesNoLeidos[pin] || 0;
-        var badge = noLeidos > 0 ? '<div class="chat-badge">' + noLeidos + '</div>' : '';
-        
-        // Texto dinámico según si hay mensajes sin leer
-        var ultimo = noLeidos > 0 ? '📨 Tienes mensajes sin leer' : 'Toca para abrir la conversación';
-        var hora = '';
-        
-        var nombre = obtenerNombreContacto(pin);
-        var subNombre = (nombre !== pin) ? ' <span style="font-size:11px; color:#8696a0; font-weight:normal;">(' + pin + ')</span>' : '';
-        
-        // Clase extra para resaltar el fondo
-        var claseExtra = noLeidos > 0 ? ' no-leido' : '';
-        
-        html += '<div class="chat-item' + claseExtra + '" onclick="abrirChat(\'' + pin + '\')">';
-        html += '<div class="chat-avatar">' + nombre.substring(0, 2).toUpperCase() + '</div>';
-        html += '<div class="chat-info">';
-        html += '<div class="chat-info-top"><div class="chat-nombre">' + nombre + subNombre + '</div><div class="chat-hora">' + hora + '</div></div>';
-        html += '<div class="chat-info-bottom"><div class="chat-ultimo">' + ultimo + '</div>' + badge + '</div>';
-        html += '</div></div>';
-    });
-    
-    cont.innerHTML = html;
+  var contactos = getContactos();
+  var cont = document.getElementById('contenidoChats');
+  if (contactos.length === 0) {
+    cont.innerHTML = '<div class="estado-vacio"><div class="estado-vacio-icono">💬</div><div class="estado-vacio-texto">No tienes chats activos</div><div class="estado-vacio-sub">Usa el botón "+" abajo para agregar un contacto</div></div>';
+    return;
+  }
+  var html = '';
+  contactos.forEach(function(pin) {
+    var noLeidos = mensajesNoLeidos[pin] || 0;
+    var badge = noLeidos > 0 ? '<div class="chat-badge">' + noLeidos + '</div>' : '';
+    var ultimo = noLeidos > 0 ? '📨 Tienes mensajes sin leer' : 'Toca para abrir la conversación';
+    var hora = '';
+    var nombre = obtenerNombreContacto(pin);
+    var subNombre = (nombre !== pin) ? ' <span style="font-size:11px; color:#8696a0; font-weight:normal;">(' + pin + ')</span>' : '';
+    var claseExtra = noLeidos > 0 ? ' no-leido' : '';
+    html += '<div class="chat-item' + claseExtra + '" onclick="abrirChat(\'' + pin + '\')">';
+    html += '<div class="chat-avatar">' + nombre.substring(0, 2).toUpperCase() + '</div>';
+    html += '<div class="chat-info">';
+    html += '<div class="chat-info-top"><div class="chat-nombre">' + nombre + subNombre + '</div><div class="chat-hora">' + hora + '</div></div>';
+    html += '<div class="chat-info-bottom"><div class="chat-ultimo">' + ultimo + '</div>' + badge + '</div>';
+    html += '</div></div>';
+  });
+  cont.innerHTML = html;
+  actualizarBadgeChats();
 }
+
 function renderizarContactos() {
   var contactos = getContactos();
   var bloqueados = getBloqueados();
   var cont = document.getElementById('contenidoContactos');
   var html = '';
   if (contactos.length === 0 && bloqueados.length === 0) {
-    cont.innerHTML = '<div class="estado-vacio"><div class="estado-vacio-icono">👥</div><div class="estado-vacio-texto">Tu lista de contactos está vacía</div><div class="estado-vacio-sub">Agrega contactos compartiendo sus PINs de Kerix</div></div>';
+    cont.innerHTML = '<div class="estado-vacio"><div class="estado-vacio-icono"></div><div class="estado-vacio-texto">Tu lista de contactos está vacía</div><div class="estado-vacio-sub">Agrega contactos compartiendo sus PINs de Kerix</div></div>';
     return;
   }
   if (contactos.length > 0) {
@@ -1055,7 +1009,7 @@ async function mostrarMenuContacto(pin, event) {
   var accion = await customConfirm('¿Deseas editar el nombre o alias de este PIN (' + pin + ')?\n(Presiona "Cancelar" si en su lugar deseas eliminar el contacto)', '👤');
   if (accion) { await editarAliasContacto(pin); }
   else {
-    var eliminar = await customConfirm('¿Estás seguro de que deseas eliminar a ' + obtenerNombreContacto(pin) + ' de tus contactos?', '🗑️');
+    var eliminar = await customConfirm('¿Estás seguro de que deseas eliminar a ' + obtenerNombreContacto(pin) + ' de tus contactos?', '️');
     if (eliminar) { eliminarContacto(pin); }
   }
 }
@@ -1124,7 +1078,7 @@ async function bloquearContactoActual() {
 }
 
 // ============================================
-// 🔔 ACTUALIZAR BADGE CON CONTADOR EN TÍTULO
+// 🔔 ACTUALIZAR BADGE CON CONTADOR
 // ============================================
 function actualizarBadgeChats() {
   var total = 0;
@@ -1133,12 +1087,32 @@ function actualizarBadgeChats() {
   if (total > 0) {
     badge.style.display = 'inline';
     badge.innerText = total;
-    // NUEVO: Actualizar título de la pestaña
     document.title = '(' + total + ') Kerix Chat';
   } else {
     badge.style.display = 'none';
     document.title = 'Kerix Chat';
   }
+}
+
+// ============================================
+// 🔔 CARGAR MENSAJES NO LEÍDOS AL INICIAR
+// ============================================
+async function cargarMensajesNoLeidos() {
+  try {
+    var { data, error } = await clienteSupabase.from('mensajes')
+      .select('pin_remitente')
+      .eq('pin_destinatario', miPIN)
+      .eq('leido', false);
+    if (error) { logError('Error cargando no leídos:', error); return; }
+    if (data) {
+      mensajesNoLeidos = {};
+      data.forEach(function(msg) {
+        mensajesNoLeidos[msg.pin_remitente] = (mensajesNoLeidos[msg.pin_remitente] || 0) + 1;
+      });
+    }
+    actualizarBadgeChats();
+    if (tabActual === 'chats') renderizarChats();
+  } catch (error) { logError('Error:', error); }
 }
 
 // ============================================
@@ -1157,7 +1131,6 @@ function abrirChat(pin) {
   suscribirseAMensajes();
   marcarComoLeidos();
 }
-
 function cerrarChat() {
   document.getElementById('pantallaChatIndividual').style.display = 'none';
   contactoActual = '';
@@ -1224,7 +1197,7 @@ async function enviarMensaje() {
   var mensajeCifrado = '';
   if (texto) {
     var clavePub = await obtenerClavePublica(contactoActual);
-    if (!clavePub) { await customAlert('⚠️ No se pudo verificar la llave de cifrado del contacto.'); return; }
+    if (!clavePub) { await customAlert('️ No se pudo verificar la llave de cifrado del contacto.'); return; }
     try { mensajeCifrado = await cifrarMensaje(texto, clavePub); } catch (error) { await customAlert('Error al intentar cifrar el mensaje.'); return; }
   }
   if (archivoSeleccionado) {
@@ -1283,16 +1256,12 @@ async function enviarMensaje() {
   } catch (error) { await customAlert('Error al insertar el mensaje en la red.'); divTemp.style.opacity = '0.5'; }
 }
 
-// ============================================
-// 🔔 MARCAR COMO LEÍDOS CON RE-RENDER
-// ============================================
 async function marcarComoLeidos() {
   if (!contactoActual || !clienteSupabase) return;
   try {
     await clienteSupabase.from('mensajes').update({ leido: true, leido_en: new Date().toISOString() }).eq('pin_remitente', contactoActual).eq('pin_destinatario', miPIN).eq('leido', false);
     delete mensajesNoLeidos[contactoActual];
     actualizarBadgeChats();
-    // NUEVO: Re-renderizar chats para quitar el resaltado
     if (tabActual === 'chats') renderizarChats();
   } catch (error) { logError('Error:', error); }
 }
@@ -1308,10 +1277,7 @@ function suscribirseAMensajes() {
       var texto = '';
       if (nuevo.mensaje_cifrado && nuevo.mensaje_cifrado.length > 0) texto = await descifrarMensaje(nuevo.mensaje_cifrado);
       mensajesNoLeidos[nuevo.pin_remitente] = (mensajesNoLeidos[nuevo.pin_remitente] || 0) + 1;
-      
-      // 🔔 NUEVO: Notificar SIEMPRE, sin importar dónde estés
       notificarNuevoMensaje(nuevo.pin_remitente, texto, nuevo.tipo_mensaje);
-      
       if (contactoActual === nuevo.pin_remitente) {
         nuevo.texto_descifrado = texto;
         var contenedor = document.getElementById('chatMensajes');
@@ -1326,7 +1292,6 @@ function suscribirseAMensajes() {
         if (nuevo.archivo_url) cargarYDescifrarAdjunto(nuevo);
         setTimeout(marcarComoLeidos, 1000);
       } else {
-        // NUEVO: Re-renderizar chats para mostrar badge y resaltar
         renderizarChats();
       }
     })
@@ -1342,7 +1307,6 @@ function suscribirseAMensajes() {
     })
     .subscribe();
 }
-
 function cancelarSuscripciones() { if (canalRealtime) { clienteSupabase.removeChannel(canalRealtime); canalRealtime = null; } }
 
 // ============================================
@@ -1394,7 +1358,7 @@ document.getElementById('archivoInput').addEventListener('change', async functio
   if (!file) return;
   if (file.size > 50 * 1024 * 1024) { await customAlert('El tamaño máximo de archivo admitido es de 50 MB.'); return; }
   archivoSeleccionado = file;
-  await customAlert('📎 Archivo listo para enviar: ' + file.name, '');
+  await customAlert('📎 Archivo listo para enviar: ' + file.name, '📎');
 });
 function cancelarArchivo() {
   archivoSeleccionado = null;
@@ -1553,95 +1517,18 @@ async function activar() {
   } catch (error) { await customAlert('Fallo de conexión: ' + error.message); }
   finally { btn.disabled = false; btn.innerText = 'Activar'; }
 }
-function copiarPIN() { navigator.clipboard.writeText(miPIN).then(() => customAlert('Tu PIN ' + miPIN + ' ha sido copiado al portapapeles.', '')); }
+function copiarPIN() { navigator.clipboard.writeText(miPIN).then(() => customAlert('Tu PIN ' + miPIN + ' ha sido copiado al portapapeles.', '📋')); }
 
-// ============================================
-// VERIFICAR SOPORTE WEBRTC
-// ============================================
-function verificarSoporteWebRTC() {
-  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-    return { soportado: false, error: 'Tu navegador no soporta acceso a dispositivos multimedia.' };
-  }
-  if (typeof RTCPeerConnection === 'undefined') {
-    return { soportado: false, error: 'Tu navegador no soporta WebRTC.' };
-  }
-  return { soportado: true, error: null };
-}
-
-// Sonido de llamada saliente (tono de marcación)
-var sonidoLlamadaSaliente = null;
-function reproducirSonidoLlamadaSaliente() {
-  try {
-    var audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    var oscillator = audioCtx.createOscillator();
-    var gainNode = audioCtx.createGain();
-    oscillator.connect(gainNode);
-    gainNode.connect(audioCtx.destination);
-    oscillator.type = 'sine';
-    oscillator.frequency.setValueAtTime(440, audioCtx.currentTime);
-    gainNode.gain.setValueAtTime(0.15, audioCtx.currentTime);
-    // Tono intermitente
-    gainNode.gain.setValueAtTime(0, audioCtx.currentTime + 1);
-    gainNode.gain.setValueAtTime(0.15, audioCtx.currentTime + 1.5);
-    gainNode.gain.setValueAtTime(0, audioCtx.currentTime + 2.5);
-    oscillator.start(audioCtx.currentTime);
-    oscillator.stop(audioCtx.currentTime + 3);
-    sonidoLlamadaSaliente = oscillator;
-  } catch (error) {
-    logError('Error sonido saliente:', error);
-  }
-}
-
-function detenerSonidoLlamadaSaliente() {
-  try {
-    if (sonidoLlamadaSaliente) {
-      sonidoLlamadaSaliente.stop();
-      sonidoLlamadaSaliente = null;
-    }
-  } catch (e) {
-    sonidoLlamadaSaliente = null;
-  }
-}
-
-// Limpiar llamadas antiguas de la base de datos (más de 24 horas)
-async function limpiarLlamadasAntiguas() {
-  try {
-    var hace24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-    await clienteSupabase.from('llamadas')
-      .delete()
-      .or('pin_remitente.eq.' + miPIN + ',pin_destinatario.eq.' + miPIN)
-      .lt('inicio', hace24h);
-    log(' Llamadas antiguas limpiadas');
-  } catch (error) {
-    logError('Error limpiando llamadas:', error);
-  }
-}
-
-// Manejar visibilidad de la página durante llamada
-document.addEventListener('visibilitychange', function() {
-  if (llamadaActiva && document.hidden) {
-    actualizarEstadoLlamada('En segundo plano');
-  } else if (llamadaActiva && !document.hidden) {
-    actualizarEstadoLlamada('Conectado');
-  }
-});
-
-// Manejar cierre de pestaña durante llamada
-window.addEventListener('beforeunload', function() {
-  if (llamadaActiva) {
-    colgarLlamada();
-  }
-});
 // ============================================
 // BACKUP Y FORWARD SECRECY
 // ============================================
 async function exportarClave() {
-  var password = await customPrompt('🔒 Exportar Llave', 'Crea una contraseña para cifrar el respaldo (mínimo 4 caracteres):', '', 'password');
+  var password = await customPrompt(' Exportar Llave', 'Crea una contraseña para cifrar el respaldo (mínimo 4 caracteres):', '', 'password');
   if (!password || password.length < 4) { await customAlert('La contraseña de respaldo debe ser de al menos 4 caracteres.'); return; }
   var codigo2FA = '';
   if (prefs.dosfa_backup) {
     codigo2FA = Math.floor(100000 + Math.random() * 900000).toString();
-    await customAlert('🔑 Tu código de seguridad 2FA es:\n' + codigo2FA + '\nEscríbelo para poder restaurarlo más tarde.', '🔑');
+    await customAlert('🔑 Tu código de seguridad 2FA es:\n' + codigo2FA + '\nEscríbelo para poder restaurarlo más tarde.', '');
   }
   try {
     var privBase64 = '';
@@ -1738,7 +1625,7 @@ async function generarBackupMensajes() {
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
     URL.revokeObjectURL(url);
     await customAlert('✅ El archivo de respaldo se ha descargado de manera segura.', '✅');
-  } catch (error) { await customAlert('❌ Error al exportar: ' + error.message, ''); }
+  } catch (error) { await customAlert('❌ Error al exportar: ' + error.message, '❌'); }
 }
 async function backupClavePrivada() {
   try {
@@ -1762,7 +1649,7 @@ async function backupClavePrivada() {
 }
 
 // ============================================
-//  NOTIFICACIONES (SIEMPRE ACTIVAS)
+// 🔔 NOTIFICACIONES
 // ============================================
 function cargarPrefsNotificaciones() {
   var guardadas = localStorage.getItem('prefs_notificaciones_' + miPIN);
@@ -1771,49 +1658,22 @@ function cargarPrefsNotificaciones() {
 function guardarPrefsNotificaciones() { localStorage.setItem('prefs_notificaciones_' + miPIN, JSON.stringify(prefsNotificaciones)); }
 
 async function solicitarPermisoNotificaciones() {
-    // 1. Verificar soporte
-    if (!('Notification' in window)) {
-        await customAlert('❌ Tu navegador no soporta notificaciones nativas.', '❌');
-        return false;
+  if (!('Notification' in window)) { await customAlert('❌ Tu navegador no soporta notificaciones nativas.', '❌'); return false; }
+  if (Notification.permission === 'granted') { await customAlert('✅ Las notificaciones ya están autorizadas.', '✅'); return true; }
+  if (Notification.permission === 'denied') { await customAlert('❌ Permisos denegados. Debes habilitarlos manualmente desde el candado de la barra del navegador.', '❌'); return false; }
+  try {
+    var permiso = await Notification.requestPermission();
+    if (permiso === 'granted') {
+      await customAlert('✅ Permiso de notificación concedido.', '✅');
+      new Notification('Kerix Chat', { body: 'Notificaciones activadas con éxito. ✅' });
     }
-
-    // 2. Si ya está concedido, no pedir de nuevo
-    if (Notification.permission === 'granted') {
-        await customAlert('✅ Las notificaciones ya están activas y funcionando.', '✅');
-        return true;
-    }
-
-    // 3. Si fue denegado previamente, informar al usuario
-    if (Notification.permission === 'denied') {
-        await customAlert('❌ Permiso denegado anteriormente.\n\nPara activarlo:\n1. Toca el candado 🔒 en la barra de dirección.\n2. Ve a "Permisos" o "Configuración del sitio".\n3. Cambia "Notificaciones" a "Permitir".', '');
-        return false;
-    }
-
-    // 4. Solicitar permiso (esto abre el diálogo nativo)
-    try {
-        console.log('🔔 Solicitando permiso de notificación...');
-        const permission = await Notification.requestPermission();
-        
-        if (permission === 'granted') {
-            await customAlert('✅ ¡Permiso concedido!\nAhora recibirás alertas incluso si la app está cerrada (en Android requiere instalación como PWA).', '✅');
-            // Probar una notificación inmediata
-            new Notification('Kerix Chat', { body: 'Notificaciones activadas correctamente. ✅' });
-            return true;
-        } else {
-            await customAlert('️ Permiso no concedido. No recibirás alertas.', '⚠️');
-            return false;
-        }
-    } catch (error) {
-        console.error('Error al pedir permiso:', error);
-        await customAlert('❌ Error al solicitar permiso: ' + error.message, '❌');
-        return false;
-    }
+    return permiso === 'granted';
+  } catch (error) { logError('Error solicitando permiso:', error); return false; }
 }
 
 function mostrarNotificacionNativa(titulo, cuerpo, pinRemitente, tipoMensaje) {
   if (!prefsNotificaciones.nativas) return;
   if (Notification.permission !== 'granted') return;
-  // NUEVO: Solo suprimir si estás ACTIVAMENTE en el chat del remitente
   if (document.visibilityState === 'visible' && contactoActual === pinRemitente) return;
   var icono = '🔒';
   if (tipoMensaje === 'imagen') icono = '🖼️';
@@ -1878,64 +1738,19 @@ function vibrarDispositivo() {
   if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
 }
 
-// ============================================
-//  NOTIFICAR SIEMPRE (sin importar dónde estés)
-// ============================================
-//  FUNCIÓN CORREGIDA: Notificar siempre que llega un mensaje nuevo
 function notificarNuevoMensaje(pinRemitente, texto, tipoMensaje) {
-    var nombre = obtenerNombreContacto(pinRemitente);
-    var titulo = 'Mensaje de ' + nombre;
-    var cuerpo = '';
-    
-    if (tipoMensaje === 'imagen') cuerpo = '️ Imagen adjunta';
-    else if (tipoMensaje === 'video') cuerpo = '🎥 Video adjunto';
-    else if (tipoMensaje === 'documento') cuerpo = '📎 Archivo adjunto';
-    else cuerpo = prefsNotificaciones.mostrarContenido ? (texto.substring(0, 50) || 'Nuevo mensaje') : 'Nuevo mensaje';
-    
-    // 1. Notificación Nativa (Solo si hay permiso)
-    if (Notification.permission === 'granted' && prefsNotificaciones.nativas) {
-        try {
-            new Notification(titulo, {
-                body: cuerpo,
-                icon: 'https://ideca19.github.io/icon-192x192.png', // Asegúrate de que esta URL exista
-                tag: 'msg-' + pinRemitente + '-' + Date.now(), // Tag único para evitar colapsar
-                vibrate: [200, 100, 200],
-                data: { url: '/' }
-            });
-        } catch (e) {
-            console.error('Error creando notificación:', e);
-        }
-    }
-    
-    // 2. Notificación Visual en App (Burbuja)
-    mostrarNotificacionVisual(titulo, cuerpo, pinRemitente);
-    
-    // 3. Sonido y Vibración
-    if (prefsNotificaciones.sonido) reproducirSonidoNotificacion();
-    if (prefsNotificaciones.vibracion && navigator.vibrate) navigator.vibrate([200, 100, 200]);
-    
-    // 4. Actualizar UI (Badge y Lista)
-    actualizarBadgeChats();
-}
-
-// 🔔 FUNCIÓN CORREGIDA: Actualizar título y badge visual
-function actualizarBadgeChats() {
-    var total = 0;
-    Object.keys(mensajesNoLeidos).forEach(function(k) { total += mensajesNoLeidos[k]; });
-    
-    // Actualizar título de la pestaña
-    document.title = total > 0 ? '(' + total + ') Kerix Chat' : 'Kerix Chat';
-    
-    // Actualizar badge en la pestaña "Chats"
-    var badge = document.getElementById('badgeChats');
-    if (badge) {
-        if (total > 0) {
-            badge.style.display = 'inline';
-            badge.innerText = total;
-        } else {
-            badge.style.display = 'none';
-        }
-    }
+  var nombre = obtenerNombreContacto(pinRemitente);
+  var titulo = 'Mensaje de ' + nombre;
+  var cuerpo = '';
+  if (tipoMensaje === 'imagen') cuerpo = '️ Imagen adjunta';
+  else if (tipoMensaje === 'video') cuerpo = '🎥 Video adjunto';
+  else if (tipoMensaje === 'documento') cuerpo = '📎 Archivo adjunto';
+  else cuerpo = prefsNotificaciones.mostrarContenido ? (texto.substring(0, 50) || 'Mensaje') : 'Nuevo mensaje';
+  mostrarNotificacionNativa(titulo, cuerpo, pinRemitente, tipoMensaje);
+  mostrarNotificacionVisual(titulo, cuerpo, pinRemitente);
+  reproducirSonidoNotificacion();
+  vibrarDispositivo();
+  actualizarBadgeChats();
 }
 
 async function guardarConfigNotificaciones() {
@@ -1954,7 +1769,7 @@ async function probarNotificacion() {
   if (Notification.permission === 'granted') {
     new Notification('Kerix Chat - Prueba', { body: 'Las notificaciones nativas se están ejecutando. ✅' });
     await customAlert('✅ Notificación de prueba disparada.', '✅');
-  } else { await customAlert('❌ No hay permisos aprobados para notificaciones aún.', ''); }
+  } else { await customAlert('❌ No hay permisos aprobados para notificaciones aún.', '❌'); }
 }
 
 // ============================================
@@ -2016,17 +1831,15 @@ async function inicializarTodo() {
     await cargarModoPrivado();
     await cargarPreferencias();
     cargarPrefsNotificaciones();
-    await suscribirseALlamadas();
-    await limpiarLlamadasAntiguas(); // Limpiar llamadas de más de 24h
     return true;
   } catch (error) { logError('Error:', error); return false; }
 }
 async function testearStorage() {
   try {
     var { data: buckets, error: bucketsError } = await clienteSupabase.storage.listBuckets();
-    if (bucketsError) { logError(' Error listando buckets:', bucketsError); return; }
+    if (bucketsError) { logError('❌ Error listando buckets:', bucketsError); return; }
     var chatFilesBucket = buckets.find(function(b) { return b.name === 'chat-files'; });
-    if (!chatFilesBucket) { await customAlert('❌ El bucket "chat-files" no existe en la instancia de Supabase.', '❌'); return; }
+    if (!chatFilesBucket) { await customAlert('❌ El bucket "chat-files" no existe en la instancia de Supabase.', ''); return; }
     var testBlob = new Blob(['test'], { type: 'text/plain' });
     var testFileName = 'test_' + miPIN + '_' + Date.now() + '.txt';
     var { data: uploadData, error: uploadError } = await clienteSupabase.storage.from('chat-files').upload(testFileName, testBlob);
@@ -2050,710 +1863,7 @@ window.addEventListener('DOMContentLoaded', async function() {
     await customAlert('⚠️ Error durante la inicialización de módulos: ' + error.message);
   }
 });
-// ============================================
-//  FUNCIONES WEBRTC - LLAMADAS Y VIDEO
-// ============================================
-
-// Formatear segundos a MM:SS
-function formatearTiempo(segundos) {
-  var m = Math.floor(segundos / 60).toString().padStart(2, '0');
-  var s = (segundos % 60).toString().padStart(2, '0');
-  return m + ':' + s;
-}
-
-// Iniciar timer de llamada
-function iniciarTimerLlamada() {
-  segundosLlamada = 0;
-  document.getElementById('llamadaTimer').innerText = '00:00';
-  timerLlamada = setInterval(function() {
-    segundosLlamada++;
-    document.getElementById('llamadaTimer').innerText = formatearTiempo(segundosLlamada);
-  }, 1000);
-}
-
-// Detener timer
-function detenerTimerLlamada() {
-  if (timerLlamada) {
-    clearInterval(timerLlamada);
-    timerLlamada = null;
-  }
-}
-
-// Obtener permisos de media (micrófono y/o cámara)
-async function obtenerStreamMedia(esVideo) {
-  try {
-    var constraints = {
-      audio: {
-        echoCancellation: true,
-        noiseSuppression: true,
-        autoGainControl: true
-      },
-      video: esVideo ? {
-        facingMode: 'user',
-        width: { ideal: 1280 },
-        height: { ideal: 720 }
-      } : false
-    };
-    
-    var stream = await navigator.mediaDevices.getUserMedia(constraints);
-    return stream;
-  } catch (error) {
-    logError('Error obteniendo media:', error);
-    if (error.name === 'NotAllowedError') {
-      await customAlert('❌ Permisos de ' + (esVideo ? 'cámara y micrófono' : 'micrófono') + ' denegados.\nDebes autorizarlos en la configuración del navegador.', '❌');
-    } else if (error.name === 'NotFoundError') {
-      await customAlert('❌ No se encontró ' + (esVideo ? 'cámara' : 'micrófono') + ' en este dispositivo.', '❌');
-    } else {
-      await customAlert('❌ Error al acceder al dispositivo: ' + error.message, '');
-    }
-    return null;
-  }
-}
-
-async function iniciarLlamada(tipo) {
-  // Verificar soporte WebRTC
-  var soporte = verificarSoporteWebRTC();
-  if (!soporte.soportado) {
-    await customAlert('❌ No se puede iniciar la llamada.\n\n' + soporte.error + '\n\nNecesitas Chrome, Firefox o Edge actualizado.', '');
-    return;
-  }
-
-  if (!contactoActual) {
-    await customAlert('❌ Debes estar en un chat para iniciar una llamada.', '❌');
-    return;
-  }
-  
-  // Verificar si ya hay una llamada activa
-  if (llamadaActiva) {
-    await customAlert('️ Ya tienes una llamada activa. Cuélgala primero.', '⚠️');
-    return;
-  }
-  
-  tipoLlamadaActual = tipo;
-  pinLlamadaActual = contactoActual;
-  esIniciador = true;
-  
-  // Mostrar confirmación
-  var tipoTexto = tipo === 'video' ? 'videollamada' : 'llamada de voz';
-  var confirmado = await customConfirm(
-    '📞 ¿Iniciar ' + tipoTexto + ' con ' + obtenerNombreContacto(contactoActual) + '?\n\nSe solicitarán permisos de ' + (tipo === 'video' ? 'cámara y micrófono' : 'micrófono') + '.',
-    tipo === 'video' ? '' : '📞'
-  );
-  
-  if (!confirmado) return;
-  
-  // Obtener stream local
-  await customAlert(' Solicitando permisos de dispositivos...', '');
-  streamLocal = await obtenerStreamMedia(tipo === 'video');
-  if (!streamLocal) return;
-  
-  // Mostrar pantalla de llamada
-  mostrarPantallaLlamada(pinLlamadaActual, 'Llamando...', tipo);
-    // Reproducir tono de marcación
-  reproducirSonidoLlamadaSaliente();
-  // Crear conexión WebRTC
-  peerConnection = new RTCPeerConnection(rtcConfig);
-  
-  // Agregar tracks locales
-  streamLocal.getTracks().forEach(function(track) {
-    peerConnection.addTrack(track, streamLocal);
-  });
-  
-  // Manejar ICE candidates
-  peerConnection.onicecandidate = function(event) {
-    if (event.candidate) {
-      enviarICECandidate(event.candidate);
-    }
-  };
-  
-  // Manejar stream remoto
-  peerConnection.ontrack = function(event) {
-    log('📥 Track remoto recibido:', event.track.kind);
-    if (!streamRemoto) {
-      streamRemoto = new MediaStream();
-    }
-    streamRemoto.addTrack(event.track);
-    
-    // Mostrar video/audio remoto
-    if (tipo === 'video') {
-      document.getElementById('videoRemoto').srcObject = streamRemoto;
-      document.getElementById('videoContainer').style.display = 'block';
-      document.getElementById('audioContainer').style.display = 'none';
-      document.getElementById('btnCamara').style.display = 'flex';
-    } else {
-      document.getElementById('audioRemoto').srcObject = streamRemoto;
-    }
-    
-    actualizarEstadoLlamada('Conectado');
-     detenerSonidoLlamadaSaliente();
-    iniciarTimerLlamada();
-  };
-  
-  // Manejar estado de conexión
-  peerConnection.onconnectionstatechange = function() {
-    log('Estado conexión:', peerConnection.connectionState);
-    if (peerConnection.connectionState === 'disconnected' || 
-        peerConnection.connectionState === 'failed') {
-      actualizarEstadoLlamada('Desconectado');
-      setTimeout(colgarLlamada, 2000);
-    }
-  };
-  
-  // Crear oferta SDP
-  try {
-    var offer = await peerConnection.createOffer({
-      offerToReceiveAudio: true,
-      offerToReceiveVideo: tipo === 'video'
-    });
-    await peerConnection.setLocalDescription(offer);
-    
-    // Enviar oferta vía Supabase
-    await enviarOfertaLlamada(offer);
-    
-    // Suscribirse a respuestas
-    suscribirseALlamadas();
-    
-  } catch (error) {
-    logError('Error creando oferta:', error);
-    await customAlert('❌ Error al iniciar la llamada: ' + error.message, '❌');
-    colgarLlamada();
-  }
-}
-
-// Enviar oferta de llamada a Supabase
-async function enviarOfertaLlamada(offer) {
-  try {
-    var { error } = await clienteSupabase.from('llamadas').insert({
-      pin_remitente: miPIN,
-      pin_destinatario: pinLlamadaActual,
-      tipo: tipoLlamadaActual,
-      estado: 'llamando',
-      oferta: JSON.stringify(offer)
-    });
-    
-    if (error) throw error;
-    log('✅ Oferta enviada');
-  } catch (error) {
-    logError('Error enviando oferta:', error);
-    await customAlert('❌ Error al enviar la solicitud de llamada.', '❌');
-    colgarLlamada();
-  }
-}
-
-// Enviar ICE candidate
-async function enviarICECandidate(candidate) {
-  try {
-    await clienteSupabase.from('llamadas').update({
-      candidatos_ice: JSON.stringify(candidate)
-    }).eq('pin_remitente', pinLlamadaActual)
-      .eq('pin_destinatario', miPIN)
-      .eq('estado', 'conectando');
-  } catch (error) {
-    logError('Error enviando ICE:', error);
-  }
-}
-
-// 📞 RECIBIR LLAMADA (cuando llega una oferta)
-async function recibirLlamada(pinRemitente, oferta, tipo) {
-  // Si ya hay llamada activa, rechazar automáticamente
-  if (llamadaActiva) {
-    log('Llamada rechazada automáticamente (ya hay una activa)');
-    // Notificar al remitente que estamos ocupados
-    try {
-      await clienteSupabase.from('llamadas').update({
-        estado: 'rechazada',
-        fin: new Date().toISOString()
-      }).eq('pin_remitente', pinRemitente)
-        .eq('pin_destinatario', miPIN)
-        .eq('estado', 'llamando');
-    } catch (e) { logError('Error rechazando auto:', e); }
-    return;
-  }
-  
-  // Verificar soporte WebRTC
-  var soporte = verificarSoporteWebRTC();
-  if (!soporte.soportado) {
-    log('WebRTC no soportado, rechazando llamada');
-    return;
-  }
-  
-  tipoLlamadaActual = tipo || 'voz';
-  pinLlamadaActual = pinRemitente;
-  esIniciador = false;
-  
-  // Mostrar modal de llamada entrante
-  var tipoTexto = tipoLlamadaActual === 'video' ? 'Videollamada entrante' : 'Llamada de voz entrante';
-  document.getElementById('llamadaEntranteNombre').innerText = obtenerNombreContacto(pinRemitente);
-  document.getElementById('llamadaEntranteTipo').innerText = tipoTexto;
-  document.getElementById('llamadaEntranteAvatar').innerText = obtenerNombreContacto(pinRemitente).substring(0, 2).toUpperCase();
-  document.getElementById('modalLlamadaEntrante').classList.add('active');
-  
-  // Sonido de llamada entrante
-  // Sonido de llamada entrante
-  reproducirSonidoLlamadaEntrante();
-  
-  // Notificación nativa del sistema
-  if (Notification.permission === 'granted') {
-    var tipoTexto = tipoLlamadaActual === 'video' ? '📹 Videollamada' : '📞 Llamada de voz';
-    var notifLlamada = new Notification(tipoTexto + ' entrante', {
-      body: obtenerNombreContacto(pinRemitente) + ' te está llamando',
-      icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">📞</text></svg>',
-      tag: 'llamada-entrante-' + pinRemitente,
-      requireInteraction: true,
-      vibrate: [500, 200, 500, 200, 500]
-    });
-    
-    notifLlamada.onclick = function() {
-      window.focus();
-      aceptarLlamada();
-      notifLlamada.close();
-    };
-  }
-}
-
-// Reproducir sonido de llamada entrante
-function reproducirSonidoLlamadaEntrante() {
-  try {
-    var audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    var oscillator = audioCtx.createOscillator();
-    var gainNode = audioCtx.createGain();
-    oscillator.connect(gainNode);
-    gainNode.connect(audioCtx.destination);
-    
-    // Tono de llamada (dos tonos alternados)
-    oscillator.frequency.setValueAtTime(440, audioCtx.currentTime);
-    oscillator.frequency.setValueAtTime(480, audioCtx.currentTime + 0.5);
-    oscillator.frequency.setValueAtTime(440, audioCtx.currentTime + 1.0);
-    
-    gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime);
-    gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 1.5);
-    
-    oscillator.start(audioCtx.currentTime);
-    oscillator.stop(audioCtx.currentTime + 1.5);
-  } catch (error) {
-    logError('Error sonido llamada:', error);
-  }
-}
-
-// ✅ ACEPTAR LLAMADA
-async function aceptarLlamada() {
-  document.getElementById('modalLlamadaEntrante').classList.remove('active');
-  
-  // Cerrar notificación nativa si existe
-  if (Notification.permission === 'granted') {
-    // Cerrar todas las notificaciones de llamada
-    try {
-      var notifs = await self.registration.getNotifications({ tag: 'llamada-entrante-' + pinLlamadaActual });
-      notifs.forEach(function(n) { n.close(); });
-    } catch(e) {}
-  }
-  // Obtener stream local
-  streamLocal = await obtenerStreamMedia(tipoLlamadaActual === 'video');
-  if (!streamLocal) {
-    rechazarLlamada();
-    return;
-  }
-  
-  // Mostrar pantalla de llamada
-  mostrarPantallaLlamada(pinLlamadaActual, 'Conectando...', tipoLlamadaActual);
-  
-  // Crear conexión WebRTC
-  peerConnection = new RTCPeerConnection(rtcConfig);
-  
-  // Agregar tracks locales
-  streamLocal.getTracks().forEach(function(track) {
-    peerConnection.addTrack(track, streamLocal);
-  });
-  
-  // Manejar ICE candidates
-  peerConnection.onicecandidate = function(event) {
-    if (event.candidate) {
-      enviarICECandidate(event.candidate);
-    }
-  };
-  
-  // Manejar stream remoto
-  peerConnection.ontrack = function(event) {
-    log('📥 Track remoto recibido:', event.track.kind);
-    if (!streamRemoto) {
-      streamRemoto = new MediaStream();
-    }
-    streamRemoto.addTrack(event.track);
-    
-    if (tipoLlamadaActual === 'video') {
-      document.getElementById('videoRemoto').srcObject = streamRemoto;
-      document.getElementById('videoContainer').style.display = 'block';
-      document.getElementById('audioContainer').style.display = 'none';
-      document.getElementById('btnCamara').style.display = 'flex';
-    } else {
-      document.getElementById('audioRemoto').srcObject = streamRemoto;
-    }
-    
-    actualizarEstadoLlamada('Conectado');
-    detenerSonidoLlamadaSaliente();
-    iniciarTimerLlamada();
-  };
-  
-  // Manejar estado
-  peerConnection.onconnectionstatechange = function() {
-    if (peerConnection.connectionState === 'disconnected' || 
-        peerConnection.connectionState === 'failed') {
-      actualizarEstadoLlamada('Desconectado');
-      setTimeout(colgarLlamada, 2000);
-    }
-  };
-  
-  // Obtener oferta de la BD
-  try {
-    var { data } = await clienteSupabase.from('llamadas')
-      .select('oferta')
-      .eq('pin_remitente', pinLlamadaActual)
-      .eq('pin_destinatario', miPIN)
-      .eq('estado', 'llamando')
-      .order('inicio', { ascending: false })
-      .limit(1)
-      .single();
-    
-    if (!data || !data.oferta) {
-      await customAlert('❌ No se encontró la oferta de llamada.', '❌');
-      colgarLlamada();
-      return;
-    }
-    
-    var offer = JSON.parse(data.oferta);
-    await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
-    
-    // Crear respuesta
-    var answer = await peerConnection.createAnswer();
-    await peerConnection.setLocalDescription(answer);
-    
-    // Actualizar estado en BD
-    await clienteSupabase.from('llamadas').update({
-      respuesta: JSON.stringify(answer),
-      estado: 'conectando'
-    }).eq('pin_remitente', pinLlamadaActual)
-      .eq('pin_destinatario', miPIN)
-      .eq('estado', 'llamando');
-    
-    log('✅ Respuesta enviada');
-    
-    // Suscribirse a ICE candidates del remoto
-    suscribirseALlamadas();
-    
-  } catch (error) {
-    logError('Error aceptando llamada:', error);
-    await customAlert('❌ Error al aceptar la llamada.', '❌');
-    colgarLlamada();
-  }
-}
-
-// ❌ RECHAZAR LLAMADA
-async function rechazarLlamada() {
-  document.getElementById('modalLlamadaEntrante').classList.remove('active');
-  
-  // Cerrar notificación nativa
-  try {
-    var notifs = await self.registration.getNotifications({ tag: 'llamada-entrante-' + pinLlamadaActual });
-    notifs.forEach(function(n) { n.close(); });
-  } catch(e) {}
-  try {
-    await clienteSupabase.from('llamadas').update({
-      estado: 'rechazada',
-      fin: new Date().toISOString()
-    }).eq('pin_remitente', pinLlamadaActual)
-      .eq('pin_destinatario', miPIN)
-      .eq('estado', 'llamando');
-    
-    log('✅ Llamada rechazada');
-  } catch (error) {
-    logError('Error rechazando:', error);
-  }
-  
-  pinLlamadaActual = '';
-}
-
-// 📞 COLGAR LLAMADA
-async function colgarLlamada() {
-  detenerTimerLlamada();
-  
-  // Detener tracks locales
-  if (streamLocal) {
-    streamLocal.getTracks().forEach(function(track) {
-      track.stop();
-    });
-    streamLocal = null;
-  }
-  
-  // Detener tracks remotos
-  if (streamRemoto) {
-    streamRemoto.getTracks().forEach(function(track) {
-      track.stop();
-    });
-    streamRemoto = null;
-  }
-  
-  // Cerrar peer connection
-  if (peerConnection) {
-    peerConnection.close();
-    peerConnection = null;
-  }
-  
-  // Limpiar UI
-  document.getElementById('videoRemoto').srcObject = null;
-  document.getElementById('audioRemoto').srcObject = null;
-  document.getElementById('pantallaLlamada').style.display = 'none';
-  document.getElementById('modalLlamadaEntrante').classList.remove('active');
-  
-  // Actualizar BD
-  if (pinLlamadaActual) {
-    try {
-      await clienteSupabase.from('llamadas').update({
-        estado: 'finalizada',
-        fin: new Date().toISOString(),
-        duracion: segundosLlamada
-      }).eq('pin_remitente', esIniciador ? miPIN : pinLlamadaActual)
-        .eq('pin_destinatario', esIniciador ? pinLlamadaActual : miPIN)
-        .in('estado', ['llamando', 'conectando', 'activa']);
-    } catch (error) {
-      logError('Error finalizando llamada:', error);
-    }
-  }
-  
-llamadaActiva = false;
-  pinLlamadaActual = '';
-  segundosLlamada = 0;
-  
-  // Detener sonidos
-  detenerSonidoLlamadaSaliente();
-  
-  // Cerrar canal de llamadas
-  if (canalLlamada) {
-    clienteSupabase.removeChannel(canalLlamada);
-    canalLlamada = null;
-  }
-  
-  log('📞 Llamada finalizada');
-}
-
-// Mostrar pantalla de llamada
-function mostrarPantallaLlamada(pin, estado, tipo) {
-  llamadaActiva = true;
-  
-  var nombre = obtenerNombreContacto(pin);
-  document.getElementById('llamadaNombre').innerText = nombre;
-  document.getElementById('llamadaNombreGrande').innerText = nombre;
-  document.getElementById('llamadaEstado').innerText = estado;
-  document.getElementById('llamadaEstadoGrande').innerText = estado;
-  document.getElementById('llamadaAvatar').innerText = nombre.substring(0, 2).toUpperCase();
-  
-  // Configurar según tipo
-  if (tipo === 'video') {
-    document.getElementById('videoContainer').style.display = 'block';
-    document.getElementById('audioContainer').style.display = 'none';
-    document.getElementById('btnCamara').style.display = 'flex';
-    
-    // Mostrar video local
-    if (streamLocal) {
-      document.getElementById('videoLocal').srcObject = streamLocal;
-    }
-  } else {
-    document.getElementById('videoContainer').style.display = 'none';
-    document.getElementById('audioContainer').style.display = 'flex';
-    document.getElementById('btnCamara').style.display = 'none';
-  }
-  
-  document.getElementById('pantallaLlamada').style.display = 'flex';
-}
-
-// Actualizar estado en UI
-function actualizarEstadoLlamada(estado) {
-  document.getElementById('llamadaEstado').innerText = estado;
-  document.getElementById('llamadaEstadoGrande').innerText = estado;
-}
-
-// Suscribirse a cambios en llamadas (señalización)
-function suscribirseALlamadas() {
-  if (canalLlamada) {
-    clienteSupabase.removeChannel(canalLlamada);
-  }
-  
-  canalLlamada = clienteSupabase.channel('llamadas_' + miPIN)
-    .on('postgres_changes', 
-      { 
-        event: 'UPDATE', 
-        schema: 'public', 
-        table: 'llamadas', 
-        filter: 'pin_destinatario=eq.' + miPIN 
-      }, 
-      async function(payload) {
-        var nuevo = payload.new;
-        
-        // Si es respuesta a nuestra oferta
-        if (nuevo.respuesta && nuevo.estado === 'conectando' && esIniciador) {
-          try {
-            var answer = JSON.parse(nuevo.respuesta);
-            await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
-            actualizarEstadoLlamada('Conectando...');
-          } catch (error) {
-            logError('Error procesando respuesta:', error);
-          }
-        }
-        
-        // Si rechazaron
-        if (nuevo.estado === 'rechazada') {
-          await customAlert('📞 La llamada fue rechazada.', '📞');
-          colgarLlamada();
-        }
-      }
-    )
-    .on('postgres_changes',
-      {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'llamadas',
-        filter: 'pin_destinatario=eq.' + miPIN
-      },
-      async function(payload) {
-        var nuevo = payload.new;
-        
-        // Si es una llamada entrante y no estamos en llamada
-        if (nuevo.estado === 'llamando' && nuevo.oferta && !llamadaActiva) {
-          await recibirLlamada(nuevo.pin_remitente, nuevo.oferta, nuevo.tipo);
-        }
-      }
-    )
-    .subscribe();
-}
-
-// 🎤 TOGGLE SILENCIAR
-function toggleSilenciar() {
-  if (!streamLocal) return;
-  
-  var audioTrack = streamLocal.getAudioTracks()[0];
-  if (audioTrack) {
-    audioTrack.enabled = !audioTrack.enabled;
-    var btn = document.getElementById('btnSilenciar');
-    btn.innerText = audioTrack.enabled ? '' : '🔇';
-    btn.style.background = audioTrack.enabled ? '#2a3942' : '#ef4444';
-  }
-}
-
-// 📷 TOGGLE CÁMARA (solo video)
-function toggleCamara() {
-  if (!streamLocal) return;
-  
-  var videoTrack = streamLocal.getVideoTracks()[0];
-  if (videoTrack) {
-    videoTrack.enabled = !videoTrack.enabled;
-    var btn = document.getElementById('btnCamara');
-    btn.innerText = videoTrack.enabled ? '' : '🚫';
-    btn.style.background = videoTrack.enabled ? '#2a3942' : '#ef4444';
-  }
-}
-
-// 🔊 TOGGLE ALTAVOZ
-function toggleAltavoz() {
-  var audioRemoto = document.getElementById('audioRemoto');
-  var btn = document.getElementById('btnAltavoz');
-  
-  if (audioRemoto) {
-    // En móviles, setSinkId no está disponible, pero podemos cambiar el volumen
-    if (audioRemoto.volume === 1) {
-      audioRemoto.volume = 0.5;
-      btn.innerText = '🔉';
-    } else {
-      audioRemoto.volume = 1;
-      btn.innerText = '🔊';
-    }
-  }
-}
-
-// Llamar a suscribirseALlamadas al iniciar la app
-// Agrega esta línea al final de tu función inicializarTodo():
-// await suscribirseALlamadas();
-  
 </script>
-
-<!-- ============================================ -->
-<!-- PANTALLA DE LLAMADA WEBRTC -->
-<!-- ============================================ -->
-<div id="pantallaLlamada" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:#0b141a; z-index:2000; flex-direction:column;">
-  
-  <!-- Header de llamada -->
-  <div style="background:#1f2c34; padding:16px; display:flex; align-items:center; gap:12px; border-bottom:1px solid #2a3942;">
-    <button onclick="colgarLlamada()" style="background:none; border:none; color:#e9edef; font-size:20px; cursor:pointer;">←</button>
-    <div style="flex:1;">
-      <div id="llamadaNombre" style="font-weight:700; font-size:16px; color:#e9edef;">Contacto</div>
-      <div id="llamadaEstado" style="font-size:12px; color:#8696a0;">Llamando...</div>
-    </div>
-    <div id="llamadaTimer" style="font-size:14px; color:#00a884; font-family:monospace;">00:00</div>
-  </div>
-
-  <!-- Área de video (oculta en llamadas de voz) -->
-  <div id="videoContainer" style="flex:1; display:none; position:relative; background:#000;">
-    <!-- Video remoto (grande) -->
-    <video id="videoRemoto" autoplay playsinline style="width:100%; height:100%; object-fit:cover;"></video>
-    
-    <!-- Video local (pequeño, esquina) -->
-    <video id="videoLocal" autoplay playsinline muted style="position:absolute; bottom:20px; right:20px; width:120px; height:160px; object-fit:cover; border-radius:12px; border:2px solid #00a884; background:#1f2c34;"></video>
-  </div>
-
-  <!-- Área de audio (visible en llamadas de voz) -->
-  <div id="audioContainer" style="flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:20px;">
-    <div id="llamadaAvatar" style="width:120px; height:120px; border-radius:50%; background:linear-gradient(135deg, #00a884, #075e54); display:flex; align-items:center; justify-content:center; font-size:48px; font-weight:700; color:#fff; font-family:'Courier New', monospace;">?</div>
-    <div style="text-align:center;">
-      <div id="llamadaNombreGrande" style="font-size:24px; font-weight:700; color:#e9edef; margin-bottom:8px;">Contacto</div>
-      <div id="llamadaEstadoGrande" style="font-size:14px; color:#8696a0;">Llamando...</div>
-    </div>
-  </div>
-
-  <!-- Audio remoto (siempre presente) -->
-  <audio id="audioRemoto" autoplay playsinline></audio>
-
-  <!-- Controles de llamada -->
-  <div style="background:#1f2c34; padding:20px; display:flex; justify-content:center; gap:20px; border-top:1px solid #2a3942;">
-    
-    <!-- Botón silenciar -->
-    <button id="btnSilenciar" onclick="toggleSilenciar()" style="width:60px; height:60px; border-radius:50%; background:#2a3942; border:none; color:#e9edef; font-size:24px; cursor:pointer; display:flex; align-items:center; justify-content:center;">
-      🎤
-    </button>
-
-    <!-- Botón cámara (solo video) -->
-    <button id="btnCamara" onclick="toggleCamara()" style="width:60px; height:60px; border-radius:50%; background:#2a3942; border:none; color:#e9edef; font-size:24px; cursor:pointer; display:none; align-items:center; justify-content:center;">
-      📷
-    </button>
-
-    <!-- Botón altavoz -->
-    <button id="btnAltavoz" onclick="toggleAltavoz()" style="width:60px; height:60px; border-radius:50%; background:#2a3942; border:none; color:#e9edef; font-size:24px; cursor:pointer; display:flex; align-items:center; justify-content:center;">
-      🔊
-    </button>
-
-    <!-- Botón colgar -->
-    <button onclick="colgarLlamada()" style="width:70px; height:70px; border-radius:50%; background:#ef4444; border:none; color:#fff; font-size:28px; cursor:pointer; display:flex; align-items:center; justify-content:center;">
-      📞
-    </button>
-  </div>
-</div>
-
-<!-- Modal de llamada entrante -->
-<div id="modalLlamadaEntrante" class="modal-overlay">
-  <div class="modal" style="max-width:340px;">
-    <div class="modal-body" style="text-align:center; padding:30px;">
-      <div id="llamadaEntranteAvatar" style="width:80px; height:80px; border-radius:50%; background:linear-gradient(135deg, #00a884, #075e54); display:flex; align-items:center; justify-content:center; font-size:32px; font-weight:700; color:#fff; font-family:'Courier New', monospace; margin:0 auto 16px;">?</div>
-      <div id="llamadaEntranteNombre" style="font-size:20px; font-weight:700; color:#e9edef; margin-bottom:8px;">Contacto</div>
-      <div id="llamadaEntranteTipo" style="font-size:14px; color:#8696a0; margin-bottom:24px;">Llamada de voz entrante</div>
-      
-      <div style="display:flex; gap:16px; justify-content:center;">
-        <button onclick="rechazarLlamada()" style="width:70px; height:70px; border-radius:50%; background:#ef4444; border:none; color:#fff; font-size:28px; cursor:pointer;">
-          📞
-        </button>
-        <button onclick="aceptarLlamada()" style="width:70px; height:70px; border-radius:50%; background:#00a884; border:none; color:#fff; font-size:28px; cursor:pointer;">
-          📞
-        </button>
-      </div>
-    </div>
-  </div>
-</div>
-  
 </body>
 </html>
+  
