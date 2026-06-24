@@ -13,7 +13,7 @@
 // CONFIGURACIÓN DE SUPABASE
 // ============================================
 var SUPABASE_URL = 'https://dksmoteiidjpymextrgj.supabase.co';
-var SUPABASE_ANON_KEY = 'sb_publishable_HuXshjcD1Je934lVgBcJtw_5kFSuGzE';
+var SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRrc21vdGVpaWRqcHltZXh0cmdqIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MTExMTk0OSwiZXhwIjoyMDk2Njg3OTQ5fQ.ghrXblhUjq4tyHeSn0y9A8JHCQsKJ5qqmeueQCd1z1E';
 
 // ============================================
 // INICIALIZACIÓN DEL CLIENTE
