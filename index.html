@@ -295,6 +295,14 @@ Vence: <span id="fechaVencimiento" style="color: #e9edef;"></span>
 <div class="menu-header-pin" id="menuPin">...</div>
 <button style="background: rgba(255,255,255,0.2); border: none; color: #fff; padding: 6px 12px; border-radius: 6px; font-size: 12px; cursor: pointer; margin-top: 8px;" onclick="copiarPIN()">📋 Copiar</button>
 </div>
+ <div class="menu-item" onclick="crearIdentidadAlternativa(); cerrarMenu();">
+  <span class="menu-item-icon">🎭</span>
+  <span class="menu-item-text">Crear identidad alternativa</span>
+</div>
+<div class="menu-item" onclick="mostrarIdentidades(); cerrarMenu();">
+  <span class="menu-item-icon"></span>
+  <span class="menu-item-text">Ver identidades</span>
+</div> 
 <div class="menu-item" onclick="cambiarTab('ajustes'); cerrarMenu();">
 <span class="menu-item-icon">⚙️</span>
 <span class="menu-item-text">Ajustes generales</span>
@@ -468,6 +476,7 @@ Vence: <span id="fechaVencimiento" style="color: #e9edef;"></span>
 <button class="modal-btn modal-btn-secondary" onclick="eliminarContactoActual()">🗑️ Eliminar contacto</button>
 <button class="modal-btn modal-btn-secondary" onclick="bloquearContactoActual()">🚫 Bloquear PIN</button>
 <button class="modal-btn modal-btn-secondary" onclick="limpiarChatCompleto()" style="color: #ef4444;">⚠️ Limpiar todo el chat</button>
+<button class="modal-btn modal-btn-secondary" onclick="mostrarCodigoSeguridad(contactoActual)"> Ver código de seguridad</button>
 </div>
 </div>
 </div>
@@ -2368,6 +2377,306 @@ document.addEventListener('visibilitychange', function() {
 window.addEventListener('beforeunload', function() {
   if (llamadaActiva) colgarLlamada();
 });
+
+// ============================================
+// 🔐 CÓDIGO DE SEGURIDAD VERIFICABLE
+// ============================================
+async function generarFingerprintClave(clavePublica) {
+  try {
+    var exported = await crypto.subtle.exportKey("spki", clavePublica);
+    var hashBuffer = await crypto.subtle.digest('SHA-256', exported);
+    var hashArray = Array.from(new Uint8Array(hashBuffer));
+    var hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    // Formato legible: grupos de 4 caracteres
+    return hashHex.match(/.{1,4}/g).join(' ').toUpperCase();
+  } catch (error) {
+    logError('Error generando fingerprint:', error);
+    return null;
+  }
+}
+
+async function mostrarCodigoSeguridad(pinContacto) {
+  try {
+    var clavePub = await obtenerClavePublica(pinContacto);
+    if (!clavePub) {
+      await customAlert('❌ No se pudo obtener la clave pública del contacto.', '❌');
+      return;
+    }
+    
+    var fingerprint = await generarFingerprintClave(clavePub);
+    var miFingerprint = await generarFingerprintClave(miClavePublica);
+    
+    var mensaje = '🔐 CÓDIGOS DE SEGURIDAD\n\n' +
+      'Tu código:\n' + miFingerprint + '\n\n' +
+      'Código de ' + obtenerNombreContacto(pinContacto) + ':\n' + fingerprint + '\n\n' +
+      '⚠️ Verifica estos códigos con tu contacto por un canal seguro (teléfono, en persona).\n\n' +
+      'Si NO coinciden, alguien puede estar interceptando la comunicación.';
+    
+    await customAlert(mensaje, '🔐');
+  } catch (error) {
+    logError('Error mostrando código:', error);
+  }
+}  
+
+// ============================================
+// 🚨 BOTÓN DE PÁNICO
+// ============================================
+var panicGestureCount = 0;
+var panicGestureTimer = null;
+
+function activarPanicButton() {
+  // Se activa con 5 toques rápidos en el logo/título
+  panicGestureCount++;
+  
+  if (panicGestureTimer) clearTimeout(panicGestureTimer);
+  panicGestureTimer = setTimeout(function() {
+    panicGestureCount = 0;
+  }, 2000); // 2 segundos para completar los toques
+  
+  if (panicGestureCount >= 5) {
+    ejecutarBorradoPanico();
+  }
+}
+
+async function ejecutarBorradoPanico() {
+  var confirmado = await customConfirm(
+    '🚨 BORRADO DE EMERGENCIA\n\n' +
+    '• Se eliminarán TODOS los datos locales\n' +
+    '• Se cerrarán todas las sesiones\n' +
+    '• Se eliminarán los mensajes del servidor\n' +
+    '• Esta acción es IRREVERSIBLE\n\n' +
+    '¿Ejecutar borrado de pánico?',
+    '🚨'
+  );
+  
+  if (!confirmado) {
+    panicGestureCount = 0;
+    return;
+  }
+  
+  try {
+    // 1. Borrar mensajes del servidor
+    await clienteSupabase.from('mensajes').delete()
+      .or('pin_remitente.eq.' + miPIN + ',pin_destinatario.eq.' + miPIN);
+    
+    // 2. Borrar datos locales
+    localStorage.clear();
+    sessionStorage.clear();
+    
+    // 3. Recargar (app como nueva)
+    window.location.reload();
+  } catch (error) {
+    logError('Error en borrado de pánico:', error);
+    // Aún así borrar local
+    localStorage.clear();
+    sessionStorage.clear();
+    window.location.reload();
+  }
+}
+
+// Agregar listener en el título/logo
+document.addEventListener('DOMContentLoaded', function() {
+  var headerTitulo = document.querySelector('.header-titulo');
+  if (headerTitulo) {
+    headerTitulo.style.cursor = 'pointer';
+    headerTitulo.addEventListener('click', activarPanicButton);
+  }
+});
+
+// ============================================
+//  DEAD MAN'S SWITCH
+// ============================================
+var DEAD_MAN_SWITCH_DAYS = 30; // Días sin actividad para autodestrucción
+var ultimoAccesoKey = 'ultimo_acceso_' + miPIN;
+
+function actualizarUltimoAcceso() {
+  localStorage.setItem(ultimoAccesoKey, Date.now().toString());
+}
+
+async function verificarDeadMansSwitch() {
+  var ultimoAcceso = localStorage.getItem(ultimoAccesoKey);
+  if (!ultimoAcceso) {
+    actualizarUltimoAcceso();
+    return;
+  }
+  
+  var diasSinAcceso = (Date.now() - parseInt(ultimoAcceso)) / (1000 * 60 * 60 * 24);
+  
+  if (diasSinAcceso > DEAD_MAN_SWITCH_DAYS) {
+    var advertencia = await customConfirm(
+      ' ALERTA DE INACTIVIDAD\n\n' +
+      'Han pasado ' + Math.floor(diasSinAcceso) + ' días sin actividad.\n\n' +
+      '¿Eres tú? Si no confirmas en 60 segundos, se ejecutará el borrado de emergencia.',
+      ''
+    );
+    
+    if (!advertencia) {
+      await ejecutarBorradoPanico();
+    } else {
+      actualizarUltimoAcceso();
+    }
+  }
+}
+
+// Llamar al iniciar la app
+window.addEventListener('DOMContentLoaded', function() {
+  verificarDeadMansSwitch();
+  actualizarUltimoAcceso();
+});
+
+// Actualizar en cada interacción
+document.addEventListener('click', actualizarUltimoAcceso);
+document.addEventListener('keydown', actualizarUltimoAcceso);  
+
+// ============================================
+// 🎭 MÚLTIPLES IDENTIDADES
+// ============================================
+function getIdentidades() {
+  var ids = localStorage.getItem('identidades_' + miPIN);
+  return ids ? JSON.parse(ids) : [];
+}
+
+function guardarIdentidades(ids) {
+  localStorage.setItem('identidades_' + miPIN, JSON.stringify(ids));
+}
+
+async function crearIdentidadAlternativa() {
+  var nombre = await customPrompt('🎭 Nueva identidad', 'Nombre de la identidad (ej: "Trabajo", "Personal"):', '');
+  if (!nombre) return;
+  
+  var pinAlternativo = await customPrompt(' PIN de la identidad', 'PIN de 8 caracteres para esta identidad:', '', 'text');
+  if (!pinAlternativo || pinAlternativo.length !== 8) {
+    await customAlert('❌ El PIN debe tener exactamente 8 caracteres.', '❌');
+    return;
+  }
+  
+  var identidades = getIdentidades();
+  if (identidades.find(i => i.pin === pinAlternativo)) {
+    await customAlert('❌ Ya existe una identidad con ese PIN.', '❌');
+    return;
+  }
+  
+  identidades.push({
+    nombre: nombre,
+    pin: pinAlternativo.toUpperCase(),
+    creado: Date.now()
+  });
+  
+  guardarIdentidades(identidades);
+  await customAlert('✅ Identidad "' + nombre + '" creada.', '✅');
+}
+
+async function cambiarIdentidad(pinIdentidad) {
+  var confirmado = await customConfirm(
+    '🎭 Cambiar a identidad: ' + pinIdentidad + '\n\n' +
+    'Se cerrará la sesión actual y se abrirá la nueva identidad.',
+    '🎭'
+  );
+  
+  if (!confirmado) return;
+  
+  // Guardar estado actual
+  sessionStorage.setItem('identidad_anterior', miPIN);
+  
+  // Cambiar PIN
+  miPIN = pinIdentidad;
+  localStorage.setItem('chat_pin', miPIN);
+  
+  // Recargar app
+  window.location.reload();
+}
+
+function mostrarIdentidades() {
+  var identidades = getIdentidades();
+  if (identidades.length === 0) {
+    customAlert('No tienes identidades alternativas. Crea una desde el menú.', '🎭');
+    return;
+  }
+  
+  var lista = identidades.map(function(id, idx) {
+    return (idx + 1) + '. ' + id.nombre + ' (' + id.pin + ')';
+  }).join('\n');
+  
+  customAlert('🎭 TUS IDENTIDADES:\n\n' + lista + '\n\nActual: ' + miPIN, '🎭');
+}
+
+// ============================================
+// 🎭 MODO APARIENCIA NORMAL
+// ============================================
+var modoAparienciaNormal = false;
+
+function activarModoAparienciaNormal() {
+  modoAparienciaNormal = !modoAparienciaNormal;
+  
+  if (modoAparienciaNormal) {
+    // Cambiar título y apariencia
+    document.title = 'Notas - Bloc de notas';
+    document.querySelector('.header-titulo').innerText = '📝 Notas';
+    document.querySelector('.app-container').style.background = '#f5f5f5';
+    document.body.style.background = '#f5f5f5';
+    
+    // Ocultar elementos sensibles
+    document.querySelectorAll('.chat-item, .mensaje, .fab').forEach(function(el) {
+      el.style.display = 'none';
+    });
+    
+    // Mostrar contenido falso
+    var contenidoFalso = document.createElement('div');
+    contenidoFalso.id = 'contenidoFalso';
+    contenidoFalso.style.cssText = 'padding: 20px; color: #333;';
+    contenidoFalso.innerHTML = '<h2>Mis Notas</h2><p>Lista de compras:\n- Pan\n- Leche\n- Huevos</p>';
+    document.getElementById('contenidoChats').appendChild(contenidoFalso);
+    
+    localStorage.setItem('modo_apariencia_' + miPIN, 'true');
+  } else {
+    // Restaurar apariencia normal
+    document.title = 'Kerix Chat';
+    document.querySelector('.header-titulo').innerText = 'Kerix Chat';
+    document.querySelector('.app-container').style.background = '#0b141a';
+    document.body.style.background = '#0b141a';
+    
+    document.querySelectorAll('.chat-item, .mensaje, .fab').forEach(function(el) {
+      el.style.display = '';
+    });
+    
+    var falso = document.getElementById('contenidoFalso');
+    if (falso) falso.remove();
+    
+    localStorage.setItem('modo_apariencia_' + miPIN, 'false');
+  }
+}
+
+// Activar con gesto secreto (doble toque largo en el logo)
+var toqueLargoTimer = null;
+var toquesLargosCount = 0;
+
+document.addEventListener('DOMContentLoaded', function() {
+  var headerTitulo = document.querySelector('.header-titulo');
+  if (headerTitulo) {
+    headerTitulo.addEventListener('mousedown', function() {
+      toqueLargoTimer = setTimeout(function() {
+        toquesLargosCount++;
+        if (toquesLargosCount >= 2) {
+          activarModoAparienciaNormal();
+          toquesLargosCount = 0;
+        }
+      }, 1000); // 1 segundo de toque largo
+    });
+    
+    headerTitulo.addEventListener('mouseup', function() {
+      clearTimeout(toqueLargoTimer);
+    });
+  }
+  
+  // Restaurar modo al cargar
+  var modoGuardado = localStorage.getItem('modo_apariencia_' + miPIN);
+  if (modoGuardado === 'true') {
+    modoAparienciaNormal = true;
+    // Aplicar cambios visuales sin mostrar alertas
+    document.title = 'Notas - Bloc de notas';
+  }
+});  
+  
 </script> 
 <!-- ============================================ -->
 <!-- PANTALLA DE LLAMADA WEBRTC -->
