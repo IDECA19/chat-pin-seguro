@@ -2,13 +2,12 @@
  * js/event-listeners.js
  * Asignación programática de todos los event listeners
  * Reemplaza los onclick inline para cumplir con CSP estricta
- * 
- * Depende de: app.js (todas las funciones globales)
- * Cargar ÚLTIMO, después de app.js
+ * * Depende de: app.js y security.js
+ * Cargar ÚLTIMO, después de todos los demás scripts.
  */
 
 document.addEventListener('DOMContentLoaded', function() {
-  console.log('🎯 Event listeners asignados correctamente');
+  console.log('🎯 Asignando Event Listeners de forma centralizada...');
 
   // ============================================
   // 🔒 PANTALLA DE BLOQUEO
@@ -28,7 +27,10 @@ document.addEventListener('DOMContentLoaded', function() {
   var pinAccesoInput = document.getElementById('pinAccesoInput');
   if (pinAccesoInput) {
     pinAccesoInput.addEventListener('keydown', function(e) {
-      if (e.key === 'Enter' && this.value) desbloquearApp();
+      if (e.key === 'Enter' && this.value) {
+        e.preventDefault();
+        desbloquearApp();
+      }
     });
   }
 
@@ -67,7 +69,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
   var btnAdjuntar = document.querySelector('.chat-btn-adjuntar');
   if (btnAdjuntar) btnAdjuntar.addEventListener('click', function() {
-    document.getElementById('archivoInput').click();
+    var fileInput = document.getElementById('archivoInput');
+    if (fileInput) fileInput.click();
   });
 
   var btnEnviar = document.querySelector('.chat-btn-enviar');
@@ -310,14 +313,13 @@ document.addEventListener('DOMContentLoaded', function() {
   // ⌨️ ATAJOS DE TECLADO GLOBALES
   // ============================================
   document.addEventListener('keydown', function(e) {
-    // Escape cierra modales
     if (e.key === 'Escape') {
       document.querySelectorAll('.modal-overlay.active').forEach(function(m) {
         m.classList.remove('active');
       });
-      cerrarMenu();
+      if (typeof cerrarMenu === 'function') cerrarMenu();
     }
   });
 
-  console.log('✅ Todos los event listeners asignados correctamente');
+  console.log('✅ Todos los event listeners asignados correctamente y limpios.');
 });
