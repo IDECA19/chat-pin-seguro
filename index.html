@@ -243,8 +243,14 @@
   <audio id="dialbackAudio" loop preload="auto" src="https://cdn.jsdelivr.net/gh/scottschiller/soundmanager2@master/demo/_mp3/click-high.mp3" class="hidden-media"></audio>
 
   <!-- Dependencia Oficial de Supabase v2 -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <!-- Supabase JS con Subresource Integrity (SRI) -->
+<script 
+  src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" 
+  integrity="sha384-JWEyvHh+lRf0sN/WWY+QTQwX+CyWqmNg4tkc8GQzAMEtR2wGNrCJlvnu1lHD1kDm" 
+  crossorigin="anonymous">
+</script>
   <!-- Archivos de Lógica desacoplados -->
+  <script src="js/security.js"></script>
   <script src="js/supabase-client.js"></script>
   <script src="js/webrtc.js"></script>
   <script src="js/app.js"></script>
