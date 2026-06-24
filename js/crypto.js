@@ -1,13 +1,12 @@
 /**
  * js/crypto.js
  * Sistema de cifrado E2EE: AES-256-GCM + RSA-OAEP
+ * 
+ * Depende de:
+ * - security.js (pinActualTemporal, cifrarClaveConPIN, descifrarClaveConPIN)
+ * - supabase-client.js (clienteSupabase)
+ * - app.js (miPIN, miClavePrivada, miClavePublica, logError)
  */
-
-// ============================================
-// VARIABLES GLOBALES DE CIFRADO
-// ============================================
-var miClavePrivada = null;
-var miClavePublica = null;
 
 // ============================================
 // FUNCIONES AUXILIARES
@@ -31,37 +30,7 @@ async function generarClaves() {
     var aGuardar = (pinAccesoHash && pinTemporal) ? await cifrarClaveConPIN(privBase64, pinTemporal) : ofuscarClave(privBase64);
     localStorage.setItem('clave_privada_' + miPIN, aGuardar);
     await subirClavePublica(pubBase64);
-  } catch (error) { logError('Error:', error); }
-}
-
-async function cargarClavePrivadaSegura(pin) {
-  var claveCifrada = localStorage.getItem('clave_privada_' + miPIN);
-  if (!claveCifrada) { await generarClaves(); return; }
-  var privBase64 = '';
-  if (claveCifrada.includes('.')) {
-    if (!pin) throw new Error('Se requiere PIN');
-    privBase64 = await descifrarClaveConPIN(claveCifrada, pin);
-  } else { privBase64 = desofuscarClave(claveCifrada); }
-  var privBuf = Uint8Array.from(atob(privBase64), c => c.charCodeAt(0));
-  miClavePrivada = await crypto.subtle.importKey("pkcs8", privBuf, { name: "RSA-OAEP", hash: "SHA-256" }, true, ["decrypt"]);
-  var { data } = await clienteSupabase.from('usuarios').select('clave_publica').eq('pin', miPIN).maybeSingle();
-  if (data && data.clave_publica) {
-    var pubBuf = Uint8Array.from(atob(data.clave_publica), c => c.charCodeAt(0));
-    miClavePublica = await crypto.subtle.importKey("spki", pubBuf, { name: "RSA-OAEP", hash: "SHA-256" }, true, ["encrypt"]);
-  } else {
-    try {
-      var jwk = await crypto.subtle.exportKey("jwk", miClavePrivada);
-      var { d, p, q, dp, dq, qi, ...publicJwk } = jwk;
-      publicJwk.key_ops = ["encrypt"];
-      miClavePublica = await crypto.subtle.importKey("jwk", publicJwk, { name: "RSA-OAEP", hash: "SHA-256" }, true, ["encrypt"]);
-      var pubExp = await crypto.subtle.exportKey("spki", miClavePublica);
-      var pubBase64 = btoa(String.fromCharCode.apply(null, new Uint8Array(pubExp)));
-      await subirClavePublica(pubBase64);
-    } catch (e) {
-      logError('No se pudo derivar clave pública. Regenerando...', e);
-      await generarClaves();
-    }
-  }
+  } catch (error) { logError('Error generating keys:', error); }
 }
 
 async function subirClavePublica(pubBase64) {
@@ -181,22 +150,28 @@ async function cargarYDescifrarAdjunto(msg) {
   try {
     var path = obtenerPathDesdeUrl(msg.archivo_url) || msg.archivo_url;
     if (!path) { container.innerHTML = '<span style="color: #ef4444; font-size: 11px;">⚠️ Error: Ruta corrupta</span>'; return; }
-    var { data: blob, error } = await clienteSupabase.storage.from('chat-files').download(path);
-    if (error) {
-      var { data: signedData, error: signedError } = await clienteSupabase.storage.from('chat-files').createSignedUrl(path, 300);
-      if (signedError || !signedData) throw new Error('Descarga bloqueada');
-      var resp = await fetch(signedData.signedUrl);
-      blob = await resp.blob();
+    var objectUrl = '';
+    if (cacheArchivosDescifrados[msg.archivo_url]) {
+      objectUrl = cacheArchivosDescifrados[msg.archivo_url];
+    } else {
+      var { data: blob, error } = await clienteSupabase.storage.from('chat-files').download(path);
+      if (error) {
+        var { data: signedData, error: signedError } = await clienteSupabase.storage.from('chat-files').createSignedUrl(path, 300);
+        if (signedError || !signedData) throw new Error('Descarga bloqueada');
+        var resp = await fetch(signedData.signedUrl);
+        blob = await resp.blob();
+      }
+      if (!blob) throw new Error('Archivo vacío');
+      var decryptedBlob;
+      if (msg.archivo_cifrado) {
+        var arrayBuffer = await blob.arrayBuffer();
+        var decryptedBuffer = await descifrarArchivo(arrayBuffer, msg.archivo_iv, msg.archivo_clave, msg.archivo_clave_destinatario);
+        var tipoMime = msg.tipoOriginal || (msg.tipo_mensaje === 'imagen' ? 'image/*' : msg.tipo_mensaje === 'video' ? 'video/*' : 'application/octet-stream');
+        decryptedBlob = new Blob([decryptedBuffer], { type: tipoMime });
+      } else { decryptedBlob = blob; }
+      objectUrl = URL.createObjectURL(decryptedBlob);
+      cacheArchivosDescifrados[msg.archivo_url] = objectUrl;
     }
-    if (!blob) throw new Error('Archivo vacío');
-    var decryptedBlob;
-    if (msg.archivo_cifrado) {
-      var arrayBuffer = await blob.arrayBuffer();
-      var decryptedBuffer = await descifrarArchivo(arrayBuffer, msg.archivo_iv, msg.archivo_clave, msg.archivo_clave_destinatario);
-      var tipoMime = msg.tipoOriginal || (msg.tipo_mensaje === 'imagen' ? 'image/*' : msg.tipo_mensaje === 'video' ? 'video/*' : 'application/octet-stream');
-      decryptedBlob = new Blob([decryptedBuffer], { type: tipoMime });
-    } else { decryptedBlob = blob; }
-    var objectUrl = URL.createObjectURL(decryptedBlob);
     container.setAttribute('data-loaded', 'true');
     if (msg.tipo_mensaje === 'imagen') container.innerHTML = '<img src="' + objectUrl + '" style="max-width: 100%; border-radius: 8px;" onclick="window.open(\'' + objectUrl + '\')">';
     else if (msg.tipo_mensaje === 'video') container.innerHTML = '<video controls style="max-width: 100%; border-radius: 8px;"><source src="' + objectUrl + '"></video>';
@@ -216,6 +191,11 @@ async function cargarYDescifrarAdjunto(msg) {
 async function exportarClave() {
   var password = await customPrompt('🔒 Exportar Llave', 'Contraseña para cifrar el respaldo (mín 4 caracteres):', '', 'password');
   if (!password || password.length < 4) { await customAlert('Mínimo 4 caracteres.'); return; }
+  var codigo2FA = '';
+  if (prefs.dosfa_backup) {
+    codigo2FA = Math.floor(100000 + Math.random() * 900000).toString();
+    await customAlert('🔑 Tu código 2FA:\n' + codigo2FA + '\nGuárdalo.', '🔑');
+  }
   try {
     var privBase64 = '';
     var claveGuardada = localStorage.getItem('clave_privada_' + miPIN);
@@ -228,10 +208,10 @@ async function exportarClave() {
     var salt = crypto.getRandomValues(new Uint8Array(16));
     var key = await crypto.subtle.deriveKey({ name: 'PBKDF2', salt: salt, iterations: 100000, hash: 'SHA-256' }, keyMaterial, { name: 'AES-GCM', length: 256 }, false, ['encrypt']);
     var iv = crypto.getRandomValues(new Uint8Array(12));
-    var cifrado = await crypto.subtle.encrypt({ name: 'AES-GCM', iv: iv }, key, encoder.encode(privBase64));
+    var cifrado = await crypto.subtle.encrypt({ name: 'AES-GCM', iv: iv }, key, encoder.encode(privBase64 + '|' + codigo2FA));
     var backup = btoa(String.fromCharCode.apply(null, salt)) + '.' + btoa(String.fromCharCode.apply(null, iv)) + '.' + btoa(String.fromCharCode.apply(null, new Uint8Array(cifrado)));
     await navigator.clipboard.writeText(backup);
-    await customAlert('✅ Respaldo copiado al portapapeles.', '✅');
+    await customAlert('✅ Respaldo copiado.' + (prefs.dosfa_backup ? '\n2FA: ' + codigo2FA : ''), '✅');
     cerrarModalBackup();
   } catch (error) { await customAlert('Error: ' + error.message); }
 }
@@ -250,6 +230,13 @@ async function importarClave() {
     var keyMaterial = await crypto.subtle.importKey('raw', encoder.encode(password), 'PBKDF2', false, ['deriveKey']);
     var key = await crypto.subtle.deriveKey({ name: 'PBKDF2', salt: salt, iterations: 100000, hash: 'SHA-256' }, keyMaterial, { name: 'AES-GCM', length: 256 }, false, ['decrypt']);
     var descifrado = new TextDecoder().decode(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: iv }, key, cifrado));
+    if (prefs.dosfa_backup) {
+      var partesD = descifrado.split('|');
+      if (partesD.length !== 2) throw new Error('Formato sin 2FA');
+      var codigo = await customPrompt('🔐 2FA', 'Ingresa el código 2FA:');
+      if (codigo !== partesD[1]) { await customAlert('❌ 2FA incorrecto.', '❌'); return; }
+      descifrado = partesD[0];
+    }
     var aGuardar = pinAccesoHash && pinActualTemporal ? await cifrarClaveConPIN(descifrado, pinActualTemporal) : ofuscarClave(descifrado);
     localStorage.setItem('clave_privada_' + miPIN, aGuardar);
     await customAlert('✅ Clave importada.', '✅');
@@ -328,3 +315,5 @@ async function desactivarForwardSecrecy() {
   await customAlert('✅ Desactivado.', '✅');
   actualizarStatusPreferencias();
 }
+
+console.log('🔐 Módulo crypto.js cargado correctamente');
