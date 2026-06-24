@@ -316,4 +316,9 @@ function validarArchivo(archivo, maxBytes) {
   return { valido: true };
 }
 
-console.log('🛡️ Módulo security.js cargado correctamente sin duplicación de DOM');
+// Exponer funciones de seguridad al objeto global window
+window.desbloquearApp = desbloquearApp;
+window.configurarPIN = configurarPIN;
+window.recuperarAcceso = recuperarAcceso;
+window.resetEmergencia = resetEmergencia;
+window.cambiarPIN = cambiarPIN;
