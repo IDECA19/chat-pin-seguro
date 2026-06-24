@@ -77,7 +77,6 @@ async function descifrarClaveConCodigo(claveCifrada, codigo) {
 // GESTIÓN DE PIN DE ACCESO
 // ============================================
 async function verificarPINConfigurado() {
-  // Aseguramos que miPIN exista para evitar romper el localStorage
   var idUsuario = typeof miPIN !== 'undefined' ? miPIN : 'default';
   pinAccesoHash = localStorage.getItem('pin_hash_' + idUsuario);
   codigoRecuperacionHash = localStorage.getItem('codigo_recuperacion_hash_' + idUsuario);
@@ -235,9 +234,6 @@ async function cambiarPIN() {
   await customAlert('✅ PIN modificado.', '✅');
 }
 
-// ============================================
-// CARGAR CLAVE PRIVADA CON RECUPERACIÓN DE PÚBLICA
-// ============================================
 async function cargarClavePrivadaSegura(pin) {
   var idUsuario = typeof miPIN !== 'undefined' ? miPIN : 'default';
   var claveCifrada = localStorage.getItem('clave_privada_' + idUsuario);
@@ -271,9 +267,6 @@ async function cargarClavePrivadaSegura(pin) {
   }
 }
 
-// ============================================
-// RATE LIMITING
-// ============================================
 function verificarRateLimit(clave, maxPeticiones, ventanaMs) {
   var ahora = Date.now();
   if (!rateLimiters[clave]) rateLimiters[clave] = { peticiones: [] };
@@ -288,9 +281,6 @@ function puedeEnviarMensaje() { return verificarRateLimit('mensajes', 10, 60000)
 function puedeBuscar() { return verificarRateLimit('busquedas', 30, 60000); }
 function puedeLlamar() { return verificarRateLimit('llamadas', 5, 60000); }
 
-// ============================================
-// VALIDACIÓN
-// ============================================
 function validarPIN(pin) {
   if (!pin || typeof pin !== 'string') return { valido: false, error: 'PIN requerido' };
   pin = pin.trim().toUpperCase();
@@ -316,9 +306,27 @@ function validarArchivo(archivo, maxBytes) {
   return { valido: true };
 }
 
-// Exponer funciones de seguridad al objeto global window
-window.desbloquearApp = desbloquearApp;
+// ============================================
+// 🌍 EXPOSICIÓN GLOBAL EXPLICITA
+// ============================================
+window.hashPIN = hashPIN;
+window.generarCodigoRecuperacion = generarCodigoRecuperacion;
+window.hashCodigo = hashCodigo;
+window.cifrarClaveConPIN = cifrarClaveConPIN;
+window.descifrarClaveConPIN = descifrarClaveConPIN;
+window.descifrarClaveConCodigo = descifrarClaveConCodigo;
+window.verificarPINConfigurado = verificarPINConfigurado;
 window.configurarPIN = configurarPIN;
 window.recuperarAcceso = recuperarAcceso;
 window.resetEmergencia = resetEmergencia;
+window.desbloquearApp = desbloquearApp;
 window.cambiarPIN = cambiarPIN;
+window.cargarClavePrivadaSegura = cargarClavePrivadaSegura;
+window.puedeEnviarMensaje = puedeEnviarMensaje;
+window.puedeBuscar = puedeBuscar;
+window.puedeLlamar = puedeLlamar;
+window.validarPIN = validarPIN;
+window.validarMensaje = validarMensaje;
+window.validarArchivo = validarArchivo;
+
+console.log('🛡️ Módulo security.js cargado y expuesto correctamente.');
