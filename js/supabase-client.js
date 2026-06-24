@@ -152,3 +152,30 @@ const SupabaseService = {
     });
   }
 };
+
+// DESPUÉS (con retry logic)
+async function obtenerClavePublica(pin) {
+    try {
+        var { data } = await ejecutarConReintentos(async function() {
+            var resultado = await clienteSupabase.from('usuarios')
+                .select('clave_publica')
+                .eq('pin', pin)
+                .single();
+            if (resultado.error) throw resultado.error;
+            return resultado;
+        }, {
+            maxRetries: 2,
+            baseDelay: 500,
+            onRetry: function(intento, max, delay, error) {
+                console.warn('⚠️ Reintentando obtener clave pública (intento ' + intento + '/' + max + ')');
+            }
+        });
+        
+        if (!data || !data.clave_publica) return null;
+        var buf = Uint8Array.from(atob(data.clave_publica), c => c.charCodeAt(0));
+        return await crypto.subtle.importKey("spki", buf, { name: "RSA-OAEP", hash: "SHA-256" }, true, ["encrypt"]);
+    } catch (error) {
+        console.error('❌ Error obteniendo clave pública tras reintentos:', error);
+        return null;
+    }
+}
