@@ -308,5 +308,43 @@ document.addEventListener('keydown', function(e) {
     if (inputPIN.value) desbloquearApp();
   }
 });
+// ============================================
+//  EVENT LISTENERS PARA PANTALLA DE BLOQUEO
+// ============================================
+document.addEventListener('DOMContentLoaded', function() {
+  // Botón Desbloquear
+  var btnDesbloquear = document.getElementById('btnDesbloquear');
+  if (btnDesbloquear) {
+    btnDesbloquear.addEventListener('click', desbloquearApp);
+  }
+  
+  // Botón Configurar PIN
+  var btnConfigPIN = document.getElementById('btnConfigPIN');
+  if (btnConfigPIN) {
+    btnConfigPIN.addEventListener('click', configurarPIN);
+  }
+  
+  // Botón Recuperar Acceso
+  var btnRecuperar = document.getElementById('btnRecuperar');
+  if (btnRecuperar) {
+    btnRecuperar.addEventListener('click', recuperarAcceso);
+  }
+  
+  // Botón Reset de Emergencia
+  var btnReset = document.getElementById('btnReset');
+  if (btnReset) {
+    btnReset.addEventListener('click', resetEmergencia);
+  }
+  
+  // Enter en input de PIN
+  var pinInput = document.getElementById('pinAccesoInput');
+  if (pinInput) {
+    pinInput.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' && this.value) {
+        desbloquearApp();
+      }
+    });
+  }
+});
 
 console.log('🛡️ Módulo security.js cargado correctamente');
