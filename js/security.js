@@ -1,8 +1,7 @@
 /**
  * js/security.js
  * Módulo de seguridad: PIN, bloqueo, rate limiting, validación
- * 
- * Depende de: (ninguna dependencia interna, es módulo base)
+ * * Depende de: (ninguna dependencia interna, es módulo base)
  * Cargar antes de: crypto.js, supabase-client.js, app.js
  */
 
@@ -78,8 +77,11 @@ async function descifrarClaveConCodigo(claveCifrada, codigo) {
 // GESTIÓN DE PIN DE ACCESO
 // ============================================
 async function verificarPINConfigurado() {
-  pinAccesoHash = localStorage.getItem('pin_hash_' + miPIN);
-  codigoRecuperacionHash = localStorage.getItem('codigo_recuperacion_hash_' + miPIN);
+  // Aseguramos que miPIN exista para evitar romper el localStorage
+  var idUsuario = typeof miPIN !== 'undefined' ? miPIN : 'default';
+  pinAccesoHash = localStorage.getItem('pin_hash_' + idUsuario);
+  codigoRecuperacionHash = localStorage.getItem('codigo_recuperacion_hash_' + idUsuario);
+  
   var pantalla = document.getElementById('pantallaBloqueo');
   var btnConfig = document.getElementById('btnConfigPIN');
   var btnRecuperar = document.getElementById('btnRecuperar');
@@ -88,25 +90,30 @@ async function verificarPINConfigurado() {
   var inputPIN = document.getElementById('pinAccesoInput');
   
   if (!pinAccesoHash) {
-    pantalla.style.display = 'none';
-    document.getElementById('appPrincipal').style.display = 'block';
+    if (pantalla) pantalla.style.display = 'none';
+    var appPrincipal = document.getElementById('appPrincipal');
+    if (appPrincipal) appPrincipal.style.display = 'block';
     try { await cargarClavePrivadaSegura(null); } catch (e) { logError('Error:', e); }
-    await verificarEstado();
-    await cargarMensajesNoLeidos();
-    cambiarTab('chats');
+    if (typeof verificarEstado === 'function') await verificarEstado();
+    if (typeof cargarMensajesNoLeidos === 'function') await cargarMensajesNoLeidos();
+    if (typeof cambiarTab === 'function') cambiarTab('chats');
   } else {
-    pantalla.style.display = 'flex';
-    btnConfig.style.display = 'none';
-    btnRecuperar.style.display = 'block';
-    btnDesbloquear.style.display = 'block';
-    btnReset.style.display = 'block';
-    inputPIN.style.display = 'block';
-    inputPIN.focus();
-    document.getElementById('appPrincipal').style.display = 'none';
+    if (pantalla) pantalla.style.display = 'flex';
+    if (btnConfig) btnConfig.style.display = 'none';
+    if (btnRecuperar) btnRecuperar.style.display = 'block';
+    if (btnDesbloquear) btnDesbloquear.style.display = 'block';
+    if (btnReset) btnReset.style.display = 'block';
+    if (inputPIN) {
+      inputPIN.style.display = 'block';
+      inputPIN.focus();
+    }
+    var appPrincipal = document.getElementById('appPrincipal');
+    if (appPrincipal) appPrincipal.style.display = 'none';
   }
 }
 
 async function configurarPIN() {
+  var idUsuario = typeof miPIN !== 'undefined' ? miPIN : 'default';
   var pin1 = await customPrompt('🔐 Configurar PIN', 'Ingresa un PIN de acceso (4-6 dígitos):', '••••', 'password');
   if (!pin1 || pin1.length < 4 || pin1.length > 6 || !/^\d+$/.test(pin1)) { await customAlert('PIN inválido (debe contener entre 4 y 6 números).'); return; }
   var pin2 = await customPrompt('🔐 Confirmar PIN', 'Confirma tu PIN de acceso:', '••••', 'password');
@@ -116,15 +123,15 @@ async function configurarPIN() {
   if (!confirmado) { await customAlert('Debes guardar el código.'); return; }
   pinAccesoHash = await hashPIN(pin1);
   codigoRecuperacionHash = await hashCodigo(codigoRecuperacion);
-  localStorage.setItem('pin_hash_' + miPIN, pinAccesoHash);
-  localStorage.setItem('codigo_recuperacion_hash_' + miPIN, codigoRecuperacionHash);
-  sessionStorage.setItem('pin_temporal_' + miPIN, pin1);
+  localStorage.setItem('pin_hash_' + idUsuario, pinAccesoHash);
+  localStorage.setItem('codigo_recuperacion_hash_' + idUsuario, codigoRecuperacionHash);
+  sessionStorage.setItem('pin_temporal_' + idUsuario, pin1);
   pinActualTemporal = pin1;
-  var clavePrivadaActual = localStorage.getItem('clave_privada_' + miPIN);
+  var clavePrivadaActual = localStorage.getItem('clave_privada_' + idUsuario);
   if (clavePrivadaActual) {
     try {
       var privBase64 = clavePrivadaActual.includes('.') ? await descifrarClaveConPIN(clavePrivadaActual, pin1) : desofuscarClave(clavePrivadaActual);
-      localStorage.setItem('clave_privada_' + miPIN, await cifrarClaveConPIN(privBase64, pin1));
+      localStorage.setItem('clave_privada_' + idUsuario, await cifrarClaveConPIN(privBase64, pin1));
     } catch (e) { logError('Error cifrando:', e); }
   }
   await customAlert('✅ PIN configurado.', '✅');
@@ -132,6 +139,7 @@ async function configurarPIN() {
 }
 
 async function recuperarAcceso() {
+  var idUsuario = typeof miPIN !== 'undefined' ? miPIN : 'default';
   var codigo = await customPrompt('🔑 Recuperación', 'Ingresa tu código de recuperación:', 'XXXX-XXXX-XXXX-XXXX-XXXX-XXXX');
   if (!codigo) return;
   var hashIngresado = await hashCodigo(codigo);
@@ -141,59 +149,66 @@ async function recuperarAcceso() {
     var nuevoPin2 = await customPrompt('🔑 Confirmar PIN', 'Confirma tu nuevo PIN:', '••••', 'password');
     if (nuevoPin !== nuevoPin2) { await customAlert('No coinciden.'); return; }
     pinAccesoHash = await hashPIN(nuevoPin);
-    localStorage.setItem('pin_hash_' + miPIN, pinAccesoHash);
-    var claveCifrada = localStorage.getItem('clave_privada_' + miPIN);
+    localStorage.setItem('pin_hash_' + idUsuario, pinAccesoHash);
+    var claveCifrada = localStorage.getItem('clave_privada_' + idUsuario);
     if (claveCifrada && claveCifrada.includes('.')) {
       try {
         var privBase64 = await descifrarClaveConCodigo(claveCifrada, codigo);
-        localStorage.setItem('clave_privada_' + miPIN, await cifrarClaveConPIN(privBase64, nuevoPin));
+        localStorage.setItem('clave_privada_' + idUsuario, await cifrarClaveConPIN(privBase64, nuevoPin));
       } catch (e) { logError('Error:', e); }
     }
     pinActualTemporal = nuevoPin;
-    sessionStorage.setItem('pin_temporal_' + miPIN, nuevoPin);
+    sessionStorage.setItem('pin_temporal_' + idUsuario, nuevoPin);
     await customAlert('✅ PIN restablecido.', '✅');
     location.reload();
   } else { await customAlert('❌ Código incorrecto.', '❌'); }
 }
 
 async function resetEmergencia() {
+  var idUsuario = typeof miPIN !== 'undefined' ? miPIN : 'default';
   var c1 = await customConfirm('⚠️ RESET DE EMERGENCIA\n• Eliminará tu PIN\n• Eliminará tu código de recuperación\n• Eliminará tu clave privada local\n• ¡NO podrás descifrar mensajes antiguos!\n¿Continuar?', '⚠️');
   if (!c1) return;
   var c2 = await customConfirm('ÚLTIMA ADVERTENCIA\n¿Estás absolutamente seguro?', '⚠️');
   if (!c2) return;
   var texto = await customPrompt('Confirmación final', 'Escribe "RESET" para confirmar:', 'RESET');
   if (texto !== 'RESET') { await customAlert('❌ Cancelado.', '❌'); return; }
-  localStorage.removeItem('pin_hash_' + miPIN);
-  localStorage.removeItem('codigo_recuperacion_hash_' + miPIN);
-  localStorage.removeItem('clave_privada_' + miPIN);
-  sessionStorage.removeItem('pin_temporal_' + miPIN);
+  localStorage.removeItem('pin_hash_' + idUsuario);
+  localStorage.removeItem('codigo_recuperacion_hash_' + idUsuario);
+  localStorage.removeItem('clave_privada_' + idUsuario);
+  sessionStorage.removeItem('pin_temporal_' + idUsuario);
   await customAlert('✅ Reset completado.', '✅');
   location.reload();
 }
 
 async function desbloquearApp() {
-  var pinIngresado = document.getElementById('pinAccesoInput').value;
+  var idUsuario = typeof miPIN !== 'undefined' ? miPIN : 'default';
+  var inputPIN = document.getElementById('pinAccesoInput');
+  if (!inputPIN) return;
+  var pinIngresado = inputPIN.value;
   if (!pinIngresado) return;
   var hashIngresado = await hashPIN(pinIngresado);
   if (hashIngresado === pinAccesoHash) {
     pinActualTemporal = pinIngresado;
-    sessionStorage.setItem('pin_temporal_' + miPIN, pinIngresado);
+    sessionStorage.setItem('pin_temporal_' + idUsuario, pinIngresado);
     document.getElementById('pantallaBloqueo').style.display = 'none';
-    document.getElementById('pinAccesoInput').value = '';
-    document.getElementById('errorPIN').style.display = 'none';
+    inputPIN.value = '';
+    var errorPIN = document.getElementById('errorPIN');
+    if (errorPIN) errorPIN.style.display = 'none';
     try { await cargarClavePrivadaSegura(pinIngresado); } catch (error) { logError('Error:', error); await customAlert('⚠️ No se pudieron cargar las llaves.'); return; }
     document.getElementById('appPrincipal').style.display = 'block';
-    try { await verificarEstado(); } catch (error) { logError('Error:', error); }
-    await cargarMensajesNoLeidos();
-    cambiarTab('chats');
+    try { if (typeof verificarEstado === 'function') await verificarEstado(); } catch (error) { logError('Error:', error); }
+    if (typeof cargarMensajesNoLeidos === 'function') await cargarMensajesNoLeidos();
+    if (typeof cambiarTab === 'function') cambiarTab('chats');
   } else {
-    document.getElementById('errorPIN').style.display = 'block';
-    document.getElementById('pinAccesoInput').value = '';
-    document.getElementById('pinAccesoInput').focus();
+    var errorPIN = document.getElementById('errorPIN');
+    if (errorPIN) errorPIN.style.display = 'block';
+    inputPIN.value = '';
+    inputPIN.focus();
   }
 }
 
 async function cambiarPIN() {
+  var idUsuario = typeof miPIN !== 'undefined' ? miPIN : 'default';
   if (!pinAccesoHash) {
     var confirmar = await customConfirm('No tienes PIN configurado.\n¿Configurar uno ahora?', '🔐');
     if (confirmar) await configurarPIN();
@@ -207,16 +222,16 @@ async function cambiarPIN() {
   var nuevoPin2 = await customPrompt('🔐 Confirmar PIN', 'Confirma tu nuevo PIN:', '••••', 'password');
   if (nuevoPin !== nuevoPin2) { await customAlert('No coinciden.'); return; }
   pinAccesoHash = await hashPIN(nuevoPin);
-  localStorage.setItem('pin_hash_' + miPIN, pinAccesoHash);
-  var claveCifrada = localStorage.getItem('clave_privada_' + miPIN);
+  localStorage.setItem('pin_hash_' + idUsuario, pinAccesoHash);
+  var claveCifrada = localStorage.getItem('clave_privada_' + idUsuario);
   if (claveCifrada) {
     try {
       var privBase64 = await descifrarClaveConPIN(claveCifrada, pinActual);
-      localStorage.setItem('clave_privada_' + miPIN, await cifrarClaveConPIN(privBase64, nuevoPin));
+      localStorage.setItem('clave_privada_' + idUsuario, await cifrarClaveConPIN(privBase64, nuevoPin));
     } catch (e) { logError('Error:', e); }
   }
   pinActualTemporal = nuevoPin;
-  sessionStorage.setItem('pin_temporal_' + miPIN, nuevoPin);
+  sessionStorage.setItem('pin_temporal_' + idUsuario, nuevoPin);
   await customAlert('✅ PIN modificado.', '✅');
 }
 
@@ -224,32 +239,34 @@ async function cambiarPIN() {
 // CARGAR CLAVE PRIVADA CON RECUPERACIÓN DE PÚBLICA
 // ============================================
 async function cargarClavePrivadaSegura(pin) {
-  var claveCifrada = localStorage.getItem('clave_privada_' + miPIN);
-  if (!claveCifrada) { await generarClaves(); return; }
+  var idUsuario = typeof miPIN !== 'undefined' ? miPIN : 'default';
+  var claveCifrada = localStorage.getItem('clave_privada_' + idUsuario);
+  if (!claveCifrada) { if (typeof generarClaves === 'function') { await generarClaves(); } return; }
   var privBase64 = '';
   if (claveCifrada.includes('.')) {
     if (!pin) throw new Error('Se requiere PIN');
     privBase64 = await descifrarClaveConPIN(claveCifrada, pin);
-  } else { privBase64 = desofuscarClave(claveCifrada); }
+  } else { if (typeof desofuscarClave === 'function') privBase64 = desofuscarClave(claveCifrada); }
   var privBuf = Uint8Array.from(atob(privBase64), c => c.charCodeAt(0));
   miClavePrivada = await crypto.subtle.importKey("pkcs8", privBuf, { name: "RSA-OAEP", hash: "SHA-256" }, true, ["decrypt"]);
-  var { data } = await clienteSupabase.from('usuarios').select('clave_publica').eq('pin', miPIN).maybeSingle();
-  if (data && data.clave_publica) {
-    var pubBuf = Uint8Array.from(atob(data.clave_publica), c => c.charCodeAt(0));
-    miClavePublica = await crypto.subtle.importKey("spki", pubBuf, { name: "RSA-OAEP", hash: "SHA-256" }, true, ["encrypt"]);
-  } else {
-    // Autoreconstrucción de clave pública desde la privada
-    try {
-      var jwk = await crypto.subtle.exportKey("jwk", miClavePrivada);
-      var { d, p, q, dp, dq, qi, ...publicJwk } = jwk;
-      publicJwk.key_ops = ["encrypt"];
-      miClavePublica = await crypto.subtle.importKey("jwk", publicJwk, { name: "RSA-OAEP", hash: "SHA-256" }, true, ["encrypt"]);
-      var pubExp = await crypto.subtle.exportKey("spki", miClavePublica);
-      var pubBase64 = btoa(String.fromCharCode.apply(null, new Uint8Array(pubExp)));
-      await subirClavePublica(pubBase64);
-    } catch (e) {
-      logError('No se pudo derivar clave pública. Regenerando...', e);
-      await generarClaves();
+  
+  if (typeof clienteSupabase !== 'undefined') {
+    var { data } = await clienteSupabase.from('usuarios').select('clave_publica').eq('pin', idUsuario).maybeSingle();
+    if (data && data.clave_publica) {
+      var pubBuf = Uint8Array.from(atob(data.clave_publica), c => c.charCodeAt(0));
+      miClavePublica = await crypto.subtle.importKey("spki", pubBuf, { name: "RSA-OAEP", hash: "SHA-256" }, true, ["encrypt"]);
+    } else {
+      try {
+        var jwk = await crypto.subtle.exportKey("jwk", miClavePrivada);
+        var { d, p, q, dp, dq, qi, ...publicJwk } = jwk;
+        publicJwk.key_ops = ["encrypt"];
+        miClavePublica = await crypto.subtle.importKey("jwk", publicJwk, { name: "RSA-OAEP", hash: "SHA-256" }, true, ["encrypt"]);
+        var pubExp = await crypto.subtle.exportKey("spki", miClavePublica);
+        var pubBase64 = btoa(String.fromCharCode.apply(null, new Uint8Array(pubExp)));
+        if (typeof subirClavePublica === 'function') await subirClavePublica(pubBase64);
+      } catch (e) {
+        if (typeof generarClaves === 'function') await generarClaves();
+      }
     }
   }
 }
@@ -299,52 +316,4 @@ function validarArchivo(archivo, maxBytes) {
   return { valido: true };
 }
 
-// ============================================
-// LISTENERS
-// ============================================
-document.addEventListener('keydown', function(e) {
-  if (e.key === 'Enter' && document.getElementById('pantallaBloqueo').style.display === 'flex') {
-    var inputPIN = document.getElementById('pinAccesoInput');
-    if (inputPIN.value) desbloquearApp();
-  }
-});
-// ============================================
-//  EVENT LISTENERS PARA PANTALLA DE BLOQUEO
-// ============================================
-document.addEventListener('DOMContentLoaded', function() {
-  // Botón Desbloquear
-  var btnDesbloquear = document.getElementById('btnDesbloquear');
-  if (btnDesbloquear) {
-    btnDesbloquear.addEventListener('click', desbloquearApp);
-  }
-  
-  // Botón Configurar PIN
-  var btnConfigPIN = document.getElementById('btnConfigPIN');
-  if (btnConfigPIN) {
-    btnConfigPIN.addEventListener('click', configurarPIN);
-  }
-  
-  // Botón Recuperar Acceso
-  var btnRecuperar = document.getElementById('btnRecuperar');
-  if (btnRecuperar) {
-    btnRecuperar.addEventListener('click', recuperarAcceso);
-  }
-  
-  // Botón Reset de Emergencia
-  var btnReset = document.getElementById('btnReset');
-  if (btnReset) {
-    btnReset.addEventListener('click', resetEmergencia);
-  }
-  
-  // Enter en input de PIN
-  var pinInput = document.getElementById('pinAccesoInput');
-  if (pinInput) {
-    pinInput.addEventListener('keydown', function(e) {
-      if (e.key === 'Enter' && this.value) {
-        desbloquearApp();
-      }
-    });
-  }
-});
-
-console.log('🛡️ Módulo security.js cargado correctamente');
+console.log('🛡️ Módulo security.js cargado correctamente sin duplicación de DOM');
