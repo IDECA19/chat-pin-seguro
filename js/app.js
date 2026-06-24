@@ -3,14 +3,14 @@
  * Orquestador principal: UI, navegación, mensajes, contactos, inicialización
  * 
  * Depende de:
- * - security.js (hashPIN, cifrarClaveConPIN, descifrarClaveConPIN, etc.)
+ * - security.js (hashPIN, cifrarClaveConPIN, descifrarClaveConPIN, verificarPINConfigurado, etc.)
  * - crypto.js (generarClaves, cifrarMensaje, descifrarMensaje, etc.)
- * - notifications.js (notificarNuevoMensaje, etc.)
- * - webrtc.js (iniciarLlamada, etc.)
+ * - notifications.js (notificarNuevoMensaje, cargarPrefsNotificaciones, etc.)
+ * - webrtc.js (iniciarLlamada, suscribirseALlamadas, etc.)
  */
 
 // ============================================
-// VARIABLES GLOBALES
+// 🌐 VARIABLES GLOBALES
 // ============================================
 var SUPABASE_URL = 'https://dksmoteiidjpymextrgj.supabase.co';
 var SUPABASE_ANON_KEY = 'sb_publishable_HuXshjcD1Je934lVgBcJtw_5kFSuGzE';
@@ -21,8 +21,13 @@ var clienteSupabase = null;
 var contactoActual = '';
 var canalRealtime = null;
 var archivoSeleccionado = null;
+var miClavePrivada = null;
+var miClavePublica = null;
 var mensajesNoLeidos = {};
 var modoPrivado = false;
+var pinAccesoHash = null;
+var codigoRecuperacionHash = null;
+var pinActualTemporal = null;
 var modoSeleccion = false;
 var mensajesSeleccionados = [];
 var tabActual = 'chats';
@@ -47,11 +52,11 @@ var prefsNotificaciones = {
 };
 
 // ============================================
-// LOGGING
+// 📝 LOGGING
 // ============================================
 function log(msg) { if (DEBUG) console.log(msg); }
 function logError(msg, error) {
-  console.error('❌', msg);
+  console.error('', msg);
   if (error) {
     if (typeof error === 'object') {
       if (error.message) console.error('   Mensaje:', error.message);
@@ -61,7 +66,7 @@ function logError(msg, error) {
 }
 
 // ============================================
-// RATE LIMITING BÁSICO
+// ⏱️ RATE LIMITING BÁSICO
 // ============================================
 var ultimoEnvio = 0;
 async function puedeEnviar() {
@@ -75,81 +80,18 @@ async function puedeEnviar() {
 }
 
 // ============================================
-// SISTEMA DE DIÁLOGOS PERSONALIZADOS
+// 🔧 UTILIDADES
 // ============================================
-function customAlert(mensaje, icono) {
-  icono = icono || '️';
-  return new Promise((resolve) => {
-    const modal = document.getElementById('customAlert');
-    document.getElementById('customAlertTexto').innerText = mensaje;
-    document.getElementById('customAlertIcono').innerText = icono;
-    modal.classList.add('active');
-    const btn = document.getElementById('customAlertBtn');
-    const handler = () => {
-      modal.classList.remove('active');
-      btn.removeEventListener('click', handler);
-      resolve();
-    };
-    btn.addEventListener('click', handler);
-  });
+function ofuscarClave(clave) { 
+  if (!clave) return clave; 
+  return btoa(clave.split('').reverse().join('')); 
 }
 
-function customConfirm(mensaje, icono) {
-  icono = icono || '❓';
-  return new Promise((resolve) => {
-    const modal = document.getElementById('customConfirm');
-    document.getElementById('customConfirmTexto').innerText = mensaje;
-    document.getElementById('customConfirmIcono').innerText = icono;
-    modal.classList.add('active');
-    const btnAceptar = document.getElementById('customConfirmBtnAceptar');
-    const btnCancelar = document.getElementById('customConfirmBtnCancelar');
-    const cleanUp = (result) => {
-      modal.classList.remove('active');
-      btnAceptar.removeEventListener('click', acceptHandler);
-      btnCancelar.removeEventListener('click', cancelHandler);
-      resolve(result);
-    };
-    const acceptHandler = () => cleanUp(true);
-    const cancelHandler = () => cleanUp(false);
-    btnAceptar.addEventListener('click', acceptHandler);
-    btnCancelar.addEventListener('click', cancelHandler);
-  });
+function desofuscarClave(ofuscada) { 
+  if (!ofuscada) return ofuscada; 
+  return atob(ofuscada).split('').reverse().join(''); 
 }
 
-function customPrompt(titulo, texto, placeholder, type) {
-  placeholder = placeholder || '';
-  type = type || 'text';
-  return new Promise((resolve) => {
-    const modal = document.getElementById('customPrompt');
-    document.getElementById('customPromptTitulo').innerText = titulo;
-    document.getElementById('customPromptTexto').innerText = texto;
-    const input = document.getElementById('customPromptInput');
-    input.value = '';
-    input.type = type;
-    input.placeholder = placeholder;
-    modal.classList.add('active');
-    setTimeout(() => input.focus(), 150);
-    const btnAceptar = document.getElementById('customPromptBtnAceptar');
-    const btnCancelar = document.getElementById('customPromptBtnCancelar');
-    const cleanUp = (value) => {
-      modal.classList.remove('active');
-      btnAceptar.removeEventListener('click', acceptHandler);
-      btnCancelar.removeEventListener('click', cancelHandler);
-      input.removeEventListener('keydown', keyHandler);
-      resolve(value);
-    };
-    const acceptHandler = () => cleanUp(input.value);
-    const cancelHandler = () => cleanUp(null);
-    const keyHandler = (e) => { if (e.key === 'Enter') acceptHandler(); };
-    btnAceptar.addEventListener('click', acceptHandler);
-    btnCancelar.addEventListener('click', cancelHandler);
-    input.addEventListener('keydown', keyHandler);
-  });
-}
-
-// ============================================
-// FUNCIONES DE UTILIDAD
-// ============================================
 function formatBytes(bytes, decimals) {
   if (!bytes || bytes === 0) return '0 Bytes';
   decimals = decimals || 2;
@@ -177,18 +119,8 @@ function escapeHtml(t) {
   return d.innerHTML; 
 }
 
-function ofuscarClave(clave) { 
-  if (!clave) return clave; 
-  return btoa(clave.split('').reverse().join('')); 
-}
-
-function desofuscarClave(ofuscada) { 
-  if (!ofuscada) return ofuscada; 
-  return atob(ofuscada).split('').reverse().join(''); 
-}
-
 // ============================================
-// NAVEGACIÓN Y UI
+//  NAVEGACIÓN Y UI
 // ============================================
 function cambiarTab(tab) {
   tabActual = tab;
@@ -260,7 +192,7 @@ function cerrarModalOpcionesChat() {
 }
 
 // ============================================
-// GESTIÓN DE ALIAS
+// 👤 GESTIÓN DE ALIAS
 // ============================================
 function getAliases() {
   var a = localStorage.getItem('aliases_' + miPIN);
@@ -279,7 +211,7 @@ function obtenerNombreContacto(pin) {
 async function editarAliasContacto(pin) {
   var actual = obtenerNombreContacto(pin);
   var actualValor = (actual === pin) ? '' : actual;
-  var nuevoNombre = await customPrompt('👤 Asignar Identificador', 'Escribe un nombre o alias para el PIN: ' + pin, actualValor);
+  var nuevoNombre = await customPrompt(' Asignar Identificador', 'Escribe un nombre o alias para el PIN: ' + pin, actualValor);
   if (nuevoNombre === null) return;
   
   var a = getAliases();
@@ -307,7 +239,7 @@ async function editarAliasContactoActual() {
 }
 
 // ============================================
-// PREFERENCIAS
+// ⚙️ PREFERENCIAS
 // ============================================
 async function cargarPreferencias() {
   try {
@@ -377,7 +309,7 @@ document.addEventListener('visibilitychange', function() {
 });
 
 // ============================================
-// CONTACTOS Y CHATS
+// 👥 CONTACTOS Y CHATS
 // ============================================
 function getContactos() { 
   var c = localStorage.getItem('contactos_' + miPIN); 
@@ -438,7 +370,7 @@ function renderizarContactos() {
   var html = '';
   
   if (contactos.length === 0 && bloqueados.length === 0) {
-    cont.innerHTML = '<div class="estado-vacio"><div class="estado-vacio-icono"></div><div class="estado-vacio-texto">Tu lista de contactos está vacía</div><div class="estado-vacio-sub">Agrega contactos compartiendo sus PINs de Kerix</div></div>';
+    cont.innerHTML = '<div class="estado-vacio"><div class="estado-vacio-icono">👥</div><div class="estado-vacio-texto">Tu lista de contactos está vacía</div><div class="estado-vacio-sub">Agrega contactos compartiendo sus PINs de Kerix</div></div>';
     return;
   }
   
@@ -514,7 +446,7 @@ async function agregarContacto() {
   document.getElementById('nuevoContactoPin').value = '';
   cerrarModalAgregar();
   
-  var alias = await customPrompt(' Guardar Identificador', '¿Quieres ponerle un nombre o alias a este PIN para reconocerlo localmente? (Opcional):', '');
+  var alias = await customPrompt('👤 Guardar Identificador', '¿Quieres ponerle un nombre o alias a este PIN para reconocerlo localmente? (Opcional):', '');
   if (alias && alias.trim() !== '') {
     var a = getAliases();
     a[pin] = alias.trim();
@@ -536,7 +468,7 @@ function eliminarContacto(pin) {
 async function bloquearPIN(pin) {
   var confirmado = await customConfirm(
     '¿Deseas bloquear de forma definitiva el PIN ' + pin + '? No podrás recibir sus mensajes.', 
-    ''
+    '🚫'
   );
   if (!confirmado) return;
   
@@ -588,7 +520,7 @@ function actualizarBadgeChats() {
 }
 
 // ============================================
-// 🔔 CARGAR MENSAJES NO LEÍDOS AL INICIAR
+//  CARGAR MENSAJES NO LEÍDOS AL INICIAR
 // ============================================
 async function cargarMensajesNoLeidos() {
   try {
@@ -612,7 +544,7 @@ async function cargarMensajesNoLeidos() {
 }
 
 // ============================================
-// CHAT INDIVIDUAL
+// 💬 CHAT INDIVIDUAL
 // ============================================
 function abrirChat(pin) {
   contactoActual = pin;
@@ -636,7 +568,7 @@ function cerrarChat() {
 }
 
 // ============================================
-// MENSAJES
+// 💬 MENSAJES
 // ============================================
 async function cargarMensajes() {
   try {
@@ -680,7 +612,7 @@ async function cargarMensajes() {
     mensajes.forEach(function(msg) { 
       if (msg.archivo_url) cargarYDescifrarAdjunto(msg); 
     });
-  } catch (error) { logError('Error loading messages:', error); }
+  } catch (error) { logError('Error cargando mensajes:', error); }
 }
 
 function construirContenidoMensaje(msg) {
@@ -781,7 +713,7 @@ async function enviarMensaje() {
       } else if (tipoMensaje === 'video') {
         localContainer.innerHTML = '<video controls style="max-width: 100%; border-radius: 8px;"><source src="' + localUrl + '"></video>';
       } else {
-        localContainer.innerHTML = '<a href="' + localUrl + '" download="' + archivoInfo.nombre + '" style="color: #00a884;">📎 ' + archivoInfo.nombre + '</a>';
+        localContainer.innerHTML = '<a href="' + localUrl + '" download="' + archivoInfo.nombre + '" style="color: #00a884;"> ' + archivoInfo.nombre + '</a>';
       }
     }
   }
@@ -889,7 +821,7 @@ function cancelarSuscripciones() {
 }
 
 // ============================================
-// SELECCIÓN Y BORRADO
+// ️ SELECCIÓN Y BORRADO
 // ============================================
 async function seleccionarModo() {
   modoSeleccion = true;
@@ -913,7 +845,7 @@ async function borrarSeleccionados() {
   }
   var confirmado = await customConfirm(
     '¿Deseas borrar de forma irreversible los ' + mensajesSeleccionados.length + ' mensajes seleccionados?', 
-    '🗑️'
+    '️'
   );
   if (!confirmado) return;
   
@@ -947,7 +879,7 @@ async function limpiarChatCompleto() {
 }
 
 // ============================================
-// ARCHIVOS
+// 📎 ARCHIVOS
 // ============================================
 document.getElementById('archivoInput').addEventListener('change', async function(e) {
   var file = e.target.files[0];
@@ -966,7 +898,7 @@ function cancelarArchivo() {
 }
 
 // ============================================
-// ESTADO Y ACTIVAR
+// 📡 ESTADO Y ACTIVAR
 // ============================================
 async function verificarEstado() {
   var estadoDiv = document.getElementById('estadoTexto');
@@ -1040,7 +972,201 @@ function copiarPIN() {
 }
 
 // ============================================
-// INICIALIZACIÓN
+//  BACKUP Y FORWARD SECRECY
+// ============================================
+async function exportarClave() {
+  var password = await customPrompt('🔒 Exportar Llave', 'Crea una contraseña para cifrar el respaldo (mínimo 4 caracteres):', '', 'password');
+  if (!password || password.length < 4) { 
+    await customAlert('La contraseña de respaldo debe ser de al menos 4 caracteres.'); 
+    return; 
+  }
+  
+  var codigo2FA = '';
+  if (prefs.dosfa_backup) {
+    codigo2FA = Math.floor(100000 + Math.random() * 900000).toString();
+    await customAlert('🔑 Tu código de seguridad 2FA es:\n' + codigo2FA + '\nEscríbelo para poder restaurarlo más tarde.', '🔑');
+  }
+  
+  try {
+    var privBase64 = '';
+    var claveGuardada = localStorage.getItem('clave_privada_' + miPIN);
+    if (claveGuardada.includes('.')) {
+      if (!pinActualTemporal) { 
+        await customAlert('Primero desbloquea la aplicación.'); 
+        return; 
+      }
+      privBase64 = await descifrarClaveConPIN(claveGuardada, pinActualTemporal);
+    } else {
+      privBase64 = desofuscarClave(claveGuardada);
+    }
+    
+    var encoder = new TextEncoder();
+    var keyMaterial = await crypto.subtle.importKey('raw', encoder.encode(password), 'PBKDF2', false, ['deriveKey']);
+    var salt = crypto.getRandomValues(new Uint8Array(16));
+    var key = await crypto.subtle.deriveKey({ name: 'PBKDF2', salt: salt, iterations: 100000, hash: 'SHA-256' }, keyMaterial, { name: 'AES-GCM', length: 256 }, false, ['encrypt']);
+    var iv = crypto.getRandomValues(new Uint8Array(12));
+    var cifrado = await crypto.subtle.encrypt({ name: 'AES-GCM', iv: iv }, key, encoder.encode(privBase64 + '|' + codigo2FA));
+    var backup = btoa(String.fromCharCode.apply(null, salt)) + '.' + btoa(String.fromCharCode.apply(null, iv)) + '.' + btoa(String.fromCharCode.apply(null, new Uint8Array(cifrado)));
+    
+    await navigator.clipboard.writeText(backup);
+    await customAlert('✅ Respaldo copiado al portapapeles correctamente.' + (prefs.dosfa_backup ? '\n2FA obligatorio: ' + codigo2FA : ''), '✅');
+    cerrarModalBackup();
+  } catch (error) { 
+    await customAlert('Error de empaquetado: ' + error.message); 
+  }
+}
+
+async function importarClave() {
+  var backup = await customPrompt('📥 Importar Llave', 'Pega aquí el contenido cifrado del respaldo:');
+  if (!backup) return;
+  
+  var password = await customPrompt('📥 Contraseña', 'Ingresa la contraseña con la que cifraste el respaldo:', '', 'password');
+  if (!password) return;
+  
+  try {
+    var partes = backup.split('.');
+    var salt = Uint8Array.from(atob(partes[0]), c => c.charCodeAt(0));
+    var iv = Uint8Array.from(atob(partes[1]), c => c.charCodeAt(0));
+    var cifrado = Uint8Array.from(atob(partes[2]), c => c.charCodeAt(0));
+    var encoder = new TextEncoder();
+    var keyMaterial = await crypto.subtle.importKey('raw', encoder.encode(password), 'PBKDF2', false, ['deriveKey']);
+    var key = await crypto.subtle.deriveKey({ name: 'PBKDF2', salt: salt, iterations: 100000, hash: 'SHA-256' }, keyMaterial, { name: 'AES-GCM', length: 256 }, false, ['decrypt']);
+    var descifrado = new TextDecoder().decode(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: iv }, key, cifrado));
+    
+    if (prefs.dosfa_backup) {
+      var partesD = descifrado.split('|');
+      if (partesD.length !== 2) throw new Error('Formato sin autenticación 2FA.');
+      var codigo = await customPrompt('🔐 Doble Factor', 'Ingresa el código de seguridad 2FA que se generó al exportar:');
+      if (codigo !== partesD[1]) { 
+        await customAlert('❌ El código 2FA ingresado es incorrecto.', '❌'); 
+        return; 
+      }
+      descifrado = partesD[0];
+    }
+    
+    var aGuardar = pinAccesoHash && pinActualTemporal ? await cifrarClaveConPIN(descifrado, pinActualTemporal) : ofuscarClave(descifrado);
+    localStorage.setItem('clave_privada_' + miPIN, aGuardar);
+    await customAlert('✅ Clave de respaldo importada con éxito.', '✅');
+    location.reload();
+  } catch (error) { 
+    await customAlert('❌ Respaldo corrupto o contraseña incorrecta.', '❌'); 
+  }
+}
+
+async function activarForwardSecrecy() {
+  if (prefs.rotacion_claves_dias === 0) { 
+    await customAlert('⚠️ Debes activar primero la opción "Rotación de claves".'); 
+    return; 
+  }
+  
+  var confirmado = await customConfirm('⚠️ ALERTA DE SEGURIDAD\nTodos los mensajes antiguos quedarán completamente ILEGIBLES una vez que roten tus llaves.\n¿Quieres activar esta funcionalidad?', '⚠️');
+  if (!confirmado) return;
+  
+  var backupPrevio = await customConfirm('¿Quieres descargar un backup descifrado en HTML de todos tus chats antes de activar esto?', '');
+  if (backupPrevio) await generarBackupMensajes();
+  
+  var confirmarFinal = await customConfirm('🔐 ¿Activar Perfect Forward Secrecy ahora?', '🔐');
+  if (!confirmarFinal) return;
+  
+  prefs.forward_secrecy = true;
+  await guardarPreferenciaBool('forward_secrecy', true);
+  await generarClaves();
+  localStorage.setItem('rotacion_claves_' + miPIN, Date.now());
+  await customAlert('✅ Forward Secrecy activado.', '✅');
+  actualizarStatusPreferencias();
+}
+
+async function desactivarForwardSecrecy() {
+  var des = await customConfirm('¿Desactivar la propiedad de Forward Secrecy?', '🔐');
+  if (!des) return;
+  
+  prefs.forward_secrecy = false;
+  await guardarPreferenciaBool('forward_secrecy', false);
+  await customAlert('✅ Funcionalidad desactivada.', '✅');
+  actualizarStatusPreferencias();
+}
+
+async function generarBackupMensajes() {
+  try {
+    var contactos = getContactos();
+    var html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Kerix Backup - ' + miPIN + '</title><style>body{font-family:Arial;background:#1a1a1a;color:#fff;padding:20px;max-width:600px;margin:0 auto;}.chat{margin:20px 0;padding:15px;background:#222;border-radius:10px;}.msg{padding:8px 12px;margin:6px 0;border-radius:12px;max-width:80%;}.enviado{background:#00a884;color:#000;margin-left:auto;}.recibido{background:#2a2a2a;color:#fff;}</style></head><body>';
+    html += '<h1>🔒 Backup Local de Mensajes</h1><p>PIN de Usuario: <strong>' + miPIN + '</strong></p><p>Creado el: ' + new Date().toLocaleString('es-ES') + '</p><hr>';
+    
+    for (var pin of contactos) {
+      var nombre = obtenerNombreContacto(pin);
+      var { data: mensajes } = await clienteSupabase.from('mensajes')
+        .select('*')
+        .or('and(pin_remitente.eq.' + miPIN + ',pin_destinatario.eq.' + pin + '),and(pin_remitente.eq.' + pin + ',pin_destinatario.eq.' + miPIN + ')')
+        .order('enviado_en', { ascending: true });
+      
+      if (!mensajes || mensajes.length === 0) continue;
+      
+      html += '<div class="chat"><h2>💬 Conversación con: ' + nombre + ' (' + pin + ')</h2>';
+      for (var msg of mensajes) {
+        var texto = '';
+        try { 
+          if (msg.mensaje_cifrado) texto = await descifrarMensaje(msg.mensaje_cifrado); 
+        } catch (e) { 
+          texto = '[Ilegible / Clave Rotada]'; 
+        }
+        var esMio = msg.pin_remitente === miPIN;
+        html += '<div class="msg ' + (esMio ? 'enviado' : 'recibido') + '">' + escapeHtml(texto) + '</div>';
+      }
+      html += '</div>';
+    }
+    
+    html += '</body></html>';
+    var blob = new Blob([html], { type: 'text/html' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url; 
+    a.download = 'backup_kerix_' + miPIN + '_' + Date.now() + '.html';
+    document.body.appendChild(a); 
+    a.click(); 
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    await customAlert('✅ El archivo de respaldo se ha descargado de manera segura.', '✅');
+  } catch (error) { 
+    await customAlert('❌ Error al exportar: ' + error.message, '❌'); 
+  }
+}
+
+async function backupClavePrivada() {
+  try {
+    var privBase64 = '';
+    var claveGuardada = localStorage.getItem('clave_privada_' + miPIN);
+    if (claveGuardada.includes('.')) {
+      if (!pinActualTemporal) { 
+        await customAlert('Por favor, desbloquea la aplicación.'); 
+        return; 
+      }
+      privBase64 = await descifrarClaveConPIN(claveGuardada, pinActualTemporal);
+    } else {
+      privBase64 = desofuscarClave(claveGuardada);
+    }
+    
+    var pubExp = await crypto.subtle.exportKey("spki", miClavePublica);
+    var pubBase64 = btoa(String.fromCharCode.apply(null, new Uint8Array(pubExp)));
+    
+    var html = '<!DOCTYPE html><html><body style="background:#1a1a1a;color:#fff;padding:20px;"><h1> Kerix Backup de Claves</h1><p style="color:#ef4444;">️ TEXTO PLANO - Guarda este archivo con estricto secreto.</p><h3>Clave Privada (RSA-OAEP Decrypt):</h3><textarea readonly style="width:100%;height:200px;">' + privBase64 + '</textarea><h3>Clave Pública (RSA-OAEP Encrypt):</h3><textarea readonly style="width:100%;height:200px;">' + pubBase64 + '</textarea></body></html>';
+    
+    var blob = new Blob([html], { type: 'text/html' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url; 
+    a.download = 'claves_par_kerix_' + miPIN + '_' + Date.now() + '.html';
+    document.body.appendChild(a); 
+    a.click(); 
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    await customAlert('✅ Clave de respaldo descargada en texto plano.', '✅');
+  } catch (error) { 
+    await customAlert('Error al generar el backup: ' + error.message); 
+  }
+}
+
+// ============================================
+// 🚀 INICIALIZACIÓN
 // ============================================
 async function generarPIN() {
   var pinGuardado = localStorage.getItem('chat_pin');
@@ -1095,7 +1221,7 @@ async function testearStorage() {
   try {
     var { data: buckets, error: bucketsError } = await clienteSupabase.storage.listBuckets();
     if (bucketsError) { 
-      logError('❌ Error listando buckets:', bucketsError); 
+      logError(' Error listando buckets:', bucketsError); 
       return; 
     }
     
@@ -1109,7 +1235,7 @@ async function testearStorage() {
     var testFileName = 'test_' + miPIN + '_' + Date.now() + '.txt';
     var { data: uploadData, error: uploadError } = await clienteSupabase.storage.from('chat-files').upload(testFileName, testBlob);
     if (uploadError) { 
-      await customAlert(' Error al subir archivo de prueba: ' + uploadError.message, '❌'); 
+      await customAlert('❌ Error al subir archivo de prueba: ' + uploadError.message, '❌'); 
       return; 
     }
     
@@ -1127,7 +1253,7 @@ async function testearStorage() {
 }
 
 // ============================================
-// INICIALIZACIÓN DOM
+// 🎯 INICIALIZACIÓN DOM
 // ============================================
 window.addEventListener('DOMContentLoaded', async function() {
   try {
@@ -1151,4 +1277,4 @@ window.addEventListener('DOMContentLoaded', async function() {
   }
 });
 
-console.log('🚀 Módulo app.js cargado correctamente');
+console.log(' Módulo app.js cargado correctamente');
