@@ -1,155 +1,381 @@
 /**
  * js/supabase-client.js
- * Configuración centralizada, conexión de base de datos y autenticación con Supabase.
+ * Cliente de Supabase adaptado para sistema de PIN anónimo
+ * 
+ * IMPORTANTE: NO usa email/password. Solo PIN anónimo.
+ * 
+ * Depende de:
+ * - security.js (hashPIN, cifrarClaveConPIN)
+ * - app.js (miPIN, logError)
  */
 
-// Inicialización de constantes utilizando los datos originales de la app Kerix
-const supabaseUrl = 'https://dksmoteiidjpymextrgj.supabase.co';
-const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRrc21vdGVpaWRqcHltZXh0cmdqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MTMyNDY5ODcsImV4cCI6MjAyODgyMjk4N30.Z_0p-nZ-fXvOa1C-KxYV6WjLh09z7Zp9f4h-mYJzS9I';
+// ============================================
+// CONFIGURACIÓN DE SUPABASE
+// ============================================
+var SUPABASE_URL = 'https://dksmoteiidjpymextrgj.supabase.co';
+var SUPABASE_ANON_KEY = 'sb_publishable_HuXshjcD1Je934lVgBcJtw_5kFSuGzE';
 
-// Cliente global de Supabase
-const supabaseClient = supabase.createClient(supabaseUrl, supabaseKey);
+// ============================================
+// INICIALIZACIÓN DEL CLIENTE
+// ============================================
+var clienteSupabase = null;
 
-// Wrappers modulares para base de datos y Storage (Asegurando modularidad del código)
-const SupabaseService = {
-  // --- AUTENTICACIÓN ---
-  async getSession() {
-    const { data: { session }, error } = await supabaseClient.auth.getSession();
-    if (error) throw error;
-    return session;
+function inicializarSupabase() {
+  if (typeof supabase === 'undefined') {
+    console.error('❌ Supabase no está cargado');
+    return false;
+  }
+  try {
+    clienteSupabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    console.log('✅ Cliente Supabase inicializado');
+    return true;
+  } catch (error) {
+    logError('Error inicializando Supabase:', error);
+    return false;
+  }
+}
+
+// ============================================
+// WRAPPERS PARA USUARIOS (SISTEMA PIN)
+// ============================================
+var SupabaseUsuarios = {
+  // Obtener usuario por PIN
+  async obtenerUsuario(pin) {
+    try {
+      var { data, error } = await clienteSupabase.from('usuarios')
+        .select('*')
+        .eq('pin', pin)
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      logError('Error obteniendo usuario:', error);
+      return null;
+    }
   },
 
-  async login(email, password) {
-    const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
-    if (error) throw error;
-    return data.user;
+  // Crear nuevo usuario con PIN
+  async crearUsuario(pin, clavePublica) {
+    try {
+      var { data, error } = await clienteSupabase.from('usuarios')
+        .insert({
+          pin: pin,
+          clave_publica: clavePublica,
+          modo_privado: false,
+          created_at: new Date().toISOString()
+        })
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      logError('Error creando usuario:', error);
+      return null;
+    }
   },
 
-  async register(email, password) {
-    const { data, error } = await supabaseClient.auth.signUp({ email, password });
-    if (error) throw error;
-    return data.user;
+  // Actualizar clave pública
+  async actualizarClavePublica(pin, clavePublica) {
+    try {
+      var { error } = await clienteSupabase.from('usuarios')
+        .update({ clave_publica: clavePublica })
+        .eq('pin', pin);
+      if (error) throw error;
+      return true;
+    } catch (error) {
+      logError('Error actualizando clave pública:', error);
+      return false;
+    }
   },
 
-  async logout() {
-    const { error } = await supabaseClient.auth.signOut();
-    if (error) throw error;
+  // Actualizar modo privado
+  async actualizarModoPrivado(pin, modoPrivado) {
+    try {
+      var { error } = await clienteSupabase.from('usuarios')
+        .update({ modo_privado: modoPrivado })
+        .eq('pin', pin);
+      if (error) throw error;
+      return true;
+    } catch (error) {
+      logError('Error actualizando modo privado:', error);
+      return false;
+    }
   },
 
-  onAuthStateChange(callback) {
-    supabaseClient.auth.onAuthStateChange((event, session) => {
-      callback(event, session);
-    });
+  // Actualizar preferencias de seguridad
+  async actualizarPreferencias(pin, preferencias) {
+    try {
+      var { error } = await clienteSupabase.from('usuarios')
+        .update(preferencias)
+        .eq('pin', pin);
+      if (error) throw error;
+      return true;
+    } catch (error) {
+      logError('Error actualizando preferencias:', error);
+      return false;
+    }
   },
 
-  // --- PERFILES ---
-  async fetchProfile(userId) {
-    const { data, error } = await supabaseClient
-      .from('profiles')
-      .select('*')
-      .eq('id', userId)
-      .single();
-    
-    if (error && error.code !== 'PGRST116') throw error; // PGRST116 es "no rows"
-    return data;
+  // Verificar estado del servicio
+  async verificarEstado(pin) {
+    try {
+      var { data, error } = await clienteSupabase.from('usuarios')
+        .select('fecha_expiracion')
+        .eq('pin', pin)
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      logError('Error verificando estado:', error);
+      return null;
+    }
   },
 
-  async saveProfile(userId, username, avatarUrl, status) {
-    const { error } = await supabaseClient
-      .from('profiles')
-      .upsert({
-        id: userId,
-        username,
-        avatar_url: avatarUrl,
-        status: status || 'Disponible',
-        updated_at: new Date()
+  // Activar servicio con código
+  async activarServicio(pin, codigo) {
+    try {
+      var resultado = await clienteSupabase.functions.invoke('activar-servicio', {
+        body: { pin: pin, codigo: codigo }
       });
-    if (error) throw error;
-  },
-
-  async fetchAllProfiles() {
-    const { data, error } = await supabaseClient
-      .from('profiles')
-      .select('*')
-      .order('username', { ascending: true });
-    if (error) throw error;
-    return data;
-  },
-
-  // --- STORAGE ---
-  async uploadFile(bucket, path, file) {
-    const { data, error } = await supabaseClient.storage
-      .from(bucket)
-      .upload(path, file, { cacheControl: '3600', upsert: true });
-    
-    if (error) throw error;
-    
-    // Obtener URL Pública
-    const { data: { publicUrl } } = supabaseClient.storage
-      .from(bucket)
-      .getPublicUrl(path);
-      
-    return publicUrl;
-  },
-
-  // --- MENSAJES Y CHATS ---
-  async fetchMessages(myId, peerId) {
-    const { data, error } = await supabaseClient
-      .from('messages')
-      .select('*')
-      .or(`and(sender_id.eq.${myId},receiver_id.eq.${peerId}),and(sender_id.eq.${peerId},receiver_id.eq.${myId})`)
-      .order('created_at', { ascending: true });
-      
-    if (error) throw error;
-    return data;
-  },
-
-  async insertMessage(senderId, receiverId, content, type = 'text') {
-    const { data, error } = await supabaseClient
-      .from('messages')
-      .insert({
-        sender_id: senderId,
-        receiver_id: receiverId,
-        content,
-        type,
-        created_at: new Date()
-      })
-      .select()
-      .single();
-      
-    if (error) throw error;
-    return data;
-  },
-
-  // Suscribirse a mensajes nuevos
-  subscribeToMessages(callback) {
-    return supabaseClient
-      .channel('schema-messages-db')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, payload => {
-        callback(payload.new);
-      })
-      .subscribe();
-  },
-
-  // --- SEÑALIZACIÓN EN TIEMPO REAL (WEBRTC) ---
-  createSignalingChannel(userId, onSignalReceived) {
-    // Canal bidireccional usando broadcast
-    return supabaseClient.channel(`room-call:${userId}`, {
-      config: { broadcast: { self: false } }
-    })
-    .on('broadcast', { event: 'signaling' }, ({ payload }) => {
-      onSignalReceived(payload);
-    })
-    .subscribe();
-  },
-
-  async sendSignalingMessage(receiverId, payload) {
-    const channel = supabaseClient.channel(`room-call:${receiverId}`);
-    await channel.send({
-      type: 'broadcast',
-      event: 'signaling',
-      payload
-    });
+      return resultado;
+    } catch (error) {
+      logError('Error activando servicio:', error);
+      return { error: error };
+    }
   }
 };
 
+// ============================================
+// WRAPPERS PARA MENSAJES
+// ============================================
+var SupabaseMensajes = {
+  // Enviar mensaje cifrado
+  async enviarMensaje(mensaje) {
+    try {
+      var { data, error } = await clienteSupabase.from('mensajes')
+        .insert(mensaje)
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      logError('Error enviando mensaje:', error);
+      return null;
+    }
+  },
+
+  // Obtener mensajes entre dos PINs
+  async obtenerMensajes(pin1, pin2) {
+    try {
+      var { data, error } = await clienteSupabase.from('mensajes')
+        .select('*')
+        .or('and(pin_remitente.eq.' + pin1 + ',pin_destinatario.eq.' + pin2 + '),and(pin_remitente.eq.' + pin2 + ',pin_destinatario.eq.' + pin1 + ')')
+        .order('enviado_en', { ascending: true });
+      if (error) throw error;
+      return data || [];
+    } catch (error) {
+      logError('Error obteniendo mensajes:', error);
+      return [];
+    }
+  },
+
+  // Marcar mensajes como leídos
+  async marcarComoLeidos(pinRemitente, pinDestinatario) {
+    try {
+      var { error } = await clienteSupabase.from('mensajes')
+        .update({ leido: true, leido_en: new Date().toISOString() })
+        .eq('pin_remitente', pinRemitente)
+        .eq('pin_destinatario', pinDestinatario)
+        .eq('leido', false);
+      if (error) throw error;
+      return true;
+    } catch (error) {
+      logError('Error marcando como leídos:', error);
+      return false;
+    }
+  },
+
+  // Obtener mensajes no leídos
+  async obtenerNoLeidos(pinDestinatario) {
+    try {
+      var { data, error } = await clienteSupabase.from('mensajes')
+        .select('pin_remitente')
+        .eq('pin_destinatario', pinDestinatario)
+        .eq('leido', false);
+      if (error) throw error;
+      return data || [];
+    } catch (error) {
+      logError('Error obteniendo no leídos:', error);
+      return [];
+    }
+  },
+
+  // Borrar mensajes
+  async borrarMensajes(ids) {
+    try {
+      var { error } = await clienteSupabase.from('mensajes')
+        .delete()
+        .in('id', ids);
+      if (error) throw error;
+      return true;
+    } catch (error) {
+      logError('Error borrando mensajes:', error);
+      return false;
+    }
+  },
+
+  // Limpiar chat completo
+  async limpiarChat(pin1, pin2) {
+    try {
+      var { error } = await clienteSupabase.from('mensajes')
+        .delete()
+        .or('and(pin_remitente.eq.' + pin1 + ',pin_destinatario.eq.' + pin2 + '),and(pin_remitente.eq.' + pin2 + ',pin_destinatario.eq.' + pin1 + ')');
+      if (error) throw error;
+      return true;
+    } catch (error) {
+      logError('Error limpiando chat:', error);
+      return false;
+    }
+  },
+
+  // Suscribirse a mensajes en tiempo real
+  suscribirseMensajes(pinDestinatario, callback) {
+    if (!clienteSupabase) return null;
+    return clienteSupabase.channel('mensajes_' + pinDestinatario)
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'mensajes',
+        filter: 'pin_destinatario=eq.' + pinDestinatario
+      }, callback)
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'mensajes',
+        filter: 'pin_remitente=eq.' + pinDestinatario
+      }, callback)
+      .on('postgres_changes', {
+        event: 'DELETE',
+        schema: 'public',
+        table: 'mensajes'
+      }, callback)
+      .subscribe();
+  }
+};
+
+// ============================================
+// WRAPPERS PARA LLAMADAS (WEBRTC)
+// ============================================
+var SupabaseLlamadas = {
+  // Iniciar llamada (crear registro)
+  async iniciarLlamada(llamada) {
+    try {
+      var { data, error } = await clienteSupabase.from('llamadas')
+        .insert(llamada)
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      logError('Error iniciando llamada:', error);
+      return null;
+    }
+  },
+
+  // Actualizar llamada
+  async actualizarLlamada(id, datos) {
+    try {
+      var { error } = await clienteSupabase.from('llamadas')
+        .update(datos)
+        .eq('id', id);
+      if (error) throw error;
+      return true;
+    } catch (error) {
+      logError('Error actualizando llamada:', error);
+      return false;
+    }
+  },
+
+  // Obtener llamada activa
+  async obtenerLlamadaActiva(pinRemitente, pinDestinatario) {
+    try {
+      var { data, error } = await clienteSupabase.from('llamadas')
+        .select('*')
+        .eq('pin_remitente', pinRemitente)
+        .eq('pin_destinatario', pinDestinatario)
+        .eq('estado', 'llamando')
+        .order('inicio', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      logError('Error obteniendo llamada:', error);
+      return null;
+    }
+  },
+
+  // Suscribirse a cambios de llamadas
+  suscribirseLlamadas(callback) {
+    if (!clienteSupabase) return null;
+    return clienteSupabase.channel('llamadas_cambios')
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'llamadas'
+      }, callback)
+      .subscribe();
+  },
+
+  // Limpiar llamadas antiguas
+  async limpiarLlamadasAntiguas(pin) {
+    try {
+      var hace24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      var { error } = await clienteSupabase.from('llamadas')
+        .delete()
+        .or('pin_remitente.eq.' + pin + ',pin_destinatario.eq.' + pin)
+        .lt('inicio', hace24h);
+      if (error) throw error;
+      return true;
+    } catch (error) {
+      logError('Error limpiando llamadas:', error);
+      return false;
+    }
+  }
+};
+
+// ============================================
+// WRAPPERS PARA STORAGE
+// ============================================
+var SupabaseStorage = {
+  // Verificar buckets
+  async verificarBuckets() {
+    try {
+      var { data: buckets, error } = await clienteSupabase.storage.listBuckets();
+      if (error) throw error;
+      return buckets;
+    } catch (error) {
+      logError('Error listando buckets:', error);
+      return [];
+    }
+  },
+
+  // Test de storage
+  async testStorage(pin) {
+    try {
+      var testBlob = new Blob(['test'], { type: 'text/plain' });
+      var testFileName = 'test_' + pin + '_' + Date.now() + '.txt';
+      var { data: uploadData, error: uploadError } = await clienteSupabase.storage.from('chat-files').upload(testFileName, testBlob);
+      if (uploadError) throw uploadError;
+      var { data: urlData, error: urlError } = await clienteSupabase.storage.from('chat-files').createSignedUrl(testFileName, 60);
+      if (urlError) throw urlError;
+      await clienteSupabase.storage.from('chat-files').remove([testFileName]);
+      return true;
+    } catch (error) {
+      logError('Error en test storage:', error);
+      return false;
+    }
+  }
+};
+
+console.log('🔌 Módulo supabase-client.js cargado correctamente');
