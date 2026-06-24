@@ -3,7 +3,8 @@
  * Sistema completo de notificaciones: nativas, visuales, sonido y vibración
  * 
  * Depende de:
- * - app.js (miPIN, prefsNotificaciones, contactoActual, obtenerNombreContacto, abrirChat, actualizarBadgeChats, customAlert, logError)
+ * - app.js (miPIN, prefsNotificaciones, contactoActual, obtenerNombreContacto, 
+ *           abrirChat, actualizarBadgeChats, customAlert, logError)
  */
 
 // ============================================
@@ -50,7 +51,7 @@ function mostrarNotificacionNativa(titulo, cuerpo, pinRemitente, tipoMensaje) {
   // Solo suprimir si estás ACTIVAMENTE en el chat del remitente
   if (document.visibilityState === 'visible' && contactoActual === pinRemitente) return;
   
-  var icono = '';
+  var icono = '🔒';
   if (tipoMensaje === 'imagen') icono = '🖼️';
   else if (tipoMensaje === 'video') icono = '🎥';
   else if (tipoMensaje === 'documento') icono = '📎';
@@ -140,9 +141,9 @@ function notificarNuevoMensaje(pinRemitente, texto, tipoMensaje) {
   var titulo = 'Mensaje de ' + nombre;
   var cuerpo = '';
   
-  if (tipoMensaje === 'imagen') cuerpo = '️ Imagen adjunta';
-  else if (tipoMensaje === 'video') cuerpo = ' Video adjunto';
-  else if (tipoMensaje === 'documento') cuerpo = '📎 Archivo adjunto';
+  if (tipoMensaje === 'imagen') cuerpo = '🖼️ Imagen adjunta';
+  else if (tipoMensaje === 'video') cuerpo = '🎥 Video adjunto';
+  else if (tipoMensaje === 'documento') cuerpo = ' Archivo adjunto';
   else cuerpo = prefsNotificaciones.mostrarContenido ? (texto.substring(0, 50) || 'Mensaje') : 'Nuevo mensaje';
   
   // Notificar SIEMPRE (sin importar dónde estés)
@@ -174,7 +175,7 @@ async function probarNotificacion() {
     new Notification('Kerix Chat - Prueba', { body: 'Las notificaciones nativas se están ejecutando. ✅' });
     await customAlert('✅ Notificación de prueba disparada.', '✅');
   } else { 
-    await customAlert('❌ No hay permisos aprobados para notificaciones aún.', ''); 
+    await customAlert('❌ No hay permisos aprobados para notificaciones aún.', '❌'); 
   }
 }
 
