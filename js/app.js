@@ -1278,3 +1278,18 @@ window.addEventListener('DOMContentLoaded', async function() {
 });
 
 console.log(' Módulo app.js cargado correctamente');
+
+// Añadir esto al final de tu js/app.js actual:
+window.abrirMenu = abrirMenu;
+window.cerrarMenu = cerrarMenu;
+window.cambiarTab = cambiarTab;
+window.mostrarModalAgregar = mostrarModalAgregar;
+window.cerrarChat = cerrarChat;
+window.mostrarOpcionesChat = mostrarOpcionesChat;
+window.enviarMensaje = enviarMensaje;
+window.iniciarLlamada = iniciarLlamada;
+window.colgarLlamada = colgarLlamada;
+window.toggleSilenciar = toggleSilenciar;
+window.toggleCamara = toggleCamara;
+window.rechazarLlamada = rechazarLlamada;
+window.aceptarLlamada = aceptarLlamada;
