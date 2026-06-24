@@ -1,278 +1,357 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>Kerix</title>
-  <link rel="manifest" href="manifest.json">
-  <meta name="theme-color" content="#00a884">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Kerix - Chat Anónimo Seguro</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#00a884">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  
-  <!-- Política de Seguridad de Contenido (CSP) Segura sin 'unsafe-inline' -->
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://dksmoteiidjpymextrgj.supabase.co; media-src 'self' blob: https://dksmoteiidjpymextrgj.supabase.co https://cdn.jsdelivr.net; connect-src 'self' https://dksmoteiidjpymextrgj.supabase.co wss://dksmoteiidjpymextrgj.supabase.co https://cdn.jsdelivr.net; font-src 'self';">
-
-  <!-- Enlace a la hoja de estilos externa -->
-  <link rel="stylesheet" href="css/styles.css">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://dksmoteiidjpymextrgj.supabase.co; media-src 'self' blob: https://dksmoteiidjpymextrgj.supabase.co; connect-src 'self' https://dksmoteiidjpymextrgj.supabase.co wss://dksmoteiidjpymextrgj.supabase.co https://cdn.jsdelivr.net; font-src 'self';">
+<link rel="stylesheet" href="css/styles.css">
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function() {
+    navigator.serviceWorker.register('/sw.js').then(function(reg) {
+      console.log('✅ SW registrado:', reg.scope);
+    }).catch(function(err) {
+      console.log('⚠️ SW error:', err);
+    });
+  });
+}
+</script>
 </head>
 <body>
 
-  <!-- Contenedor del Toast de Conectividad PWA -->
-  <div id="connection-toast" class="toast hidden"></div>
-
-<!-- Pantalla de Bienvenida Anónima -->
-<div id="welcomeScreen" class="screen flex-center">
-  <div class="welcome-container">
-    <div class="logo-circle">K</div>
-    <h1>Kerix</h1>
-    <p class="subtitle">Chat 100% Anónimo y Cifrado</p>
-    
-    <div class="pin-generation-box">
-      <p>Tu PIN de identidad:</p>
-      <div id="generatedPIN" class="pin-display">----</div>
-      <button id="btnRegeneratePIN" class="btn btn-secondary btn-sm">🔄 Generar otro</button>
-    </div>
-    
-    <button id="btnEnterKerix" class="btn btn-primary w-full">
-      🔐 Entrar con este PIN
-    </button>
-    
-    <div class="pin-login-section">
-      <p>¿Ya tienes un PIN?</p>
-      <input type="text" id="loginPIN" placeholder="Ingresa tu PIN (8 caracteres)" maxlength="8">
-      <button id="btnLoginWithPIN" class="btn btn-secondary w-full">
-        Ingresar con PIN existente
-      </button>
-    </div>
-  </div>
+<!-- MODALES PERSONALIZADOS -->
+<div id="customAlert" class="modal-overlay">
+<div class="modal" style="max-width: 340px;">
+<div class="modal-body" style="text-align: center; padding: 24px;">
+<div id="customAlertIcono" style="font-size: 44px; margin-bottom: 12px;">⚠️</div>
+<div id="customAlertTexto" style="font-size: 15px; color: #e9edef; margin-bottom: 20px; line-height: 1.5;"></div>
+<button class="modal-btn modal-btn-primary" id="customAlertBtn" style="margin: 0;">Entendido</button>
+</div>
+</div>
 </div>
 
-      <!-- Selector de Avatar para Registro -->
-      <div id="avatarSelectorContainer" class="avatar-selector-wrapper hidden">
-        <label for="avatarInput" class="avatar-label">
-          <div id="avatarPreview" class="avatar-preview-circle">📷</div>
-          <span class="avatar-hint">Elegir Foto de Perfil</span>
-        </label>
-        <input type="file" id="avatarInput" accept="image/*" class="hidden-input">
-      </div>
+<div id="customConfirm" class="modal-overlay">
+<div class="modal" style="max-width: 340px;">
+<div class="modal-body" style="text-align: center; padding: 24px;">
+<div id="customConfirmIcono" style="font-size: 44px; margin-bottom: 12px;">❓</div>
+<div id="customConfirmTexto" style="font-size: 15px; color: #e9edef; margin-bottom: 20px; line-height: 1.5;"></div>
+<div style="display: flex; gap: 10px;">
+<button class="modal-btn modal-btn-secondary" id="customConfirmBtnCancelar" style="margin: 0; flex: 1;">Cancelar</button>
+<button class="modal-btn modal-btn-primary" id="customConfirmBtnAceptar" style="margin: 0; flex: 1;">Confirmar</button>
+</div>
+</div>
+</div>
+</div>
 
-      <form id="authForm">
-        <div class="input-group">
-          <label for="emailInput">Correo Electrónico</label>
-          <input type="email" id="emailInput" placeholder="tu@correo.com" required autocomplete="username">
-        </div>
-        <div class="input-group">
-          <label for="passwordInput">Contraseña</label>
-          <input type="password" id="passwordInput" placeholder="Mínimo 6 caracteres" required autocomplete="current-password">
-        </div>
-        <div id="usernameGroup" class="input-group hidden">
-          <label for="usernameInput">Nombre de Usuario</label>
-          <input type="text" id="usernameInput" placeholder="Ej. Jazira">
-        </div>
+<div id="customPrompt" class="modal-overlay">
+<div class="modal" style="max-width: 360px;">
+<div class="modal-header">
+<div class="modal-titulo" id="customPromptTitulo">Entrada requerida</div>
+</div>
+<div class="modal-body" style="padding: 20px;">
+<div id="customPromptTexto" style="font-size: 14px; color: #8696a0; margin-bottom: 12px;"></div>
+<input type="text" id="customPromptInput" class="modal-input" style="margin-bottom: 16px;">
+<div style="display: flex; gap: 10px;">
+<button class="modal-btn modal-btn-secondary" id="customPromptBtnCancelar" style="margin: 0; flex: 1;">Cancelar</button>
+<button class="modal-btn modal-btn-primary" id="customPromptBtnAceptar" style="margin: 0; flex: 1;">Aceptar</button>
+</div>
+</div>
+</div>
+</div>
 
-        <button type="submit" id="btnSubmitAuth" class="btn btn-primary w-full">Iniciar Sesión</button>
-      </form>
+<!-- PANTALLA DE BLOQUEO -->
+<div id="pantallaBloqueo">
+<div class="bloqueo-card">
+<div class="bloqueo-icono">🔒</div>
+<div class="bloqueo-titulo">Kerix Bloqueado</div>
+<div class="bloqueo-subtitulo">Ingresa tu PIN de acceso</div>
+<input type="password" id="pinAccesoInput" placeholder="••••" maxlength="6">
+<button class="bloqueo-btn bloqueo-btn-primary" onclick="desbloquearApp()" id="btnDesbloquear">Desbloquear</button>
+<button class="bloqueo-btn bloqueo-btn-secondary" onclick="configurarPIN()" id="btnConfigPIN" style="display:none;">🔑 Configurar PIN</button>
+<button class="bloqueo-btn bloqueo-btn-warning" onclick="recuperarAcceso()" id="btnRecuperar" style="display:none;">Olvidé mi PIN</button>
+<button class="bloqueo-btn bloqueo-btn-danger" onclick="resetEmergencia()" id="btnReset" style="display:none; margin-top:10px;">⚠️ Reset de Emergencia</button>
+<p id="errorPIN">PIN incorrecto</p>
+</div>
+</div>
 
-      <div class="auth-toggle">
-        <span id="toggleText">¿No tienes cuenta?</span>
-        <button id="btnToggleAuth" class="btn-link">Regístrate</button>
-      </div>
-    </div>
-  </div>
+<!-- APP PRINCIPAL -->
+<div class="app-container" id="appPrincipal" style="display:none;">
+<div class="header-main">
+<div class="header-titulo">Kerix Chat</div>
+<div class="header-iconos">
+<button class="header-icon" onclick="abrirMenu()" title="Menú">☰</button>
+</div>
+</div>
+<div class="tabs">
+<div class="tab active" onclick="cambiarTab('chats')" id="tabChats">Chats <span class="tab-badge" id="badgeChats" style="display:none;">0</span></div>
+<div class="tab" onclick="cambiarTab('contactos')" id="tabContactos">Contactos</div>
+<div class="tab" onclick="cambiarTab('ajustes')" id="tabAjustes">Ajustes</div>
+</div>
+<div id="contenidoChats" class="lista-chats"></div>
+<div id="contenidoContactos" class="lista-chats hidden"></div>
+<div id="contenidoAjustes" class="hidden" style="padding: 20px;">
+<div class="config-seccion">
+<div class="config-titulo">🔒 Modo Privado</div>
+<div class="config-toggle">
+<div>
+<div class="config-toggle-label">Solo recibir de contactos guardados</div>
+<div style="font-size: 12px; color: #8696a0; margin-top: 4px;">Los mensajes de PINs desconocidos se rechazarán</div>
+</div>
+<label class="switch"><input type="checkbox" id="toggleModoPrivado" onchange="cambiarModoPrivado()"><span class="slider"></span></label>
+</div>
+</div>
+<div class="config-seccion">
+<div class="config-titulo">📡 Estado del servicio</div>
+<div id="estadoTexto" class="status expired" style="padding: 12px; border-radius: 8px; text-align: center; background: rgba(239, 68, 68, 0.15); color: #ef4444;">Cargando...</div>
+<div id="formActivacion" class="hidden" style="margin-top: 12px;">
+<div class="config-label">Código de Activación:</div>
+<input type="text" id="codigoInput" class="config-input" placeholder="Ej: ACT-45D-XXXX" maxlength="20">
+<button class="modal-btn modal-btn-primary" onclick="activar()" id="btnActivar" style="margin-top: 8px;">Activar</button>
+</div>
+<p style="font-size: 12px; color: #8696a0; margin-top: 10px; text-align: center;">
+Vence: <span id="fechaVencimiento" style="color: #e9edef;"></span>
+</p>
+</div>
+</div>
+<button class="fab" onclick="mostrarModalAgregar()" id="fabAgregar" title="Agregar contacto">+</button>
+</div>
 
-  <!-- Pantalla Principal de la Aplicación -->
-  <div id="appScreen" class="screen hidden app-layout">
-    
-    <!-- Barra Lateral Izquierda (Chats, Perfil, Contactos) -->
-    <aside class="sidebar">
-      <!-- Encabezado del Perfil del Usuario -->
-      <header class="sidebar-header">
-        <div class="user-profile-summary">
-          <div id="myAvatar" class="avatar avatar-clickable">?</div>
-          <div class="user-meta">
-            <span id="myUsername" class="user-name">Cargando...</span>
-            <span id="myStatus" class="user-status">En línea</span>
-          </div>
-        </div>
-        <div class="header-actions">
-          <button id="btnNewChat" class="icon-btn" title="Nuevo Contacto">💬</button>
-          <button id="btnShowProfile" class="icon-btn" title="Editar Perfil">⚙️</button>
-          <button id="btnLogout" class="icon-btn text-danger" title="Cerrar Sesión">🚪</button>
-        </div>
-      </header>
+<!-- CHAT INDIVIDUAL -->
+<div id="pantallaChatIndividual" style="display:none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #0b141a; z-index: 150;">
+<div class="chat-header">
+<button class="chat-header-back" onclick="cerrarChat()">←</button>
+<div class="chat-header-avatar" id="chatAvatar">?</div>
+<div class="chat-header-info">
+<div class="chat-header-nombre" id="chatNombre">Contacto</div>
+<div class="chat-header-estado" id="chatEstado">en línea</div>
+</div>
+<div class="chat-header-acciones">
+<button class="header-icon" onclick="iniciarLlamada('voz')" title="Llamada de voz">📞</button>
+<button class="header-icon" onclick="iniciarLlamada('video')" title="Videollamada">📹</button>
+<button class="header-icon" onclick="mostrarOpcionesChat()" title="Opciones">⋮</button>
+</div>
+</div>
+<div class="chat-mensajes" id="chatMensajes">
+<p style="color: #8696a0; text-align: center; padding: 40px 20px;">No hay mensajes aún</p>
+</div>
+<div class="chat-input-container">
+<button class="chat-btn chat-btn-adjuntar" onclick="document.getElementById('archivoInput').click()">📎</button>
+<textarea class="chat-input" id="nuevoMensaje" placeholder="Escribe un mensaje..." rows="1"></textarea>
+<button class="chat-btn chat-btn-enviar" onclick="enviarMensaje()">➤</button>
+</div>
+<input type="file" id="archivoInput" style="display: none;" accept="image/*,video/*,.pdf,.doc,.docx,.txt,.zip">
+</div>
 
-      <!-- Barra de Búsqueda de Conversaciones -->
-      <div class="search-bar-container">
-        <div class="search-wrapper">
-          <span class="search-icon">🔍</span>
-          <input type="text" id="searchChatsInput" placeholder="Buscar o empezar un chat nuevo">
-        </div>
-      </div>
+<!-- MENÚ LATERAL -->
+<div class="menu-overlay" id="menuOverlay" onclick="cerrarMenu()"></div>
+<div class="menu-lateral" id="menuLateral">
+<div class="menu-header">
+<div class="menu-header-label">Tu PIN de Kerix</div>
+<div class="menu-header-pin" id="menuPin">...</div>
+<button style="background: rgba(255,255,255,0.2); border: none; color: #fff; padding: 6px 12px; border-radius: 6px; font-size: 12px; cursor: pointer; margin-top: 8px;" onclick="copiarPIN()">📋 Copiar</button>
+</div>
+<div class="menu-item" onclick="cambiarTab('ajustes'); cerrarMenu();">
+<span class="menu-item-icon">⚙️</span>
+<span class="menu-item-text">Ajustes generales</span>
+</div>
+<div class="menu-item" onclick="abrirConfigSeguridad(); cerrarMenu();">
+<span class="menu-item-icon">🛡️</span>
+<span class="menu-item-text">Seguridad Avanzada</span>
+</div>
+<div class="menu-item" onclick="abrirConfigNotificaciones(); cerrarMenu();">
+<span class="menu-item-icon">🔔</span>
+<span class="menu-item-text">Notificaciones</span>
+</div>
+<div class="menu-item" onclick="mostrarBackupMenu(); cerrarMenu();">
+<span class="menu-item-icon">🔑</span>
+<span class="menu-item-text">Backup de Claves</span>
+</div>
+<div class="menu-item" onclick="cambiarPIN(); cerrarMenu();">
+<span class="menu-item-icon">🔐</span>
+<span class="menu-item-text">Cambiar PIN de acceso</span>
+</div>
+<div class="menu-item" onclick="testearStorage(); cerrarMenu();">
+<span class="menu-item-icon">🧪</span>
+<span class="menu-item-text">Diagnóstico de Storage</span>
+</div>
+<div class="menu-item danger" onclick="resetEmergencia(); cerrarMenu();">
+<span class="menu-item-icon">⚠️</span>
+<span class="menu-item-text">Reset de Emergencia</span>
+</div>
+</div>
 
-      <!-- Listado de Chats Activos -->
-      <div id="chatList" class="chat-list">
-        <!-- Generado dinámicamente -->
-      </div>
-    </aside>
+<!-- MODALES -->
+<div class="modal-overlay" id="modalAgregar">
+<div class="modal">
+<div class="modal-header">
+<div class="modal-titulo">👥 Agregar contacto</div>
+<button class="modal-cerrar" onclick="cerrarModalAgregar()">✕</button>
+</div>
+<div class="modal-body">
+<div class="config-desc">Ingresa el PIN de 8 caracteres de tu contacto</div>
+<input type="text" id="nuevoContactoPin" class="modal-input" placeholder="Ej: 15B9661D" maxlength="8">
+<button class="modal-btn modal-btn-primary" onclick="agregarContacto()">Agregar contacto</button>
+</div>
+</div>
+</div>
 
-    <!-- Área de Chat Principal (Derecha) -->
-    <main class="chat-area">
-      <!-- Estado Inicial Sin Chat Seleccionado -->
-      <div id="noChatPlaceholder" class="chat-placeholder flex-center">
-        <div class="placeholder-content">
-          <div class="logo-large">K</div>
-          <h2>Kerix para Web</h2>
-          <p>Envía y recibe mensajes, realiza llamadas de voz y video en tiempo real de forma segura y confidencial.</p>
-          <div class="security-badge">🔒 Cifrado de extremo a extremo</div>
-        </div>
-      </div>
+<div class="modal-overlay" id="modalSeguridad">
+<div class="modal" style="max-width: 500px;">
+<div class="modal-header">
+<div class="modal-titulo">🛡️ Seguridad Avanzada</div>
+<button class="modal-cerrar" onclick="cerrarModalSeguridad()">✕</button>
+</div>
+<div class="modal-body" style="padding: 0;">
+<div class="config-seccion">
+<div class="config-titulo">⏱️ Auto-destrucción de mensajes</div>
+<select id="prefAutoDestruccion" class="config-select" onchange="guardarPreferencia('auto_destruccion_dias', this.value)">
+<option value="0">Desactivado</option><option value="7">7 días</option><option value="30">30 días</option><option value="90">90 días</option><option value="365">1 año</option>
+</select>
+</div>
+<div class="config-seccion">
+<div class="config-titulo">🔑 Rotación automática de claves</div>
+<select id="prefRotacionClaves" class="config-select" onchange="guardarPreferencia('rotacion_claves_dias', this.value)">
+<option value="0">Desactivado</option><option value="30">Cada 30 días</option><option value="90">Cada 90 días</option><option value="180">Cada 6 meses</option>
+</select>
+</div>
+<div class="config-seccion">
+<div class="config-titulo">👁️ Ocultar mensajes al cambiar de pestaña</div>
+<div class="config-toggle">
+<div class="config-toggle-label">Desenfoca los mensajes cuando la app pierde el foco</div>
+<label class="switch"><input type="checkbox" id="prefOcultarCambiar" onchange="guardarPreferenciaBool('ocultar_al_cambiar', this.checked)"><span class="slider"></span></label>
+</div>
+</div>
+<div class="config-seccion">
+<div class="config-titulo">🔐 Forward Secrecy</div>
+<div style="display: flex; gap: 8px; margin-top: 8px;">
+<button class="modal-btn modal-btn-primary" onclick="activarForwardSecrecy()" id="btnActivarFS" style="flex: 1; margin: 0;">🔒 Activar</button>
+<button class="modal-btn modal-btn-secondary" onclick="desactivarForwardSecrecy()" id="btnDesactivarFS" style="flex: 1; margin: 0; display: none;">Desactivar</button>
+</div>
+<button class="modal-btn modal-btn-secondary" onclick="generarBackupMensajes()" style="margin-top: 8px;">📦 Backup de mensajes</button>
+<button class="modal-btn modal-btn-secondary" onclick="backupClavePrivada()" style="margin-top: 8px;">🔑 Backup de clave privada</button>
+</div>
+</div>
+</div>
+</div>
 
-      <!-- Chat Activo Seleccionado -->
-      <div id="activeChat" class="chat-container hidden">
-        <header class="chat-header">
-          <div class="contact-info">
-            <div id="chatContactAvatar" class="avatar">?</div>
-            <div class="contact-meta">
-              <span id="chatContactName" class="contact-name">Contacto</span>
-              <span id="chatContactStatus" class="contact-status">Cargando...</span>
-            </div>
-          </div>
-          <div class="call-actions">
-            <button id="btnAudioCall" class="icon-btn" title="Llamada de Voz">📞</button>
-            <button id="btnVideoCall" class="icon-btn" title="Videollamada">📹</button>
-          </div>
-        </header>
+<div class="modal-overlay" id="modalNotificaciones">
+<div class="modal">
+<div class="modal-header">
+<div class="modal-titulo">🔔 Notificaciones</div>
+<button class="modal-cerrar" onclick="cerrarModalNotificaciones()">✕</button>
+</div>
+<div class="modal-body">
+<div class="config-toggle">
+<div class="config-toggle-label">Notificaciones del navegador</div>
+<label class="switch"><input type="checkbox" id="notifNativas"><span class="slider"></span></label>
+</div>
+<div class="config-toggle">
+<div class="config-toggle-label">Burbujas dentro de la app</div>
+<label class="switch"><input type="checkbox" id="notifVisuales"><span class="slider"></span></label>
+</div>
+<div class="config-toggle">
+<div class="config-toggle-label">Sonido al recibir</div>
+<label class="switch"><input type="checkbox" id="notifSonido"><span class="slider"></span></label>
+</div>
+<div class="config-toggle">
+<div class="config-toggle-label">Vibración</div>
+<label class="switch"><input type="checkbox" id="notifVibracion"><span class="slider"></span></label>
+</div>
+<div class="config-toggle">
+<div class="config-toggle-label">Mostrar contenido del mensaje</div>
+<label class="switch"><input type="checkbox" id="notifContenido"><span class="slider"></span></label>
+</div>
+<button class="modal-btn modal-btn-primary" onclick="guardarConfigNotificaciones()" style="margin-top: 12px;">Guardar configuración</button>
+<button class="modal-btn modal-btn-secondary" onclick="solicitarPermisoNotificaciones()">🔓 Solicitar Permiso</button>
+<button class="modal-btn modal-btn-secondary" onclick="probarNotificacion()">🧪 Probar Notificación</button>
+</div>
+</div>
+</div>
 
-        <!-- Contenedor de Mensajes Históricos -->
-        <div id="messagesContainer" class="messages-container">
-          <!-- Generado dinámicamente -->
-        </div>
+<div class="modal-overlay" id="modalBackup">
+<div class="modal">
+<div class="modal-header">
+<div class="modal-titulo">🔑 Backup de Claves</div>
+<button class="modal-cerrar" onclick="cerrarModalBackup()">✕</button>
+</div>
+<div class="modal-body">
+<button class="modal-btn modal-btn-primary" onclick="exportarClave()">📤 Exportar clave</button>
+<button class="modal-btn modal-btn-secondary" onclick="importarClave()">📥 Importar clave</button>
+</div>
+</div>
+</div>
 
-        <!-- Área de Entrada de Mensajes -->
-        <footer class="chat-footer">
-          <div class="input-actions">
-            <!-- Selector de Archivo de Imagen oculto -->
-            <input type="file" id="attachmentInput" accept="image/*" class="hidden-input">
-            <button id="btnAttach" class="icon-btn" title="Adjuntar Imagen">📎</button>
-          </div>
+<div class="modal-overlay" id="modalOpcionesChat">
+<div class="modal">
+<div class="modal-header">
+<div class="modal-titulo">⚙️ Opciones del chat</div>
+<button class="modal-cerrar" onclick="cerrarModalOpcionesChat()">✕</button>
+</div>
+<div class="modal-body">
+<button class="modal-btn modal-btn-secondary" onclick="editarAliasContactoActual()">👤 Editar nombre de contacto</button>
+<button class="modal-btn modal-btn-secondary" onclick="seleccionarModo()">☑️ Seleccionar mensajes</button>
+<button class="modal-btn modal-btn-secondary" onclick="eliminarContactoActual()">🗑️ Eliminar contacto</button>
+<button class="modal-btn modal-btn-secondary" onclick="bloquearContactoActual()">🚫 Bloquear PIN</button>
+<button class="modal-btn modal-btn-secondary" onclick="limpiarChatCompleto()" style="color: #ef4444;">⚠️ Limpiar todo el chat</button>
+</div>
+</div>
+</div>
 
-          <div class="message-input-wrapper">
-            <input type="text" id="messageInput" placeholder="Escribe un mensaje aquí..." autocomplete="off">
-          </div>
+<!-- PANTALLA DE LLAMADA WEBRTC -->
+<div id="pantallaLlamada" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:#0b141a; z-index:2000; flex-direction:column;">
+<div style="background:#1f2c34; padding:16px; display:flex; align-items:center; gap:12px; border-bottom:1px solid #2a3942;">
+<button onclick="colgarLlamada()" style="background:none; border:none; color:#e9edef; font-size:20px; cursor:pointer;">←</button>
+<div style="flex:1;">
+<div id="llamadaNombre" style="font-weight:700; font-size:16px; color:#e9edef;">Contacto</div>
+<div id="llamadaEstado" style="font-size:12px; color:#8696a0;">Llamando...</div>
+</div>
+<div id="llamadaTimer" style="font-size:14px; color:#00a884; font-family:monospace;">00:00</div>
+</div>
+<div id="videoContainer" style="flex:1; display:none; position:relative; background:#000;">
+<video id="videoRemoto" autoplay playsinline style="width:100%; height:100%; object-fit:cover;"></video>
+<video id="videoLocal" autoplay playsinline muted style="position:absolute; bottom:20px; right:20px; width:120px; height:160px; object-fit:cover; border-radius:12px; border:2px solid #00a884;"></video>
+</div>
+<div id="audioContainer" style="flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:20px;">
+<div id="llamadaAvatar" style="width:120px; height:120px; border-radius:50%; background:linear-gradient(135deg, #00a884, #075e54); display:flex; align-items:center; justify-content:center; font-size:48px; font-weight:700; color:#fff; font-family:'Courier New', monospace;">?</div>
+<div style="text-align:center;">
+<div id="llamadaNombreGrande" style="font-size:24px; font-weight:700; color:#e9edef; margin-bottom:8px;">Contacto</div>
+<div id="llamadaEstadoGrande" style="font-size:14px; color:#8696a0;">Llamando...</div>
+</div>
+</div>
+<audio id="audioRemoto" autoplay playsinline></audio>
+<div style="background:#1f2c34; padding:20px; display:flex; justify-content:center; gap:20px; border-top:1px solid #2a3942;">
+<button id="btnSilenciar" onclick="toggleSilenciar()" style="width:60px; height:60px; border-radius:50%; background:#2a3942; border:none; color:#e9edef; font-size:24px; cursor:pointer;">🎤</button>
+<button id="btnCamara" onclick="toggleCamara()" style="width:60px; height:60px; border-radius:50%; background:#2a3942; border:none; color:#e9edef; font-size:24px; cursor:pointer; display:none;">📷</button>
+<button id="btnAltavoz" onclick="toggleAltavoz()" style="width:60px; height:60px; border-radius:50%; background:#2a3942; border:none; color:#e9edef; font-size:24px; cursor:pointer;">🔊</button>
+<button onclick="colgarLlamada()" style="width:70px; height:70px; border-radius:50%; background:#ef4444; border:none; color:#fff; font-size:28px; cursor:pointer;">📞</button>
+</div>
+</div>
 
-          <div class="send-actions">
-            <button id="btnVoiceRecord" class="icon-btn mic-idle" title="Grabar nota de voz">🎤</button>
-            <button id="btnSendMessage" class="icon-btn btn-send hidden" title="Enviar mensaje">➤</button>
-          </div>
-        </footer>
-      </div>
-    </main>
-  </div>
+<div id="modalLlamadaEntrante" class="modal-overlay">
+<div class="modal" style="max-width:340px;">
+<div class="modal-body" style="text-align:center; padding:30px;">
+<div id="llamadaEntranteAvatar" style="width:80px; height:80px; border-radius:50%; background:linear-gradient(135deg, #00a884, #075e54); display:flex; align-items:center; justify-content:center; font-size:32px; font-weight:700; color:#fff; font-family:'Courier New', monospace; margin:0 auto 16px;">?</div>
+<div id="llamadaEntranteNombre" style="font-size:20px; font-weight:700; color:#e9edef; margin-bottom:8px;">Contacto</div>
+<div id="llamadaEntranteTipo" style="font-size:14px; color:#8696a0; margin-bottom:24px;">Llamada entrante</div>
+<div style="display:flex; gap:16px; justify-content:center;">
+<button onclick="rechazarLlamada()" style="width:70px; height:70px; border-radius:50%; background:#ef4444; border:none; color:#fff; font-size:28px; cursor:pointer;">📞</button>
+<button onclick="aceptarLlamada()" style="width:70px; height:70px; border-radius:50%; background:#00a884; border:none; color:#fff; font-size:28px; cursor:pointer;">📞</button>
+</div>
+</div>
+</div>
+</div>
 
-  <!-- Panel Desplegable: Editar Perfil -->
-  <div id="profilePanel" class="side-panel hidden">
-    <header class="panel-header">
-      <button id="btnCloseProfile" class="icon-btn back-btn">←</button>
-      <h2>Perfil de Usuario</h2>
-    </header>
-    <div class="panel-body">
-      <div class="profile-edit-avatar">
-        <div id="profileAvatarPreview" class="avatar avatar-edit-lg">?</div>
-        <label for="profileAvatarFileInput" class="btn btn-secondary btn-sm mt-12">Cambiar Foto</label>
-        <input type="file" id="profileAvatarFileInput" accept="image/*" class="hidden-input">
-      </div>
-      <div class="input-group mt-24">
-        <label for="profileUsernameInput">Nombre de Usuario</label>
-        <input type="text" id="profileUsernameInput">
-      </div>
-      <div class="input-group">
-        <label for="profileStatusInput">Info. Estado</label>
-        <input type="text" id="profileStatusInput" placeholder="Disponible, Ocupado, etc.">
-      </div>
-      <button id="btnSaveProfile" class="btn btn-primary w-full mt-24">Guardar Cambios</button>
-    </div>
-  </div>
-
-  <!-- Panel Desplegable: Contactos / Nuevo Chat -->
-  <div id="contactsPanel" class="side-panel hidden">
-    <header class="panel-header">
-      <button id="btnCloseContacts" class="icon-btn back-btn">←</button>
-      <h2>Nuevo Chat</h2>
-    </header>
-    <div class="panel-body">
-      <div class="search-bar-container px-0">
-        <div class="search-wrapper">
-          <span class="search-icon">🔍</span>
-          <input type="text" id="searchContactsInput" placeholder="Buscar contactos por correo...">
-        </div>
-      </div>
-      <div id="contactsList" class="contacts-list mt-16">
-        <!-- Generado dinámicamente -->
-      </div>
-    </div>
-  </div>
-
-  <!-- Modal de Llamada Saliente / En Curso -->
-  <div id="callOverlay" class="modal-overlay hidden">
-    <div class="call-card">
-      <div class="call-header">
-        <div id="callContactAvatar" class="avatar avatar-call-lg">?</div>
-        <h2 id="callContactNameLabel">Contacto</h2>
-        <span id="callStatusLabel" class="call-status">Llamando...</span>
-      </div>
-
-      <!-- Contenedor de Video (para videollamadas) -->
-      <div id="videoContainer" class="video-grid hidden">
-        <video id="remoteVideo" autoplay playsinline class="remote-video"></video>
-        <video id="localVideo" autoplay muted playsinline class="local-video"></video>
-      </div>
-
-      <div class="call-timer-container">
-        <span id="callTimer" class="timer-hidden">00:00</span>
-      </div>
-
-      <!-- Controles de Llamada -->
-      <div class="call-controls">
-        <button id="btnToggleMute" class="circle-btn" title="Silenciar Micrófono">🎙️</button>
-        <button id="btnToggleVideo" class="circle-btn hidden" title="Apagar Cámara">📹</button>
-        <button id="btnHangup" class="circle-btn btn-danger-round" title="Colgar">📞</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Modal de Llamada Entrante -->
-  <div id="modalLlamadaEntrante" class="modal-overlay hidden">
-    <div class="modal-card">
-      <div class="modal-body text-center">
-        <div id="llamadaEntranteAvatar" class="avatar avatar-incoming-call">?</div>
-        <h3 id="llamadaEntranteNombre">Nombre de Contacto</h3>
-        <span id="llamadaEntranteTipo" class="llamada-tipo">Llamada entrante...</span>
-        
-        <div class="modal-actions mt-24 flex-center gap-16">
-          <button id="btnDeclineCall" class="btn-incoming-action btn-decline-call" title="Rechazar">📞</button>
-          <button id="btnAcceptCall" class="btn-incoming-action btn-accept-call" title="Aceptar">📞</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Elementos de Audio de Señalización -->
-  <audio id="ringtoneAudio" loop preload="auto" src="https://cdn.jsdelivr.net/gh/scottschiller/soundmanager2@master/demo/_mp3/click-low.mp3" class="hidden-media"></audio>
-  <audio id="dialbackAudio" loop preload="auto" src="https://cdn.jsdelivr.net/gh/scottschiller/soundmanager2@master/demo/_mp3/click-high.mp3" class="hidden-media"></audio>
-
-  <!-- Dependencia Oficial de Supabase v2 -->
-  <!-- Supabase JS con Subresource Integrity (SRI) -->
-<script 
-  src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" 
-  integrity="sha384-JWEyvHh+lRf0sN/WWY+QTQwX+CyWqmNg4tkc8GQzAMEtR2wGNrCJlvnu1lHD1kDm" 
-  crossorigin="anonymous">
-</script>
-  <!-- Archivos de Lógica desacoplados -->
-  <script src="js/security.js"></script>
-  <script src="js/supabase-client.js"></script>
-  <script src="js/crypto.js"></script> 
-  <script src="js/webrtc.js"></script>
-  <script src="js/app.js"></script>
+<!-- SCRIPTS EN ORDEN DE DEPENDENCIA -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="js/security.js"></script>
+<script src="js/crypto.js"></script>
+<script src="js/notifications.js"></script>
+<script src="js/webrtc.js"></script>
+<script src="js/app.js"></script>
 </body>
 </html>
