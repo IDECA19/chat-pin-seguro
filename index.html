@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<title>Kerix - Chat Anónimo Seguro</title>
+<title>Kerix - Chat PIN Seguro</title>
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#00a884">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -11,6 +11,17 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://dksmoteiidjpymextrgj.supabase.co; media-src 'self' blob: https://dksmoteiidjpymextrgj.supabase.co; connect-src 'self' https://dksmoteiidjpymextrgj.supabase.co wss://dksmoteiidjpymextrgj.supabase.co https://cdn.jsdelivr.net; font-src 'self';">
 <link rel="stylesheet" href="css/styles.css">
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function() {
+    navigator.serviceWorker.register('/sw.js').then(function(registration) {
+      console.log('✅ Service Worker registrado:', registration.scope);
+    }).catch(function(error) {
+      console.log('⚠️ SW no registrado:', error);
+    });
+  });
+}
+</script>
 </head>
 <body>
 
@@ -18,7 +29,7 @@
 <div id="customAlert" class="modal-overlay">
 <div class="modal" style="max-width: 340px;">
 <div class="modal-body" style="text-align: center; padding: 24px;">
-<div id="customAlertIcono" style="font-size: 44px; margin-bottom: 12px;">⚠️</div>
+<div id="customAlertIcono" style="font-size: 44px; margin-bottom: 12px;">️</div>
 <div id="customAlertTexto" style="font-size: 15px; color: #e9edef; margin-bottom: 20px; line-height: 1.5;"></div>
 <button class="modal-btn modal-btn-primary" id="customAlertBtn" style="margin: 0;">Entendido</button>
 </div>
@@ -96,7 +107,7 @@
 </div>
 </div>
 <div class="config-seccion">
-<div class="config-titulo">📡 Estado del servicio</div>
+<div class="config-titulo"> Estado del servicio</div>
 <div id="estadoTexto" class="status expired" style="padding: 12px; border-radius: 8px; text-align: center; background: rgba(239, 68, 68, 0.15); color: #ef4444;">Cargando...</div>
 <div id="formActivacion" class="hidden" style="margin-top: 12px;">
 <div class="config-label">Código de Activación:</div>
@@ -130,7 +141,7 @@ Vence: <span id="fechaVencimiento" style="color: #e9edef;"></span>
 <p style="color: #8696a0; text-align: center; padding: 40px 20px;">No hay mensajes aún</p>
 </div>
 <div class="chat-input-container">
-<button class="chat-btn chat-btn-adjuntar" id="btnAdjuntar">📎</button>
+<button class="chat-btn chat-btn-adjuntar" id="btnAdjuntar"></button>
 <textarea class="chat-input" id="nuevoMensaje" placeholder="Escribe un mensaje..." rows="1"></textarea>
 <button class="chat-btn chat-btn-enviar" id="btnEnviar">➤</button>
 </div>
@@ -241,14 +252,14 @@ Vence: <span id="fechaVencimiento" style="color: #e9edef;"></span>
 </div>
 </div>
 <div class="config-seccion" style="border-left: 3px solid #f59e0b;">
-<div class="config-titulo">🔐 Forward Secrecy</div>
+<div class="config-titulo"> Forward Secrecy</div>
 <div class="config-desc">Cuando roten las claves, los mensajes antiguos quedarán ilegibles en el servidor. ⚠️ Requiere "Rotación de claves" activada.</div>
 <div style="display: flex; gap: 8px; margin-top: 8px;">
 <button class="modal-btn modal-btn-primary" id="btnActivarFS" style="flex: 1; margin: 0;">🔒 Activar</button>
 <button class="modal-btn modal-btn-secondary" id="btnDesactivarFS" style="flex: 1; margin: 0; display: none;">Desactivar</button>
 </div>
-<button class="modal-btn modal-btn-secondary" id="btnBackupMensajes" style="margin-top: 8px;">📦 Backup de mensajes</button>
-<button class="modal-btn modal-btn-secondary" id="btnBackupClavePrivada" style="margin-top: 8px;">🔑 Backup de clave privada</button>
+<button class="modal-btn modal-btn-secondary" id="btnBackupMensajes" style="margin-top: 8px;"> Backup de mensajes</button>
+<button class="modal-btn modal-btn-secondary" id="btnBackupClavePrivada" style="margin-top: 8px;"> Backup de clave privada</button>
 </div>
 </div>
 </div>
@@ -285,7 +296,7 @@ Vence: <span id="fechaVencimiento" style="color: #e9edef;"></span>
 </div>
 <button class="modal-btn modal-btn-primary" id="btnGuardarConfigNotif" style="margin-top: 12px;">Guardar configuración</button>
 <button class="modal-btn modal-btn-secondary" id="btnSolicitarPermiso">🔓 Solicitar Permiso del Navegador</button>
-<button class="modal-btn modal-btn-secondary" id="btnProbarNotif">🧪 Probar Notificación</button>
+<button class="modal-btn modal-btn-secondary" id="btnProbarNotif"> Probar Notificación</button>
 </div>
 </div>
 </div>
@@ -347,8 +358,8 @@ Vence: <span id="fechaVencimiento" style="color: #e9edef;"></span>
 <div style="background:#1f2c34; padding:20px; display:flex; justify-content:center; gap:20px; border-top:1px solid #2a3942;">
 <button id="btnSilenciar" style="width:60px; height:60px; border-radius:50%; background:#2a3942; border:none; color:#e9edef; font-size:24px; cursor:pointer;">🎤</button>
 <button id="btnCamara" style="width:60px; height:60px; border-radius:50%; background:#2a3942; border:none; color:#e9edef; font-size:24px; cursor:pointer; display:none;">📷</button>
-<button id="btnAltavoz" style="width:60px; height:60px; border-radius:50%; background:#2a3942; border:none; color:#e9edef; font-size:24px; cursor:pointer;">🔊</button>
-<button id="btnColgar" style="width:70px; height:70px; border-radius:50%; background:#ef4444; border:none; color:#fff; font-size:28px; cursor:pointer;">📞</button>
+<button id="btnAltavoz" style="width:60px; height:60px; border-radius:50%; background:#2a3942; border:none; color:#e9edef; font-size:24px; cursor:pointer;"></button>
+<button id="btnColgar" style="width:70px; height:70px; border-radius:50%; background:#ef4444; border:none; color:#fff; font-size:28px; cursor:pointer;"></button>
 </div>
 </div>
 
@@ -367,7 +378,7 @@ Vence: <span id="fechaVencimiento" style="color: #e9edef;"></span>
 </div>
 </div>
 
-<!-- ORDEN DE CARGA DE SCRIPTS (IMPORTANTE) -->
+<!-- ORDEN DE CARGA DE SCRIPTS -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="js/security.js"></script>
 <script src="js/crypto.js"></script>
@@ -376,6 +387,5 @@ Vence: <span id="fechaVencimiento" style="color: #e9edef;"></span>
 <script src="js/webrtc.js"></script>
 <script src="js/app.js"></script>
 <script src="js/event-listeners.js"></script>
-</body>
 </body>
 </html>
