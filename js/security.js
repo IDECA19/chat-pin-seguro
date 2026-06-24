@@ -1,7 +1,9 @@
 /**
  * js/security.js
- * Sistema de seguridad: PIN, bloqueo, rate limiting, validación
- * No tiene dependencias internas
+ * Módulo de seguridad: PIN, bloqueo, rate limiting, validación
+ * 
+ * Depende de: (ninguna dependencia interna, es módulo base)
+ * Cargar antes de: crypto.js, supabase-client.js, app.js
  */
 
 // ============================================
@@ -179,7 +181,7 @@ async function desbloquearApp() {
     document.getElementById('pantallaBloqueo').style.display = 'none';
     document.getElementById('pinAccesoInput').value = '';
     document.getElementById('errorPIN').style.display = 'none';
-    try { await cargarClavePrivadaSegura(pinIngresado); } catch (error) { logError('Error:', error); await generarClaves(); }
+    try { await cargarClavePrivadaSegura(pinIngresado); } catch (error) { logError('Error:', error); await customAlert('⚠️ No se pudieron cargar las llaves.'); return; }
     document.getElementById('appPrincipal').style.display = 'block';
     try { await verificarEstado(); } catch (error) { logError('Error:', error); }
     await cargarMensajesNoLeidos();
@@ -203,72 +205,4 @@ async function cambiarPIN() {
   var nuevoPin = await customPrompt('🔐 Nuevo PIN', 'Ingresa tu nuevo PIN (4-6 dígitos):', '••••', 'password');
   if (!nuevoPin || nuevoPin.length < 4 || nuevoPin.length > 6 || !/^\d+$/.test(nuevoPin)) { await customAlert('PIN inválido.'); return; }
   var nuevoPin2 = await customPrompt('🔐 Confirmar PIN', 'Confirma tu nuevo PIN:', '••••', 'password');
-  if (nuevoPin !== nuevoPin2) { await customAlert('No coinciden.'); return; }
-  pinAccesoHash = await hashPIN(nuevoPin);
-  localStorage.setItem('pin_hash_' + miPIN, pinAccesoHash);
-  var claveCifrada = localStorage.getItem('clave_privada_' + miPIN);
-  if (claveCifrada) {
-    try {
-      var privBase64 = await descifrarClaveConPIN(claveCifrada, pinActual);
-      localStorage.setItem('clave_privada_' + miPIN, await cifrarClaveConPIN(privBase64, nuevoPin));
-    } catch (e) { logError('Error:', e); }
-  }
-  pinActualTemporal = nuevoPin;
-  sessionStorage.setItem('pin_temporal_' + miPIN, nuevoPin);
-  await customAlert('✅ PIN modificado.', '✅');
-}
-
-// ============================================
-// RATE LIMITING
-// ============================================
-function verificarRateLimit(clave, maxPeticiones, ventanaMs) {
-  var ahora = Date.now();
-  if (!rateLimiters[clave]) rateLimiters[clave] = { peticiones: [] };
-  var limiter = rateLimiters[clave];
-  limiter.peticiones = limiter.peticiones.filter(function(t) { return ahora - t < ventanaMs; });
-  if (limiter.peticiones.length >= maxPeticiones) return false;
-  limiter.peticiones.push(ahora);
-  return true;
-}
-
-function puedeEnviarMensaje() { return verificarRateLimit('mensajes', 10, 60000); }
-function puedeBuscar() { return verificarRateLimit('busquedas', 30, 60000); }
-function puedeLlamar() { return verificarRateLimit('llamadas', 5, 60000); }
-
-// ============================================
-// VALIDACIÓN
-// ============================================
-function validarPIN(pin) {
-  if (!pin || typeof pin !== 'string') return { valido: false, error: 'PIN requerido' };
-  pin = pin.trim().toUpperCase();
-  if (pin.length !== 8) return { valido: false, error: 'El PIN debe tener 8 caracteres' };
-  if (!/^[0-9A-F]{8}$/.test(pin)) return { valido: false, error: 'Solo caracteres hexadecimales (0-9, A-F)' };
-  return { valido: true, valor: pin };
-}
-
-function validarMensaje(texto, maxLongitud) {
-  maxLongitud = maxLongitud || 5000;
-  if (!texto || typeof texto !== 'string') return { valido: false, error: 'Mensaje requerido' };
-  texto = texto.trim();
-  if (texto.length === 0) return { valido: false, error: 'Mensaje vacío' };
-  if (texto.length > maxLongitud) return { valido: false, error: 'Excede ' + maxLongitud + ' caracteres' };
-  return { valido: true, valor: texto };
-}
-
-function validarArchivo(archivo, maxBytes) {
-  maxBytes = maxBytes || (50 * 1024 * 1024);
-  if (!archivo) return { valido: false, error: 'No se seleccionó archivo' };
-  if (archivo.size > maxBytes) return { valido: false, error: 'Excede ' + Math.round(maxBytes / (1024*1024)) + ' MB' };
-  if (archivo.size === 0) return { valido: false, error: 'Archivo vacío' };
-  return { valido: true };
-}
-
-// ============================================
-// LISTENERS
-// ============================================
-document.addEventListener('keydown', function(e) {
-  if (e.key === 'Enter' && document.getElementById('pantallaBloqueo').style.display === 'flex') {
-    var inputPIN = document.getElementById('pinAccesoInput');
-    if (inputPIN.value) desbloquearApp();
-  }
-});
+ 
