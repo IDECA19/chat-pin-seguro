@@ -21,14 +21,32 @@
   <!-- Contenedor del Toast de Conectividad PWA -->
   <div id="connection-toast" class="toast hidden"></div>
 
-  <!-- Pantalla de Inicio de Sesión / Registro -->
-  <div id="loginScreen" class="screen flex-center">
-    <div class="login-container">
-      <div class="login-header">
-        <div class="logo-circle">K</div>
-        <h1>Kerix</h1>
-        <p class="subtitle">Mensajería y Llamadas Seguras</p>
-      </div>
+<!-- Pantalla de Bienvenida Anónima -->
+<div id="welcomeScreen" class="screen flex-center">
+  <div class="welcome-container">
+    <div class="logo-circle">K</div>
+    <h1>Kerix</h1>
+    <p class="subtitle">Chat 100% Anónimo y Cifrado</p>
+    
+    <div class="pin-generation-box">
+      <p>Tu PIN de identidad:</p>
+      <div id="generatedPIN" class="pin-display">----</div>
+      <button id="btnRegeneratePIN" class="btn btn-secondary btn-sm">🔄 Generar otro</button>
+    </div>
+    
+    <button id="btnEnterKerix" class="btn btn-primary w-full">
+      🔐 Entrar con este PIN
+    </button>
+    
+    <div class="pin-login-section">
+      <p>¿Ya tienes un PIN?</p>
+      <input type="text" id="loginPIN" placeholder="Ingresa tu PIN (8 caracteres)" maxlength="8">
+      <button id="btnLoginWithPIN" class="btn btn-secondary w-full">
+        Ingresar con PIN existente
+      </button>
+    </div>
+  </div>
+</div>
 
       <!-- Selector de Avatar para Registro -->
       <div id="avatarSelectorContainer" class="avatar-selector-wrapper hidden">
