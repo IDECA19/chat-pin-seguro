@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Kerix</title>
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#00a884">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  
+  <!-- Política de Seguridad de Contenido (CSP) Segura sin 'unsafe-inline' -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self'; img-src 'self' data: blob: https://dksmoteiidjpymextrgj.supabase.co; media-src 'self' blob: https://dksmoteiidjpymextrgj.supabase.co; connect-src 'self' https://dksmoteiidjpymextrgj.supabase.co wss://dksmoteiidjpymextrgj.supabase.co https://cdn.jsdelivr.net; font-src 'self';">
+
+  <!-- Enlace a la hoja de estilos externa -->
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+  <!-- Contenedor del Toast de Conectividad PWA -->
+  <div id="connection-toast" class="toast hidden"></div>
+
+  <!-- Pantalla de Inicio de Sesión / Registro -->
+  <div id="loginScreen" class="screen flex-center">
+    <div class="login-container">
+      <div class="login-header">
+        <div class="logo-circle">K</div>
+        <h1>Kerix</h1>
+        <p class="subtitle">Mensajería y Llamadas Seguras</p>
+      </div>
+
+      <!-- Selector de Avatar para Registro -->
+      <div id="avatarSelectorContainer" class="avatar-selector-wrapper hidden">
+        <label for="avatarInput" class="avatar-label">
+          <div id="avatarPreview" class="avatar-preview-circle">📷</div>
+          <span class="avatar-hint">Elegir Foto de Perfil</span>
+        </label>
+        <input type="file" id="avatarInput" accept="image/*" class="hidden-input">
+      </div>
+
+      <form id="authForm">
+        <div class="input-group">
+          <label for="emailInput">Correo Electrónico</label>
+          <input type="email" id="emailInput" placeholder="tu@correo.com" required autocomplete="username">
+        </div>
+        <div class="input-group">
+          <label for="passwordInput">Contraseña</label>
+          <input type="password" id="passwordInput" placeholder="Mínimo 6 caracteres" required autocomplete="current-password">
+        </div>
+        <div id="usernameGroup" class="input-group hidden">
+          <label for="usernameInput">Nombre de Usuario</label>
+          <input type="text" id="usernameInput" placeholder="Ej. Jazira">
+        </div>
+
+        <button type="submit" id="btnSubmitAuth" class="btn btn-primary w-full">Iniciar Sesión</button>
+      </form>
+
+      <div class="auth-toggle">
+        <span id="toggleText">¿No tienes cuenta?</span>
+        <button id="btnToggleAuth" class="btn-link">Regístrate</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Pantalla Principal de la Aplicación -->
+  <div id="appScreen" class="screen hidden app-layout">
+    
+    <!-- Barra Lateral Izquierda (Chats, Perfil, Contactos) -->
+    <aside class="sidebar">
+      <!-- Encabezado del Perfil del Usuario -->
+      <header class="sidebar-header">
+        <div class="user-profile-summary">
+          <div id="myAvatar" class="avatar avatar-clickable">?</div>
+          <div class="user-meta">
+            <span id="myUsername" class="user-name">Cargando...</span>
+            <span id="myStatus" class="user-status">En línea</span>
+          </div>
+        </div>
+        <div class="header-actions">
+          <button id="btnNewChat" class="icon-btn" title="Nuevo Contacto">💬</button>
+          <button id="btnShowProfile" class="icon-btn" title="Editar Perfil">⚙️</button>
+          <button id="btnLogout" class="icon-btn text-danger" title="Cerrar Sesión">🚪</button>
+        </div>
+      </header>
+
+      <!-- Barra de Búsqueda de Conversaciones -->
+      <div class="search-bar-container">
+        <div class="search-wrapper">
+          <span class="search-icon">🔍</span>
+          <input type="text" id="searchChatsInput" placeholder="Buscar o empezar un chat nuevo">
+        </div>
+      </div>
+
+      <!-- Listado de Chats Activos -->
+      <div id="chatList" class="chat-list">
+        <!-- Generado dinámicamente -->
+      </div>
+    </aside>
+
+    <!-- Área de Chat Principal (Derecha) -->
+    <main class="chat-area">
+      <!-- Estado Inicial Sin Chat Seleccionado -->
+      <div id="noChatPlaceholder" class="chat-placeholder flex-center">
+        <div class="placeholder-content">
+          <div class="logo-large">K</div>
+          <h2>Kerix para Web</h2>
+          <p>Envía y recibe mensajes, realiza llamadas de voz y video en tiempo real de forma segura y confidencial.</p>
+          <div class="security-badge">🔒 Cifrado de extremo a extremo</div>
+        </div>
+      </div>
+
+      <!-- Chat Activo Seleccionado -->
+      <div id="activeChat" class="chat-container hidden">
+        <header class="chat-header">
+          <div class="contact-info">
+            <div id="chatContactAvatar" class="avatar">?</div>
+            <div class="contact-meta">
+              <span id="chatContactName" class="contact-name">Contacto</span>
+              <span id="chatContactStatus" class="contact-status">Cargando...</span>
+            </div>
+          </div>
+          <div class="call-actions">
+            <button id="btnAudioCall" class="icon-btn" title="Llamada de Voz">📞</button>
+            <button id="btnVideoCall" class="icon-btn" title="Videollamada">📹</button>
+          </div>
+        </header>
+
+        <!-- Contenedor de Mensajes Históricos -->
+        <div id="messagesContainer" class="messages-container">
+          <!-- Generado dinámicamente -->
+        </div>
+
+        <!-- Área de Entrada de Mensajes -->
+        <footer class="chat-footer">
+          <div class="input-actions">
+            <!-- Selector de Archivo de Imagen oculto -->
+            <input type="file" id="attachmentInput" accept="image/*" class="hidden-input">
+            <button id="btnAttach" class="icon-btn" title="Adjuntar Imagen">📎</button>
+          </div>
+
+          <div class="message-input-wrapper">
+            <input type="text" id="messageInput" placeholder="Escribe un mensaje aquí..." autocomplete="off">
+          </div>
+
+          <div class="send-actions">
+            <button id="btnVoiceRecord" class="icon-btn mic-idle" title="Grabar nota de voz">🎤</button>
+            <button id="btnSendMessage" class="icon-btn btn-send hidden" title="Enviar mensaje">➤</button>
+          </div>
+        </footer>
+      </div>
+    </main>
+  </div>
+
+  <!-- Panel Desplegable: Editar Perfil -->
+  <div id="profilePanel" class="side-panel hidden">
+    <header class="panel-header">
+      <button id="btnCloseProfile" class="icon-btn back-btn">←</button>
+      <h2>Perfil de Usuario</h2>
+    </header>
+    <div class="panel-body">
+      <div class="profile-edit-avatar">
+        <div id="profileAvatarPreview" class="avatar avatar-edit-lg">?</div>
+        <label for="profileAvatarFileInput" class="btn btn-secondary btn-sm mt-12">Cambiar Foto</label>
+        <input type="file" id="profileAvatarFileInput" accept="image/*" class="hidden-input">
+      </div>
+      <div class="input-group mt-24">
+        <label for="profileUsernameInput">Nombre de Usuario</label>
+        <input type="text" id="profileUsernameInput">
+      </div>
+      <div class="input-group">
+        <label for="profileStatusInput">Info. Estado</label>
+        <input type="text" id="profileStatusInput" placeholder="Disponible, Ocupado, etc.">
+      </div>
+      <button id="btnSaveProfile" class="btn btn-primary w-full mt-24">Guardar Cambios</button>
+    </div>
+  </div>
+
+  <!-- Panel Desplegable: Contactos / Nuevo Chat -->
+  <div id="contactsPanel" class="side-panel hidden">
+    <header class="panel-header">
+      <button id="btnCloseContacts" class="icon-btn back-btn">←</button>
+      <h2>Nuevo Chat</h2>
+    </header>
+    <div class="panel-body">
+      <div class="search-bar-container px-0">
+        <div class="search-wrapper">
+          <span class="search-icon">🔍</span>
+          <input type="text" id="searchContactsInput" placeholder="Buscar contactos por correo...">
+        </div>
+      </div>
+      <div id="contactsList" class="contacts-list mt-16">
+        <!-- Generado dinámicamente -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal de Llamada Saliente / En Curso -->
+  <div id="callOverlay" class="modal-overlay hidden">
+    <div class="call-card">
+      <div class="call-header">
+        <div id="callContactAvatar" class="avatar avatar-call-lg">?</div>
+        <h2 id="callContactNameLabel">Contacto</h2>
+        <span id="callStatusLabel" class="call-status">Llamando...</span>
+      </div>
+
+      <!-- Contenedor de Video (para videollamadas) -->
+      <div id="videoContainer" class="video-grid hidden">
+        <video id="remoteVideo" autoplay playsinline class="remote-video"></video>
+        <video id="localVideo" autoplay muted playsinline class="local-video"></video>
+      </div>
+
+      <div class="call-timer-container">
+        <span id="callTimer" class="timer-hidden">00:00</span>
+      </div>
+
+      <!-- Controles de Llamada -->
+      <div class="call-controls">
+        <button id="btnToggleMute" class="circle-btn" title="Silenciar Micrófono">🎙️</button>
+        <button id="btnToggleVideo" class="circle-btn hidden" title="Apagar Cámara">📹</button>
+        <button id="btnHangup" class="circle-btn btn-danger-round" title="Colgar">📞</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal de Llamada Entrante -->
+  <div id="modalLlamadaEntrante" class="modal-overlay hidden">
+    <div class="modal-card">
+      <div class="modal-body text-center">
+        <div id="llamadaEntranteAvatar" class="avatar avatar-incoming-call">?</div>
+        <h3 id="llamadaEntranteNombre">Nombre de Contacto</h3>
+        <span id="llamadaEntranteTipo" class="llamada-tipo">Llamada entrante...</span>
+        
+        <div class="modal-actions mt-24 flex-center gap-16">
+          <button id="btnDeclineCall" class="btn-incoming-action btn-decline-call" title="Rechazar">📞</button>
+          <button id="btnAcceptCall" class="btn-incoming-action btn-accept-call" title="Aceptar">📞</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Elementos de Audio de Señalización -->
+  <audio id="ringtoneAudio" loop preload="auto" src="https://cdn.jsdelivr.net/gh/scottschiller/soundmanager2@master/demo/_mp3/click-low.mp3" class="hidden-media"></audio>
+  <audio id="dialbackAudio" loop preload="auto" src="https://cdn.jsdelivr.net/gh/scottschiller/soundmanager2@master/demo/_mp3/click-high.mp3" class="hidden-media"></audio>
+
+  <!-- Dependencia Oficial de Supabase v2 -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <!-- Archivos de Lógica desacoplados -->
+  <script src="js/supabase-client.js"></script>
+  <script src="js/webrtc.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
