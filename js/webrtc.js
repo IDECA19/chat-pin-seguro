@@ -3,12 +3,13 @@
  * Sistema completo de llamadas WebRTC: voz y video
  * 
  * Depende de:
- * - app.js (miPIN, clienteSupabase, contactoActual, obtenerNombreContacto, customAlert, customConfirm, logError)
+ * - app.js (miPIN, clienteSupabase, contactoActual, obtenerNombreContacto, 
+ *           customAlert, customConfirm, logError)
  * - notifications.js (opcional, para notificaciones de llamada entrante)
  */
 
 // ============================================
-// 📞 FUNCIONES WEBRTC - LLAMADAS Y VIDEO
+// 📞 VARIABLES GLOBALES WEBRTC
 // ============================================
 var peerConnection = null;
 var streamLocal = null;
@@ -20,6 +21,8 @@ var esIniciador = false;
 var timerLlamada = null;
 var segundosLlamada = 0;
 var canalLlamada = null;
+var sonidoEntranteInterval = null;
+var sonidoLlamadaSaliente = null;
 
 var rtcConfig = {
   iceServers: [
@@ -29,6 +32,9 @@ var rtcConfig = {
   ]
 };
 
+// ============================================
+// ⏱️ TIMER DE LLAMADA
+// ============================================
 function formatearTiempo(segundos) {
   var m = Math.floor(segundos / 60).toString().padStart(2, '0');
   var s = (segundos % 60).toString().padStart(2, '0');
@@ -51,6 +57,9 @@ function detenerTimerLlamada() {
   }
 }
 
+// ============================================
+// 🎤 MEDIA STREAM
+// ============================================
 async function obtenerStreamMedia(esVideo) {
   try {
     var constraints = {
@@ -65,6 +74,9 @@ async function obtenerStreamMedia(esVideo) {
   }
 }
 
+// ============================================
+// 📞 INICIAR LLAMADA
+// ============================================
 async function iniciarLlamada(tipo) {
   if (!contactoActual) { 
     await customAlert('❌ Debes estar en un chat para llamar.', '❌'); 
@@ -82,7 +94,7 @@ async function iniciarLlamada(tipo) {
   var tipoTexto = tipo === 'video' ? 'videollamada' : 'llamada de voz';
   var confirmado = await customConfirm(
     '📞 ¿Iniciar ' + tipoTexto + ' con ' + obtenerNombreContacto(contactoActual) + '?', 
-    tipo === 'video' ? '📹' : '📞'
+    tipo === 'video' ? '📹' : ''
   );
   if (!confirmado) return;
   
@@ -168,11 +180,16 @@ async function enviarICECandidate(candidate) {
   }
 }
 
+// ============================================
+// 📞 RECIBIR LLAMADA
+// ============================================
 async function recibirLlamada(pinRemitente, oferta, tipo) {
   if (llamadaActiva) {
     try {
-      await clienteSupabase.from('llamadas').update({ estado: 'rechazada', fin: new Date().toISOString() })
-        .eq('pin_remitente', pinRemitente)
+      await clienteSupabase.from('llamadas').update({ 
+        estado: 'rechazada', 
+        fin: new Date().toISOString() 
+      }).eq('pin_remitente', pinRemitente)
         .eq('pin_destinatario', miPIN)
         .eq('estado', 'llamando');
     } catch (e) {}
@@ -206,7 +223,9 @@ async function recibirLlamada(pinRemitente, oferta, tipo) {
   }
 }
 
-var sonidoEntranteInterval = null;
+// ============================================
+// 🔔 SONIDOS DE LLAMADA
+// ============================================
 function reproducirSonidoLlamadaEntrante() {
   detenerSonidoLlamadaEntrante();
   try {
@@ -236,7 +255,6 @@ function detenerSonidoLlamadaEntrante() {
   }
 }
 
-var sonidoLlamadaSaliente = null;
 function reproducirSonidoLlamadaSaliente() {
   try {
     var audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -264,6 +282,9 @@ function detenerSonidoLlamadaSaliente() {
   } catch (e) {}
 }
 
+// ============================================
+// ✅ ACEPTAR LLAMADA
+// ============================================
 async function aceptarLlamada() {
   document.getElementById('modalLlamadaEntrante').classList.remove('active');
   detenerSonidoLlamadaEntrante();
@@ -274,7 +295,7 @@ async function aceptarLlamada() {
     return; 
   }
   
-  mostrarPantallaLlamada(pinLlamadaActual, '🔄 Conectando...', tipoLlamadaActual);
+  mostrarPantallaLlamada(pinLlamadaActual, ' Conectando...', tipoLlamadaActual);
   
   peerConnection = new RTCPeerConnection(rtcConfig);
   streamLocal.getTracks().forEach(function(track) { 
@@ -344,6 +365,9 @@ async function aceptarLlamada() {
   }
 }
 
+// ============================================
+// ❌ RECHAZAR Y COLGAR
+// ============================================
 async function rechazarLlamada() {
   document.getElementById('modalLlamadaEntrante').classList.remove('active');
   detenerSonidoLlamadaEntrante();
@@ -395,16 +419,14 @@ async function colgarLlamada() {
     } catch (e) {}
   }
   
-  if (canalLlamada) { 
-    clienteSupabase.removeChannel(canalLlamada); 
-    canalLlamada = null; 
-  }
-  
   llamadaActiva = false;
   pinLlamadaActual = '';
   segundosLlamada = 0;
 }
 
+// ============================================
+// 🖥️ UI DE LLAMADA
+// ============================================
 function mostrarPantallaLlamada(pin, estado, tipo) {
   llamadaActiva = true;
   var nombre = obtenerNombreContacto(pin);
@@ -434,7 +456,9 @@ function actualizarEstadoLlamada(estado) {
   document.getElementById('llamadaEstadoGrande').innerText = estado;
 }
 
-// Canal centralizado de WebRTC para sincronización mutua
+// ============================================
+// 📡 SUSCRIPCIÓN WEBRTC
+// ============================================
 function suscribirseALlamadas() {
   if (canalLlamada) { 
     clienteSupabase.removeChannel(canalLlamada); 
@@ -477,13 +501,16 @@ function suscribirseALlamadas() {
       
       // Sincronización mutua para colgar llamadas activas
       if (nuevo.estado === 'finalizada' && llamadaActiva) {
-        await customAlert('📞 La llamada ha finalizado.', '');
+        await customAlert('📞 La llamada ha finalizado.', '📞');
         colgarLlamada();
       }
     })
     .subscribe();
 }
 
+// ============================================
+// ️ CONTROLES DE LLAMADA
+// ============================================
 function toggleSilenciar() {
   if (!streamLocal) return;
   var audioTrack = streamLocal.getAudioTracks()[0];
@@ -501,7 +528,7 @@ function toggleCamara() {
   if (videoTrack) {
     videoTrack.enabled = !videoTrack.enabled;
     var btn = document.getElementById('btnCamara');
-    btn.innerText = videoTrack.enabled ? '📷' : '';
+    btn.innerText = videoTrack.enabled ? '📷' : '🚫';
     btn.style.background = videoTrack.enabled ? '#2a3942' : '#ef4444';
   }
 }
@@ -531,6 +558,9 @@ async function limpiarLlamadasAntiguas() {
   }
 }
 
+// ============================================
+//  EVENTOS DE VISIBILIDAD
+// ============================================
 document.addEventListener('visibilitychange', function() {
   if (!llamadaActiva) return;
   if (document.hidden) actualizarEstadoLlamada('🌙 En segundo plano');
@@ -541,4 +571,4 @@ window.addEventListener('beforeunload', function() {
   if (llamadaActiva) colgarLlamada();
 });
 
-console.log('📞 Módulo webrtc.js cargado correctamente');
+console.log(' Módulo webrtc.js cargado correctamente');
