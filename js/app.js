@@ -1,875 +1,1154 @@
 /**
  * js/app.js
- * Orquestador de la UI del DOM, manejo de eventos de clic/teclado integrados de forma segura,
- * grabaciones de notas de voz, validación PWA y renderizado libre de vulnerabilidades XSS.
+ * Orquestador principal: UI, navegación, mensajes, contactos, inicialización
+ * 
+ * Depende de:
+ * - security.js (hashPIN, cifrarClaveConPIN, descifrarClaveConPIN, etc.)
+ * - crypto.js (generarClaves, cifrarMensaje, descifrarMensaje, etc.)
+ * - notifications.js (notificarNuevoMensaje, etc.)
+ * - webrtc.js (iniciarLlamada, etc.)
  */
 
-// --- ESTADOS Y VARIABLES GLOBALES DE LA APP ---
-let myProfile = null;
-let activeContactId = null;
-let activeChannel = null;
-let chatMessagesList = [];
-let allProfiles = [];
-let mediaRecorder = null;
-let audioChunks = [];
-let callTimerInterval = null;
-let incomingOfferData = null;
+// ============================================
+// VARIABLES GLOBALES
+// ============================================
+var SUPABASE_URL = 'https://dksmoteiidjpymextrgj.supabase.co';
+var SUPABASE_ANON_KEY = 'sb_publishable_HuXshjcD1Je934lVgBcJtw_5kFSuGzE';
+var DEBUG = false;
 
-// Ringtones de la UI
-const ringtone = document.getElementById('ringtoneAudio');
-const dialback = document.getElementById('dialbackAudio');
+var miPIN = '';
+var clienteSupabase = null;
+var contactoActual = '';
+var canalRealtime = null;
+var archivoSeleccionado = null;
+var mensajesNoLeidos = {};
+var modoPrivado = false;
+var modoSeleccion = false;
+var mensajesSeleccionados = [];
+var tabActual = 'chats';
+var cacheArchivosDescifrados = {};
 
-// --- INTEGRACIÓN RESILIENTE DE SERVICE WORKER ---
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js')
-      .then(reg => console.log('PWA Service Worker registrado con éxito:', reg.scope))
-      .catch(err => console.warn('Fallo al registrar Service Worker:', err));
-  });
-}
+var prefs = {
+  auto_destruccion_dias: 0, 
+  rotacion_claves_dias: 0, 
+  ocultar_al_cambiar: false,
+  borrado_seguro: false, 
+  dosfa_backup: false, 
+  limpieza_metadatos: false, 
+  forward_secrecy: false
+};
 
-// --- DETECCIÓN DE CONEXIÓN DE RED (Robustez PWA) ---
-function updateNetworkStatus() {
-  const toast = document.getElementById('connection-toast');
-  toast.className = 'toast'; // reset clases
-  
-  if (navigator.onLine) {
-    toast.textContent = 'Conexión recuperada. Sincronizando datos...';
-    toast.classList.add('online');
-    setTimeout(() => toast.classList.add('hidden'), 3000);
-  } else {
-    toast.textContent = 'Sin conexión a internet. Modo fuera de línea activo.';
-    toast.classList.add('offline');
-    toast.classList.remove('hidden');
+var prefsNotificaciones = { 
+  nativas: true, 
+  visuales: true, 
+  sonido: true, 
+  vibracion: true, 
+  mostrarContenido: true 
+};
+
+// ============================================
+// LOGGING
+// ============================================
+function log(msg) { if (DEBUG) console.log(msg); }
+function logError(msg, error) {
+  console.error('❌', msg);
+  if (error) {
+    if (typeof error === 'object') {
+      if (error.message) console.error('   Mensaje:', error.message);
+      if (error.details) console.error('   Detalles:', error.details);
+    } else { console.error('   Error:', error); }
   }
 }
-window.addEventListener('online', updateNetworkStatus);
-window.addEventListener('offline', updateNetworkStatus);
 
-// --- UTILIDADES DE SEGURIDAD (Evitar Inyecciones XSS) ---
-function escapeHTML(str) {
-  if (!str) return '';
-  return str.replace(/[&<>'"]/g, tag => ({
-    '&': '&amp;',
-    '<': '&lt;',
-    '>': '&gt;',
-    "'": '&#39;',
-    '"': '&quot;'
-  }[tag] || tag));
+// ============================================
+// RATE LIMITING BÁSICO
+// ============================================
+var ultimoEnvio = 0;
+async function puedeEnviar() {
+  var ahora = Date.now();
+  if (ahora - ultimoEnvio < 1000) { 
+    await customAlert('⏱️ Espera un momento antes de enviar otro mensaje.', '⏱️'); 
+    return false; 
+  }
+  ultimoEnvio = ahora;
+  return true;
 }
 
-// --- CONEXIÓN DE EVENTOS DINÁMICOS DEL DOM (Mitigación CSP) ---
-document.addEventListener('DOMContentLoaded', () => {
-  // Estado inicial de red
-  updateNetworkStatus();
+// ============================================
+// SISTEMA DE DIÁLOGOS PERSONALIZADOS
+// ============================================
+function customAlert(mensaje, icono) {
+  icono = icono || '️';
+  return new Promise((resolve) => {
+    const modal = document.getElementById('customAlert');
+    document.getElementById('customAlertTexto').innerText = mensaje;
+    document.getElementById('customAlertIcono').innerText = icono;
+    modal.classList.add('active');
+    const btn = document.getElementById('customAlertBtn');
+    const handler = () => {
+      modal.classList.remove('active');
+      btn.removeEventListener('click', handler);
+      resolve();
+    };
+    btn.addEventListener('click', handler);
+  });
+}
 
-  // Suscribirse a cambios de autenticación
-  SupabaseService.onAuthStateChange((event, session) => {
-    if (session) {
-      initializeUserSession(session.user);
-    } else {
-      showAuthScreen();
+function customConfirm(mensaje, icono) {
+  icono = icono || '❓';
+  return new Promise((resolve) => {
+    const modal = document.getElementById('customConfirm');
+    document.getElementById('customConfirmTexto').innerText = mensaje;
+    document.getElementById('customConfirmIcono').innerText = icono;
+    modal.classList.add('active');
+    const btnAceptar = document.getElementById('customConfirmBtnAceptar');
+    const btnCancelar = document.getElementById('customConfirmBtnCancelar');
+    const cleanUp = (result) => {
+      modal.classList.remove('active');
+      btnAceptar.removeEventListener('click', acceptHandler);
+      btnCancelar.removeEventListener('click', cancelHandler);
+      resolve(result);
+    };
+    const acceptHandler = () => cleanUp(true);
+    const cancelHandler = () => cleanUp(false);
+    btnAceptar.addEventListener('click', acceptHandler);
+    btnCancelar.addEventListener('click', cancelHandler);
+  });
+}
+
+function customPrompt(titulo, texto, placeholder, type) {
+  placeholder = placeholder || '';
+  type = type || 'text';
+  return new Promise((resolve) => {
+    const modal = document.getElementById('customPrompt');
+    document.getElementById('customPromptTitulo').innerText = titulo;
+    document.getElementById('customPromptTexto').innerText = texto;
+    const input = document.getElementById('customPromptInput');
+    input.value = '';
+    input.type = type;
+    input.placeholder = placeholder;
+    modal.classList.add('active');
+    setTimeout(() => input.focus(), 150);
+    const btnAceptar = document.getElementById('customPromptBtnAceptar');
+    const btnCancelar = document.getElementById('customPromptBtnCancelar');
+    const cleanUp = (value) => {
+      modal.classList.remove('active');
+      btnAceptar.removeEventListener('click', acceptHandler);
+      btnCancelar.removeEventListener('click', cancelHandler);
+      input.removeEventListener('keydown', keyHandler);
+      resolve(value);
+    };
+    const acceptHandler = () => cleanUp(input.value);
+    const cancelHandler = () => cleanUp(null);
+    const keyHandler = (e) => { if (e.key === 'Enter') acceptHandler(); };
+    btnAceptar.addEventListener('click', acceptHandler);
+    btnCancelar.addEventListener('click', cancelHandler);
+    input.addEventListener('keydown', keyHandler);
+  });
+}
+
+// ============================================
+// FUNCIONES DE UTILIDAD
+// ============================================
+function formatBytes(bytes, decimals) {
+  if (!bytes || bytes === 0) return '0 Bytes';
+  decimals = decimals || 2;
+  var k = 1024;
+  var sizes = ['Bytes', 'KB', 'MB', 'GB'];
+  var i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(decimals)) + ' ' + sizes[i];
+}
+
+function obtenerPathDesdeUrl(url) {
+  if (!url) return null;
+  try {
+    if (url.includes('/storage/v1/object/')) {
+      var match = url.match(/\/chat-files\/([^?]+)/);
+      if (match && match[1]) return decodeURIComponent(match[1]);
     }
+  } catch (e) { logError('Error extrayendo path:', e); }
+  return null;
+}
+
+function escapeHtml(t) { 
+  if(!t) return ''; 
+  var d = document.createElement('div'); 
+  d.appendChild(document.createTextNode(t)); 
+  return d.innerHTML; 
+}
+
+function ofuscarClave(clave) { 
+  if (!clave) return clave; 
+  return btoa(clave.split('').reverse().join('')); 
+}
+
+function desofuscarClave(ofuscada) { 
+  if (!ofuscada) return ofuscada; 
+  return atob(ofuscada).split('').reverse().join(''); 
+}
+
+// ============================================
+// NAVEGACIÓN Y UI
+// ============================================
+function cambiarTab(tab) {
+  tabActual = tab;
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('tab' + tab.charAt(0).toUpperCase() + tab.slice(1)).classList.add('active');
+  document.getElementById('contenidoChats').classList.add('hidden');
+  document.getElementById('contenidoContactos').classList.add('hidden');
+  document.getElementById('contenidoAjustes').classList.add('hidden');
+  document.getElementById('contenido' + tab.charAt(0).toUpperCase() + tab.slice(1)).classList.remove('hidden');
+  document.getElementById('fabAgregar').style.display = (tab === 'chats' || tab === 'contactos') ? 'flex' : 'none';
+  if (tab === 'chats') renderizarChats();
+  else if (tab === 'contactos') renderizarContactos();
+}
+
+function abrirMenu() { 
+  document.getElementById('menuOverlay').classList.add('active'); 
+  document.getElementById('menuLateral').classList.add('active'); 
+}
+
+function cerrarMenu() { 
+  document.getElementById('menuOverlay').classList.remove('active'); 
+  document.getElementById('menuLateral').classList.remove('active'); 
+}
+
+function mostrarModalAgregar() { 
+  document.getElementById('modalAgregar').classList.add('active'); 
+  setTimeout(() => document.getElementById('nuevoContactoPin').focus(), 100); 
+}
+
+function cerrarModalAgregar() { 
+  document.getElementById('modalAgregar').classList.remove('active'); 
+}
+
+function abrirConfigSeguridad() { 
+  document.getElementById('modalSeguridad').classList.add('active'); 
+}
+
+function cerrarModalSeguridad() { 
+  document.getElementById('modalSeguridad').classList.remove('active'); 
+}
+
+function abrirConfigNotificaciones() {
+  document.getElementById('notifNativas').checked = prefsNotificaciones.nativas;
+  document.getElementById('notifVisuales').checked = prefsNotificaciones.visuales;
+  document.getElementById('notifSonido').checked = prefsNotificaciones.sonido;
+  document.getElementById('notifVibracion').checked = prefsNotificaciones.vibracion;
+  document.getElementById('notifContenido').checked = prefsNotificaciones.mostrarContenido;
+  document.getElementById('modalNotificaciones').classList.add('active');
+}
+
+function cerrarModalNotificaciones() { 
+  document.getElementById('modalNotificaciones').classList.remove('active'); 
+}
+
+function mostrarBackupMenu() { 
+  document.getElementById('modalBackup').classList.add('active'); 
+}
+
+function cerrarModalBackup() { 
+  document.getElementById('modalBackup').classList.remove('active'); 
+}
+
+function mostrarOpcionesChat() { 
+  document.getElementById('modalOpcionesChat').classList.add('active'); 
+}
+
+function cerrarModalOpcionesChat() { 
+  document.getElementById('modalOpcionesChat').classList.remove('active'); 
+}
+
+// ============================================
+// GESTIÓN DE ALIAS
+// ============================================
+function getAliases() {
+  var a = localStorage.getItem('aliases_' + miPIN);
+  return a ? JSON.parse(a) : {};
+}
+
+function guardarAliases(a) {
+  localStorage.setItem('aliases_' + miPIN, JSON.stringify(a));
+}
+
+function obtenerNombreContacto(pin) {
+  var a = getAliases();
+  return a[pin] || pin;
+}
+
+async function editarAliasContacto(pin) {
+  var actual = obtenerNombreContacto(pin);
+  var actualValor = (actual === pin) ? '' : actual;
+  var nuevoNombre = await customPrompt('👤 Asignar Identificador', 'Escribe un nombre o alias para el PIN: ' + pin, actualValor);
+  if (nuevoNombre === null) return;
+  
+  var a = getAliases();
+  nuevoNombre = nuevoNombre.trim();
+  if (nuevoNombre === '') { delete a[pin]; }
+  else { a[pin] = nuevoNombre; }
+  guardarAliases(a);
+  
+  await customAlert('✅ Identificador guardado con éxito localmente.', '✅');
+  
+  if (tabActual === 'chats') renderizarChats();
+  else if (tabActual === 'contactos') renderizarContactos();
+  
+  if (contactoActual === pin) {
+    var subtexto = (nuevoNombre !== '') ? ' (' + pin + ')' : '';
+    document.getElementById('chatNombre').innerHTML = obtenerNombreContacto(pin) + ' <span style="font-size:11px; opacity:0.7; font-weight: normal;">' + subtexto + '</span>';
+    document.getElementById('chatAvatar').innerText = obtenerNombreContacto(pin).substring(0, 2).toUpperCase();
+  }
+}
+
+async function editarAliasContactoActual() {
+  if (!contactoActual) return;
+  cerrarModalOpcionesChat();
+  await editarAliasContacto(contactoActual);
+}
+
+// ============================================
+// PREFERENCIAS
+// ============================================
+async function cargarPreferencias() {
+  try {
+    var { data } = await clienteSupabase.from('usuarios')
+      .select('auto_destruccion_dias, rotacion_claves_dias, ocultar_al_cambiar, borrado_seguro, dosfa_backup, limpieza_metadatos, forward_secrecy')
+      .eq('pin', miPIN)
+      .single();
+    
+    if (data) {
+      prefs.auto_destruccion_dias = data.auto_destruccion_dias || 0;
+      prefs.rotacion_claves_dias = data.rotacion_claves_dias || 0;
+      prefs.ocultar_al_cambiar = data.ocultar_al_cambiar === true;
+      prefs.borrado_seguro = data.borrado_seguro === true;
+      prefs.dosfa_backup = data.dosfa_backup === true;
+      prefs.limpieza_metadatos = data.limpieza_metadatos === true;
+      prefs.forward_secrecy = data.forward_secrecy === true;
+    }
+    
+    localStorage.setItem('prefs_' + miPIN, JSON.stringify(prefs));
+    document.getElementById('prefAutoDestruccion').value = prefs.auto_destruccion_dias;
+    document.getElementById('prefRotacionClaves').value = prefs.rotacion_claves_dias;
+    document.getElementById('prefOcultarCambiar').checked = prefs.ocultar_al_cambiar;
+    document.getElementById('prefBorradoSeguro').checked = prefs.borrado_seguro;
+    document.getElementById('prefDosfa').checked = prefs.dosfa_backup;
+    document.getElementById('prefLimpiezaMeta').checked = prefs.limpieza_metadatos;
+    actualizarStatusPreferencias();
+  } catch (error) {
+    logError('Error prefs:', error);
+    var prefsLocal = localStorage.getItem('prefs_' + miPIN);
+    if (prefsLocal) { prefs = JSON.parse(prefsLocal); actualizarStatusPreferencias(); }
+  }
+}
+
+function actualizarStatusPreferencias() {
+  var btnA = document.getElementById('btnActivarFS');
+  var btnD = document.getElementById('btnDesactivarFS');
+  if (prefs.forward_secrecy) { 
+    if (btnA) btnA.style.display = 'none'; 
+    if (btnD) btnD.style.display = 'block'; 
+  } else { 
+    if (btnA) btnA.style.display = 'block'; 
+    if (btnD) btnD.style.display = 'none'; 
+  }
+}
+
+async function guardarPreferencia(campo, valor) {
+  prefs[campo] = parseInt(valor);
+  localStorage.setItem('prefs_' + miPIN, JSON.stringify(prefs));
+  try { 
+    await clienteSupabase.from('usuarios').update({ [campo]: parseInt(valor) }).eq('pin', miPIN); 
+  } catch (e) { logError('Error:', e); }
+}
+
+async function guardarPreferenciaBool(campo, valor) {
+  prefs[campo] = valor;
+  localStorage.setItem('prefs_' + miPIN, JSON.stringify(prefs));
+  try { 
+    await clienteSupabase.from('usuarios').update({ [campo]: valor }).eq('pin', miPIN); 
+  } catch (e) { logError('Error:', e); }
+}
+
+document.addEventListener('visibilitychange', function() {
+  if (!prefs.ocultar_al_cambiar) return;
+  document.querySelectorAll('.mensaje').forEach(m => {
+    m.style.filter = document.hidden ? 'blur(15px)' : 'none';
   });
-
-  // Eventos de Autenticación
-  document.getElementById('authForm').addEventListener('submit', handleAuthSubmit);
-  document.getElementById('btnToggleAuth').addEventListener('click', toggleAuthMode);
-  document.getElementById('avatarInput').addEventListener('change', handleRegisterAvatarChange);
-
-  // Botones de Barra Lateral
-  document.getElementById('btnNewChat').addEventListener('click', () => showPanel('contactsPanel'));
-  document.getElementById('btnShowProfile').addEventListener('click', openProfilePanel);
-  document.getElementById('btnLogout').addEventListener('click', handleLogout);
-  document.getElementById('searchChatsInput').addEventListener('input', handleFilterChats);
-
-  // Cerrar Paneles
-  document.getElementById('btnCloseProfile').addEventListener('click', () => hidePanel('profilePanel'));
-  document.getElementById('btnCloseContacts').addEventListener('click', () => hidePanel('contactsPanel'));
-
-  // Guardar Perfil
-  document.getElementById('btnSaveProfile').addEventListener('click', handleSaveProfile);
-  document.getElementById('profileAvatarFileInput').addEventListener('change', handleProfileAvatarChange);
-
-  // Buscar Contactos en Panel
-  document.getElementById('searchContactsInput').addEventListener('input', handleFilterContacts);
-
-  // Chat Activo - Controles de Entrada
-  document.getElementById('messageInput').addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') handleSendMessage();
-  });
-  document.getElementById('messageInput').addEventListener('input', handleMessageInputToggle);
-  document.getElementById('btnSendMessage').addEventListener('click', handleSendMessage);
-  document.getElementById('btnAttach').addEventListener('click', () => document.getElementById('attachmentInput').click());
-  document.getElementById('attachmentInput').addEventListener('change', handleAttachmentSend);
-
-  // Grabador de voz
-  document.getElementById('btnVoiceRecord').addEventListener('mousedown', startVoiceRecording);
-  document.getElementById('btnVoiceRecord').addEventListener('mouseup', stopVoiceRecording);
-  document.getElementById('btnVoiceRecord').addEventListener('touchstart', (e) => {
-    e.preventDefault();
-    startVoiceRecording();
-  });
-  document.getElementById('btnVoiceRecord').addEventListener('touchend', (e) => {
-    e.preventDefault();
-    stopVoiceRecording();
-  });
-
-  // Botones de Llamada (Voz / Video)
-  document.getElementById('btnAudioCall').addEventListener('click', () => makeCall('audio'));
-  document.getElementById('btnVideoCall').addEventListener('click', () => makeCall('video'));
-
-  // Botones de gestión de llamadas activa/entrante
-  document.getElementById('btnHangup').addEventListener('click', handleHangupClick);
-  document.getElementById('btnDeclineCall').addEventListener('click', handleDeclineIncomingCall);
-  document.getElementById('btnAcceptCall').addEventListener('click', handleAcceptIncomingCall);
-
-  // Controles de llamada activa
-  document.getElementById('btnToggleMute').addEventListener('click', handleToggleMute);
-  document.getElementById('btnToggleVideo').addEventListener('click', handleToggleVideoTrack);
 });
 
-// --- AUTENTICACIÓN Y ENRUTAMIENTO DE PANTALLAS ---
-function showAuthScreen() {
-  document.getElementById('appScreen').classList.add('hidden');
-  document.getElementById('loginScreen').classList.remove('hidden');
+// ============================================
+// CONTACTOS Y CHATS
+// ============================================
+function getContactos() { 
+  var c = localStorage.getItem('contactos_' + miPIN); 
+  return c ? JSON.parse(c) : []; 
 }
 
-function showAppScreen() {
-  document.getElementById('loginScreen').classList.add('hidden');
-  document.getElementById('appScreen').classList.remove('hidden');
+function guardarContactos(c) { 
+  localStorage.setItem('contactos_' + miPIN, JSON.stringify(c)); 
 }
 
-function toggleAuthMode(e) {
-  e.preventDefault();
-  const usernameGroup = document.getElementById('usernameGroup');
-  const avatarGroup = document.getElementById('avatarSelectorContainer');
-  const submitBtn = document.getElementById('btnSubmitAuth');
-  const toggleBtn = document.getElementById('btnToggleAuth');
-  const toggleText = document.getElementById('toggleText');
-
-  if (usernameGroup.classList.contains('hidden')) {
-    usernameGroup.classList.remove('hidden');
-    avatarGroup.classList.remove('hidden');
-    submitBtn.textContent = 'Registrarse';
-    toggleText.textContent = '¿Ya tienes cuenta?';
-    toggleBtn.textContent = 'Inicia Sesión';
-  } else {
-    usernameGroup.classList.add('hidden');
-    avatarGroup.classList.add('hidden');
-    submitBtn.textContent = 'Iniciar Sesión';
-    toggleText.textContent = '¿No tienes cuenta?';
-    toggleBtn.textContent = 'Regístrate';
-  }
+function getBloqueados() { 
+  var b = localStorage.getItem('bloqueados_' + miPIN); 
+  return b ? JSON.parse(b) : []; 
 }
 
-async function handleAuthSubmit(e) {
-  e.preventDefault();
-  const email = document.getElementById('emailInput').value.trim();
-  const password = document.getElementById('passwordInput').value;
-  const usernameGroup = document.getElementById('usernameGroup');
-  const isRegister = !usernameGroup.classList.contains('hidden');
-
-  try {
-    if (isRegister) {
-      const username = document.getElementById('usernameInput').value.trim() || email.split('@')[0];
-      const avatarFile = document.getElementById('avatarInput').files[0];
-      
-      const user = await SupabaseService.register(email, password);
-      if (user) {
-        let avatarUrl = '';
-        if (avatarFile) {
-          avatarUrl = await SupabaseService.uploadFile('avatars', `user_${user.id}_${Date.now()}`, avatarFile);
-        }
-        await SupabaseService.saveProfile(user.id, username, avatarUrl, 'Disponible');
-        showToast('Cuenta registrada con éxito. Iniciando...');
-      }
-    } else {
-      await SupabaseService.login(email, password);
-    }
-  } catch (err) {
-    showToast(`Error: ${err.message}`, true);
-  }
+function guardarBloqueados(b) { 
+  localStorage.setItem('bloqueados_' + miPIN, JSON.stringify(b)); 
 }
 
-function handleRegisterAvatarChange(e) {
-  const file = e.target.files[0];
-  if (file) {
-    const reader = new FileReader();
-    reader.onload = function(evt) {
-      const preview = document.getElementById('avatarPreview');
-      preview.textContent = '';
-      const img = document.createElement('img');
-      img.src = evt.target.result;
-      preview.appendChild(img);
-    };
-    reader.readAsDataURL(file);
-  }
-}
-
-async function handleLogout() {
-  try {
-    await SupabaseService.logout();
-    window.location.reload();
-  } catch (err) {
-    showToast('Error al cerrar sesión', true);
-  }
-}
-
-// --- SESIÓN DE USUARIO E INICIALIZACIÓN DE CANALES ---
-async function initializeUserSession(user) {
-  try {
-    myProfile = await SupabaseService.fetchProfile(user.id);
-    if (!myProfile) {
-      // Perfil de respaldo si no existe en BD de perfiles
-      const username = user.email.split('@')[0];
-      await SupabaseService.saveProfile(user.id, username, '', 'Disponible');
-      myProfile = await SupabaseService.fetchProfile(user.id);
-    }
-    
-    // Configurar perfil en UI (Modificación segura del DOM)
-    updateHeaderProfileUI();
-    showAppScreen();
-
-    // Cargar listas iniciales
-    await loadContacts();
-    await loadChats();
-
-    // Inicializar canales en Tiempo Real
-    SupabaseService.subscribeToMessages(onNewMessageReceived);
-    
-    // Canal de llamadas WebRTC
-    activeChannel = SupabaseService.createSignalingChannel(user.id, handleIncomingSignals);
-    window.onWebRTCHangup = resetCallUI;
-
-  } catch (err) {
-    console.error('Error al iniciar sesión de usuario:', err);
-    showToast('Fallo al obtener datos de usuario.', true);
-  }
-}
-
-function updateHeaderProfileUI() {
-  const myAvatar = document.getElementById('myAvatar');
-  myAvatar.textContent = '';
-  if (myProfile.avatar_url) {
-    const img = document.createElement('img');
-    img.src = myProfile.avatar_url;
-    myAvatar.appendChild(img);
-  } else {
-    myAvatar.textContent = (myProfile.username || '?').substring(0, 2).toUpperCase();
-  }
-  document.getElementById('myUsername').textContent = escapeHTML(myProfile.username);
-  document.getElementById('myStatus').textContent = escapeHTML(myProfile.status || 'En línea');
-}
-
-// --- PANELES LATERALES ---
-function showPanel(panelId) {
-  document.getElementById(panelId).classList.remove('hidden');
-}
-
-function hidePanel(panelId) {
-  document.getElementById(panelId).classList.add('hidden');
-}
-
-async function openProfilePanel() {
-  document.getElementById('profileUsernameInput').value = myProfile.username;
-  document.getElementById('profileStatusInput').value = myProfile.status || '';
+// ============================================
+// 🔔 RENDERIZAR CHATS CON INDICADORES VISUALES
+// ============================================
+function renderizarChats() {
+  var contactos = getContactos();
+  var cont = document.getElementById('contenidoChats');
   
-  const preview = document.getElementById('profileAvatarPreview');
-  preview.textContent = '';
-  if (myProfile.avatar_url) {
-    const img = document.createElement('img');
-    img.src = myProfile.avatar_url;
-    preview.appendChild(img);
+  if (contactos.length === 0) {
+    cont.innerHTML = '<div class="estado-vacio"><div class="estado-vacio-icono">💬</div><div class="estado-vacio-texto">No tienes chats activos</div><div class="estado-vacio-sub">Usa el botón "+" abajo para agregar un contacto</div></div>';
+    return;
+  }
+  
+  var html = '';
+  contactos.forEach(function(pin) {
+    var noLeidos = mensajesNoLeidos[pin] || 0;
+    var badge = noLeidos > 0 ? '<div class="chat-badge">' + noLeidos + '</div>' : '';
+    var ultimo = noLeidos > 0 ? '📨 Tienes mensajes sin leer' : 'Toca para abrir la conversación';
+    var hora = '';
+    var nombre = obtenerNombreContacto(pin);
+    var subNombre = (nombre !== pin) ? ' <span style="font-size:11px; color:#8696a0; font-weight:normal;">(' + pin + ')</span>' : '';
+    var claseExtra = noLeidos > 0 ? ' no-leido' : '';
+    
+    html += '<div class="chat-item' + claseExtra + '" onclick="abrirChat(\'' + pin + '\')">';
+    html += '<div class="chat-avatar">' + nombre.substring(0, 2).toUpperCase() + '</div>';
+    html += '<div class="chat-info">';
+    html += '<div class="chat-info-top"><div class="chat-nombre">' + nombre + subNombre + '</div><div class="chat-hora">' + hora + '</div></div>';
+    html += '<div class="chat-info-bottom"><div class="chat-ultimo">' + ultimo + '</div>' + badge + '</div>';
+    html += '</div></div>';
+  });
+  
+  cont.innerHTML = html;
+  actualizarBadgeChats();
+}
+
+function renderizarContactos() {
+  var contactos = getContactos();
+  var bloqueados = getBloqueados();
+  var cont = document.getElementById('contenidoContactos');
+  var html = '';
+  
+  if (contactos.length === 0 && bloqueados.length === 0) {
+    cont.innerHTML = '<div class="estado-vacio"><div class="estado-vacio-icono"></div><div class="estado-vacio-texto">Tu lista de contactos está vacía</div><div class="estado-vacio-sub">Agrega contactos compartiendo sus PINs de Kerix</div></div>';
+    return;
+  }
+  
+  if (contactos.length > 0) {
+    html += '<div style="padding: 12px 16px; color: #00a884; font-size: 13px; font-weight: 700;">CONTACTOS (' + contactos.length + ')</div>';
+    contactos.forEach(function(pin) {
+      var nombre = obtenerNombreContacto(pin);
+      var subNombre = (nombre !== pin) ? ' <span style="font-size:11px; color:#8696a0; font-weight:normal;">(' + pin + ')</span>' : '';
+      html += '<div class="chat-item" onclick="abrirChat(\'' + pin + '\')">';
+      html += '<div class="chat-avatar">' + nombre.substring(0, 2).toUpperCase() + '</div>';
+      html += '<div class="chat-info"><div class="chat-nombre">' + nombre + subNombre + '</div></div>';
+      html += '<button class="header-icon" onclick="event.stopPropagation(); mostrarMenuContacto(\'' + pin + '\', event)">⋮</button>';
+      html += '</div>';
+    });
+  }
+  
+  if (bloqueados.length > 0) {
+    html += '<div style="padding: 12px 16px; color: #ef4444; font-size: 13px; font-weight: 700; margin-top: 12px;">🚫 PINs BLOQUEADOS (' + bloqueados.length + ')</div>';
+    bloqueados.forEach(function(pin) {
+      var nombre = obtenerNombreContacto(pin);
+      var subNombre = (nombre !== pin) ? ' <span style="font-size:11px; color:#8696a0; font-weight:normal;">(' + pin + ')</span>' : '';
+      html += '<div class="chat-item" style="opacity: 0.6;">';
+      html += '<div class="chat-avatar" style="background: linear-gradient(135deg, #ef4444, #991b1b);">' + nombre.substring(0, 2).toUpperCase() + '</div>';
+      html += '<div class="chat-info"><div class="chat-nombre" style="color: #8696a0;">' + nombre + subNombre + '</div></div>';
+      html += '<button class="header-icon" onclick="desbloquearPIN(\'' + pin + '\')">✅</button>';
+      html += '</div>';
+    });
+  }
+  
+  cont.innerHTML = html;
+}
+
+async function mostrarMenuContacto(pin, event) {
+  event.stopPropagation();
+  var accion = await customConfirm(
+    '¿Deseas editar el nombre o alias de este PIN (' + pin + ')?\n(Presiona "Cancelar" si en su lugar deseas eliminar el contacto)', 
+    '👤'
+  );
+  if (accion) { 
+    await editarAliasContacto(pin); 
   } else {
-    preview.textContent = (myProfile.username || '?').substring(0, 2).toUpperCase();
+    var eliminar = await customConfirm(
+      '¿Estás seguro de que deseas eliminar a ' + obtenerNombreContacto(pin) + ' de tus contactos?', 
+      '🗑️'
+    );
+    if (eliminar) { eliminarContacto(pin); }
   }
-  showPanel('profilePanel');
 }
 
-async function handleSaveProfile() {
-  const newName = document.getElementById('profileUsernameInput').value.trim();
-  const newStatus = document.getElementById('profileStatusInput').value.trim();
-  const avatarFile = document.getElementById('profileAvatarFileInput').files[0];
+async function agregarContacto() {
+  var pin = document.getElementById('nuevoContactoPin').value.trim().toUpperCase();
+  if (pin.length !== 8) { 
+    await customAlert('El PIN de Kerix debe tener exactamente 8 caracteres hexadecimales.'); 
+    return; 
+  }
+  if (pin === miPIN) { 
+    await customAlert('No puedes agregarte a ti mismo.'); 
+    return; 
+  }
+  var contactos = getContactos();
+  if (contactos.includes(pin)) { 
+    await customAlert('Este contacto ya se encuentra en tu lista.'); 
+    return; 
+  }
+  if (getBloqueados().includes(pin)) {
+    var desbloquear = await customConfirm('Este PIN está bloqueado. ¿Deseas desbloquearlo y agregarlo?', '🚫');
+    if (!desbloquear) return;
+    desbloquearPIN(pin);
+  }
+  
+  contactos.push(pin);
+  guardarContactos(contactos);
+  document.getElementById('nuevoContactoPin').value = '';
+  cerrarModalAgregar();
+  
+  var alias = await customPrompt(' Guardar Identificador', '¿Quieres ponerle un nombre o alias a este PIN para reconocerlo localmente? (Opcional):', '');
+  if (alias && alias.trim() !== '') {
+    var a = getAliases();
+    a[pin] = alias.trim();
+    guardarAliases(a);
+  }
+  
+  cambiarTab('chats');
+}
 
-  if (!newName) return showToast('El nombre no puede estar vacío.', true);
+function eliminarContacto(pin) {
+  guardarContactos(getContactos().filter(c => c !== pin));
+  var a = getAliases();
+  delete a[pin];
+  guardarAliases(a);
+  renderizarChats();
+  renderizarContactos();
+}
 
+async function bloquearPIN(pin) {
+  var confirmado = await customConfirm(
+    '¿Deseas bloquear de forma definitiva el PIN ' + pin + '? No podrás recibir sus mensajes.', 
+    ''
+  );
+  if (!confirmado) return;
+  
+  var b = getBloqueados();
+  if (!b.includes(pin)) b.push(pin);
+  guardarBloqueados(b);
+  guardarContactos(getContactos().filter(c => c !== pin));
+  renderizarChats();
+  renderizarContactos();
+}
+
+function desbloquearPIN(pin) {
+  guardarBloqueados(getBloqueados().filter(b => b !== pin));
+  renderizarContactos();
+}
+
+async function eliminarContactoActual() {
+  if (!contactoActual) return;
+  var confirmado = await customConfirm('¿Deseas eliminar a ' + obtenerNombreContacto(contactoActual) + '?', '🗑️');
+  if (confirmado) { 
+    eliminarContacto(contactoActual); 
+    cerrarChat(); 
+  }
+  cerrarModalOpcionesChat();
+}
+
+async function bloquearContactoActual() {
+  if (!contactoActual) return;
+  await bloquearPIN(contactoActual);
+  cerrarChat();
+  cerrarModalOpcionesChat();
+}
+
+// ============================================
+// 🔔 ACTUALIZAR BADGE CON CONTADOR
+// ============================================
+function actualizarBadgeChats() {
+  var total = 0;
+  Object.keys(mensajesNoLeidos).forEach(function(k) { total += mensajesNoLeidos[k]; });
+  var badge = document.getElementById('badgeChats');
+  if (total > 0) {
+    badge.style.display = 'inline';
+    badge.innerText = total;
+    document.title = '(' + total + ') Kerix Chat';
+  } else {
+    badge.style.display = 'none';
+    document.title = 'Kerix Chat';
+  }
+}
+
+// ============================================
+// 🔔 CARGAR MENSAJES NO LEÍDOS AL INICIAR
+// ============================================
+async function cargarMensajesNoLeidos() {
   try {
-    let avatarUrl = myProfile.avatar_url;
-    if (avatarFile) {
-      avatarUrl = await SupabaseService.uploadFile('avatars', `user_${myProfile.id}_${Date.now()}`, avatarFile);
-    }
-
-    await SupabaseService.saveProfile(myProfile.id, newName, avatarUrl, newStatus);
-    myProfile = { ...myProfile, username: newName, avatar_url: avatarUrl, status: newStatus };
-    updateHeaderProfileUI();
-    hidePanel('profilePanel');
-    showToast('Perfil actualizado correctamente.');
-    await loadContacts();
-  } catch (err) {
-    showToast('Error al actualizar perfil.', true);
-  }
-}
-
-function handleProfileAvatarChange(e) {
-  const file = e.target.files[0];
-  if (file) {
-    const reader = new FileReader();
-    reader.onload = function(evt) {
-      const preview = document.getElementById('profileAvatarPreview');
-      preview.textContent = '';
-      const img = document.createElement('img');
-      img.src = evt.target.result;
-      preview.appendChild(img);
-    };
-    reader.readAsDataURL(file);
-  }
-}
-
-// --- FILTRADOS Y BÚSQUEDAS ---
-function handleFilterChats(e) {
-  const q = e.target.value.toLowerCase();
-  const items = document.querySelectorAll('#chatList .chat-item');
-  items.forEach(item => {
-    const name = item.querySelector('.chat-item-name').textContent.toLowerCase();
-    if (name.includes(q)) {
-      item.classList.remove('hidden');
-    } else {
-      item.classList.add('hidden');
-    }
-  });
-}
-
-function handleFilterContacts(e) {
-  const q = e.target.value.toLowerCase();
-  const items = document.querySelectorAll('#contactsList .contact-item');
-  items.forEach(item => {
-    const name = item.querySelector('.contact-name-meta span').textContent.toLowerCase();
-    if (name.includes(q)) {
-      item.classList.remove('hidden');
-    } else {
-      item.classList.add('hidden');
-    }
-  });
-}
-
-// --- LOGICA DE CONTACTOS Y CHATS ---
-async function loadContacts() {
-  try {
-    allProfiles = await SupabaseService.fetchAllProfiles();
-    const container = document.getElementById('contactsList');
-    container.textContent = ''; // Limpieza segura
-
-    allProfiles.forEach(profile => {
-      if (profile.id === myProfile.id) return;
-
-      const item = document.createElement('div');
-      item.className = 'contact-item';
-      
-      const avatarNode = document.createElement('div');
-      avatarNode.className = 'avatar';
-      if (profile.avatar_url) {
-        const img = document.createElement('img');
-        img.src = profile.avatar_url;
-        avatarNode.appendChild(img);
-      } else {
-        avatarNode.textContent = (profile.username || '?').substring(0, 2).toUpperCase();
-      }
-
-      const meta = document.createElement('div');
-      meta.className = 'contact-name-meta';
-      
-      const name = document.createElement('span');
-      name.textContent = profile.username;
-      name.style.fontWeight = '600';
-      
-      const status = document.createElement('small');
-      status.textContent = profile.status || 'Disponible';
-      status.style.color = 'var(--text-secondary)';
-
-      meta.appendChild(name);
-      meta.appendChild(status);
-
-      item.appendChild(avatarNode);
-      item.appendChild(meta);
-
-      item.addEventListener('click', () => {
-        hidePanel('contactsPanel');
-        startOrOpenChat(profile);
+    var { data, error } = await clienteSupabase.from('mensajes')
+      .select('pin_remitente')
+      .eq('pin_destinatario', miPIN)
+      .eq('leido', false);
+    
+    if (error) { logError('Error cargando no leídos:', error); return; }
+    
+    if (data) {
+      mensajesNoLeidos = {};
+      data.forEach(function(msg) {
+        mensajesNoLeidos[msg.pin_remitente] = (mensajesNoLeidos[msg.pin_remitente] || 0) + 1;
       });
-
-      container.appendChild(item);
-    });
-  } catch (err) {
-    console.error('Error al cargar contactos:', err);
-  }
+    }
+    
+    actualizarBadgeChats();
+    if (tabActual === 'chats') renderizarChats();
+  } catch (error) { logError('Error:', error); }
 }
 
-async function loadChats() {
+// ============================================
+// CHAT INDIVIDUAL
+// ============================================
+function abrirChat(pin) {
+  contactoActual = pin;
+  var nombre = obtenerNombreContacto(pin);
+  var subtexto = (nombre !== pin) ? ' <span style="font-size:11px; opacity:0.7; font-weight: normal;">(' + pin + ')</span>' : '';
+  document.getElementById('chatNombre').innerHTML = nombre + subtexto;
+  document.getElementById('chatAvatar').innerText = nombre.substring(0, 2).toUpperCase();
+  document.getElementById('pantallaChatIndividual').style.display = 'block';
+  modoSeleccion = false;
+  mensajesSeleccionados = [];
+  cargarMensajes();
+  suscribirseAMensajes();
+  marcarComoLeidos();
+}
+
+function cerrarChat() {
+  document.getElementById('pantallaChatIndividual').style.display = 'none';
+  contactoActual = '';
+  cancelarSuscripciones();
+  cambiarTab('chats');
+}
+
+// ============================================
+// MENSAJES
+// ============================================
+async function cargarMensajes() {
   try {
-    // Almacena chats en función de los perfiles conocidos
-    const container = document.getElementById('chatList');
-    container.textContent = ''; // Limpieza segura
+    var { data, error } = await clienteSupabase.from('mensajes')
+      .select('*')
+      .or('and(pin_remitente.eq.' + miPIN + ',pin_destinatario.eq.' + contactoActual + '),and(pin_remitente.eq.' + contactoActual + ',pin_destinatario.eq.' + miPIN + ')')
+      .order('enviado_en', { ascending: true });
+    
+    if (error) throw error;
+    
+    var contenedor = document.getElementById('chatMensajes');
+    if (!data || data.length === 0) { 
+      contenedor.innerHTML = '<p style="color: #8696a0; text-align: center; padding: 40px 20px;">No hay mensajes aún</p>'; 
+      return; 
+    }
+    
+    var mensajes = [];
+    for (var msg of data) {
+      var texto = '';
+      if (msg.mensaje_cifrado && msg.mensaje_cifrado.length > 0) {
+        texto = await descifrarMensaje(msg.mensaje_cifrado);
+      }
+      mensajes.push({ ...msg, texto_descifrado: texto });
+    }
+    
+    var html = '';
+    mensajes.forEach(function(msg) {
+      var esMio = msg.pin_remitente === miPIN;
+      var clase = esMio ? 'mensaje-enviado' : 'mensaje-recibido';
+      if (mensajesSeleccionados.includes(String(msg.id))) clase += ' seleccionado';
+      var checks = esMio ? (msg.leido ? '<span class="check-leido">✓✓</span>' : '<span>✓</span>') : '';
+      var onclickAttr = modoSeleccion ? 'onclick="toggleSeleccion(\'' + msg.id + '\')"' : '';
+      html += '<div class="mensaje ' + clase + '" data-id="' + msg.id + '" ' + onclickAttr + '>';
+      html += '<div class="mensaje-texto">' + construirContenidoMensaje(msg) + '</div>';
+      html += '<div class="mensaje-meta">' + checks + '</div>';
+      html += '</div>';
+    });
+    
+    contenedor.innerHTML = html;
+    contenedor.scrollTop = contenedor.scrollHeight;
+    mensajes.forEach(function(msg) { 
+      if (msg.archivo_url) cargarYDescifrarAdjunto(msg); 
+    });
+  } catch (error) { logError('Error loading messages:', error); }
+}
 
-    allProfiles.forEach(profile => {
-      if (profile.id === myProfile.id) return;
+function construirContenidoMensaje(msg) {
+  var contenido = '';
+  if (msg.archivo_url) {
+    contenido = '<div id="media-container-' + msg.id + '" class="media-container" data-loaded="false">';
+    contenido += '<span class="loading-media">🔐 Descifrando adjunto seguro...</span>';
+    contenido += '</div>';
+  }
+  if (msg.texto_descifrado) {
+    var textoEscapado = escapeHtml(msg.texto_descifrado);
+    if (contenido) contenido = textoEscapado + '<br>' + contenido;
+    else contenido = textoEscapado;
+  }
+  if (!contenido) contenido = '<em style="color: #8696a0;">[Archivo]</em>';
+  return contenido;
+}
 
-      const item = document.createElement('div');
-      item.className = 'chat-item';
-      item.setAttribute('data-id', profile.id);
-      if (activeContactId === profile.id) item.classList.add('active');
-
-      const avatarNode = document.createElement('div');
-      avatarNode.className = 'avatar';
-      if (profile.avatar_url) {
-        const img = document.createElement('img');
-        img.src = profile.avatar_url;
-        avatarNode.appendChild(img);
+async function enviarMensaje() {
+  if (!await puedeEnviar()) return;
+  
+  var texto = document.getElementById('nuevoMensaje').value.trim();
+  if (!texto && !archivoSeleccionado) { 
+    await customAlert('No puedes enviar un mensaje vacío.'); 
+    return; 
+  }
+  
+  var contenedor = document.getElementById('chatMensajes');
+  var tipoMensaje = 'texto';
+  var archivoInfo = null;
+  var mensajeCifrado = '';
+  
+  if (texto) {
+    var clavePub = await obtenerClavePublica(contactoActual);
+    if (!clavePub) { 
+      await customAlert('⚠️ No se pudo verificar la llave de cifrado del contacto.'); 
+      return; 
+    }
+    try { 
+      mensajeCifrado = await cifrarMensaje(texto, clavePub); 
+    } catch (error) { 
+      await customAlert('Error al intentar cifrar el mensaje.'); 
+      return; 
+    }
+  }
+  
+  if (archivoSeleccionado) {
+    try {
+      document.getElementById('archivoInput').style.display = 'none';
+      archivoInfo = await subirArchivo(archivoSeleccionado, contactoActual);
+      var tipo = archivoInfo.tipo.split('/')[0];
+      if (tipo === 'image') tipoMensaje = 'imagen';
+      else if (tipo === 'video') tipoMensaje = 'video';
+      else tipoMensaje = 'documento';
+    } catch (error) {
+      logError('❌ Error al subir archivo:', error);
+      await customAlert('Error al subir el archivo adjunto: ' + error.message);
+      return;
+    }
+  }
+  
+  var tempId = 'temp-' + Date.now();
+  var mensajeTemp = {
+    id: tempId, 
+    pin_remitente: miPIN, 
+    pin_destinatario: contactoActual, 
+    tipo_mensaje: tipoMensaje,
+    archivo_url: archivoInfo ? archivoInfo.url : null, 
+    archivo_nombre: archivoInfo ? archivoInfo.nombre : null,
+    archivo_tamaño: archivoInfo ? archivoInfo.tamaño : null, 
+    archivo_iv: archivoInfo ? archivoInfo.iv : null,
+    archivo_clave: archivoInfo ? archivoInfo.claveParaMi : null, 
+    archivo_clave_destinatario: archivoInfo ? archivoInfo.claveParaDestinatario : null,
+    archivo_cifrado: archivoInfo ? archivoInfo.cifrado : false, 
+    texto_descifrado: texto,
+    enviado_en: new Date().toISOString(), 
+    leido: false
+  };
+  
+  var sinMensajes = contenedor.querySelector('p');
+  if (sinMensajes) contenedor.innerHTML = '';
+  
+  var divTemp = document.createElement('div');
+  divTemp.className = 'mensaje mensaje-enviado';
+  divTemp.setAttribute('data-id', tempId);
+  divTemp.innerHTML = '<div class="mensaje-texto">' + construirContenidoMensaje(mensajeTemp) + '</div><div class="mensaje-meta"><span>✓</span></div>';
+  contenedor.appendChild(divTemp);
+  contenedor.scrollTop = contenedor.scrollHeight;
+  
+  if (archivoSeleccionado && archivoInfo) {
+    var localContainer = document.getElementById('media-container-' + tempId);
+    if (localContainer) {
+      var localUrl = URL.createObjectURL(archivoSeleccionado);
+      cacheArchivosDescifrados[archivoInfo.url] = localUrl;
+      localContainer.setAttribute('data-loaded', 'true');
+      if (tipoMensaje === 'imagen') {
+        localContainer.innerHTML = '<img src="' + localUrl + '" style="max-width: 100%; border-radius: 8px;">';
+      } else if (tipoMensaje === 'video') {
+        localContainer.innerHTML = '<video controls style="max-width: 100%; border-radius: 8px;"><source src="' + localUrl + '"></video>';
       } else {
-        avatarNode.textContent = (profile.username || '?').substring(0, 2).toUpperCase();
+        localContainer.innerHTML = '<a href="' + localUrl + '" download="' + archivoInfo.nombre + '" style="color: #00a884;">📎 ' + archivoInfo.nombre + '</a>';
       }
-
-      const details = document.createElement('div');
-      details.className = 'chat-item-details';
-
-      const header = document.createElement('div');
-      header.className = 'chat-item-header';
-      const name = document.createElement('span');
-      name.className = 'chat-item-name';
-      name.textContent = profile.username;
-      
-      const time = document.createElement('span');
-      time.className = 'chat-item-time';
-      header.appendChild(name);
-      header.appendChild(time);
-
-      const body = document.createElement('div');
-      body.className = 'chat-item-body';
-      const preview = document.createElement('span');
-      preview.className = 'chat-item-preview';
-      preview.textContent = 'Empezar conversación...';
-      body.appendChild(preview);
-
-      details.appendChild(header);
-      details.appendChild(body);
-
-      item.appendChild(avatarNode);
-      item.appendChild(details);
-
-      item.addEventListener('click', () => startOrOpenChat(profile));
-      container.appendChild(item);
+    }
+  }
+  
+  try {
+    var { error } = await clienteSupabase.from('mensajes').insert({
+      pin_remitente: miPIN, 
+      pin_destinatario: contactoActual, 
+      mensaje_cifrado: mensajeCifrado, 
+      nonce: 'e2ee', 
+      tipo_mensaje: tipoMensaje,
+      archivo_url: archivoInfo ? archivoInfo.url : null, 
+      archivo_nombre: archivoInfo ? archivoInfo.nombre : null,
+      archivo_tamaño: archivoInfo ? archivoInfo.tamaño : null, 
+      archivo_iv: archivoInfo ? archivoInfo.iv : null,
+      archivo_clave: archivoInfo ? archivoInfo.claveParaMi : null, 
+      archivo_clave_destinatario: archivoInfo ? archivoInfo.claveParaDestinatario : null,
+      archivo_cifrado: archivoInfo ? archivoInfo.cifrado : false, 
+      leido: false
     });
-  } catch (err) {
-    console.error('Error al cargar conversaciones:', err);
-  }
-}
-
-function startOrOpenChat(profile) {
-  activeContactId = profile.id;
-  
-  // Actualizar lista de selección activa en UI
-  document.querySelectorAll('#chatList .chat-item').forEach(el => {
-    el.classList.remove('active');
-    if (el.getAttribute('data-id') === profile.id) el.classList.add('active');
-  });
-
-  // Mostrar contenedor de Chat Activo
-  document.getElementById('noChatPlaceholder').classList.add('hidden');
-  document.getElementById('activeChat').classList.remove('hidden');
-
-  // Configurar Encabezado del Chat
-  const headAvatar = document.getElementById('chatContactAvatar');
-  headAvatar.textContent = '';
-  if (profile.avatar_url) {
-    const img = document.createElement('img');
-    img.src = profile.avatar_url;
-    headAvatar.appendChild(img);
-  } else {
-    headAvatar.textContent = (profile.username || '?').substring(0, 2).toUpperCase();
-  }
-  document.getElementById('chatContactName').textContent = escapeHTML(profile.username);
-  document.getElementById('chatContactStatus').textContent = escapeHTML(profile.status || 'En línea');
-
-  // Cargar Mensajes
-  fetchAndRenderMessages();
-}
-
-// --- CARGA Y RENDERIZADO DE MENSAJES (Seguro contra XSS) ---
-async function fetchAndRenderMessages() {
-  if (!activeContactId) return;
-  try {
-    chatMessagesList = await SupabaseService.fetchMessages(myProfile.id, activeContactId);
-    renderMessagesUI();
-  } catch (err) {
-    console.error('Error al obtener mensajes:', err);
-  }
-}
-
-function renderMessagesUI() {
-  const container = document.getElementById('messagesContainer');
-  container.textContent = ''; // Limpieza segura para evitar fugas de memoria y XSS
-
-  chatMessagesList.forEach(msg => {
-    const isOutgoing = msg.sender_id === myProfile.id;
     
-    const wrapper = document.createElement('div');
-    wrapper.className = `message-wrapper ${isOutgoing ? 'outgoing' : 'incoming'}`;
-
-    const bubble = document.createElement('div');
-    bubble.className = 'message-bubble';
-
-    // Contenido condicional seguro
-    if (msg.type === 'text') {
-      const textNode = document.createElement('p');
-      textNode.textContent = msg.content; // textContent sanitiza entradas
-      bubble.appendChild(textNode);
-    } else if (msg.type === 'image') {
-      const img = document.createElement('img');
-      img.className = 'message-image';
-      img.src = msg.content;
-      img.alt = 'Imagen compartida';
-      bubble.appendChild(img);
-    } else if (msg.type === 'audio') {
-      const audio = document.createElement('audio');
-      audio.className = 'message-audio';
-      audio.controls = true;
-      audio.src = msg.content;
-      bubble.appendChild(audio);
-    }
-
-    // Hora de envío
-    const timeMeta = document.createElement('span');
-    timeMeta.className = 'message-time-meta';
-    timeMeta.textContent = new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    bubble.appendChild(timeMeta);
-
-    wrapper.appendChild(bubble);
-    container.appendChild(wrapper);
-  });
-
-  // Auto-scroll al fondo
-  container.scrollTop = container.scrollHeight;
-}
-
-// --- ENVÍO DE MENSAJES ---
-function handleMessageInputToggle() {
-  const input = document.getElementById('messageInput');
-  const sendBtn = document.getElementById('btnSendMessage');
-  const recordBtn = document.getElementById('btnVoiceRecord');
-
-  if (input.value.trim().length > 0) {
-    sendBtn.classList.remove('hidden');
-    recordBtn.classList.add('hidden');
-  } else {
-    sendBtn.classList.add('hidden');
-    recordBtn.classList.remove('hidden');
+    if (error) throw error;
+    
+    document.getElementById('nuevoMensaje').value = '';
+    document.getElementById('nuevoMensaje').style.height = 'auto';
+    cancelarArchivo();
+    cargarMensajes();
+  } catch (error) { 
+    await customAlert('Error al insertar el mensaje en la red.'); 
+    divTemp.style.opacity = '0.5'; 
   }
 }
 
-async function handleSendMessage() {
-  const input = document.getElementById('messageInput');
-  const text = input.value.trim();
-  if (!text || !activeContactId) return;
-
+async function marcarComoLeidos() {
+  if (!contactoActual || !clienteSupabase) return;
   try {
-    const msg = await SupabaseService.insertMessage(myProfile.id, activeContactId, text, 'text');
-    chatMessagesList.push(msg);
-    renderMessagesUI();
-    input.value = '';
-    handleMessageInputToggle();
-  } catch (err) {
-    showToast('Fallo al enviar mensaje.', true);
-  }
+    await clienteSupabase.from('mensajes')
+      .update({ leido: true, leido_en: new Date().toISOString() })
+      .eq('pin_remitente', contactoActual)
+      .eq('pin_destinatario', miPIN)
+      .eq('leido', false);
+    
+    delete mensajesNoLeidos[contactoActual];
+    actualizarBadgeChats();
+    if (tabActual === 'chats') renderizarChats();
+  } catch (error) { logError('Error:', error); }
 }
 
-async function handleAttachmentSend(e) {
-  const file = e.target.files[0];
-  if (!file || !activeContactId) return;
-
-  try {
-    showToast('Subiendo imagen...');
-    const publicUrl = await SupabaseService.uploadFile('attachments', `img_${myProfile.id}_${Date.now()}`, file);
-    const msg = await SupabaseService.insertMessage(myProfile.id, activeContactId, publicUrl, 'image');
-    chatMessagesList.push(msg);
-    renderMessagesUI();
-  } catch (err) {
-    showToast('Fallo al cargar imagen.', true);
-  }
-}
-
-// --- GRABACIÓN DE AUDIO (NOTAS DE VOZ) ---
-async function startVoiceRecording() {
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    mediaRecorder = new MediaRecorder(stream);
-    audioChunks = [];
-
-    mediaRecorder.ondataavailable = (event) => {
-      audioChunks.push(event.data);
-    };
-
-    mediaRecorder.onstop = async () => {
-      showToast('Enviando audio...');
-      const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-      const file = new File([audioBlob], 'audio.webm', { type: 'audio/webm' });
+function suscribirseAMensajes() {
+  if (!clienteSupabase) return;
+  cancelarSuscripciones();
+  
+  canalRealtime = clienteSupabase.channel('mensajes_' + miPIN)
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'mensajes', filter: 'pin_destinatario=eq.' + miPIN }, async function(payload) {
+      var nuevo = payload.new;
+      if (getBloqueados().includes(nuevo.pin_remitente)) return;
+      if (modoPrivado && !getContactos().includes(nuevo.pin_remitente)) return;
       
-      try {
-        const publicUrl = await SupabaseService.uploadFile('attachments', `voice_${myProfile.id}_${Date.now()}`, file);
-        const msg = await SupabaseService.insertMessage(myProfile.id, activeContactId, publicUrl, 'audio');
-        chatMessagesList.push(msg);
-        renderMessagesUI();
-      } catch (err) {
-        showToast('Fallo al enviar audio.', true);
+      var texto = '';
+      if (nuevo.mensaje_cifrado && nuevo.mensaje_cifrado.length > 0) {
+        texto = await descifrarMensaje(nuevo.mensaje_cifrado);
       }
-    };
+      
+      mensajesNoLeidos[nuevo.pin_remitente] = (mensajesNoLeidos[nuevo.pin_remitente] || 0) + 1;
+      notificarNuevoMensaje(nuevo.pin_remitente, texto, nuevo.tipo_mensaje);
+      
+      if (contactoActual === nuevo.pin_remitente) {
+        nuevo.texto_descifrado = texto;
+        var contenedor = document.getElementById('chatMensajes');
+        var sinMensajes = contenedor.querySelector('p');
+        if (sinMensajes) contenedor.innerHTML = '';
+        var div = document.createElement('div');
+        div.className = 'mensaje mensaje-recibido';
+        div.setAttribute('data-id', nuevo.id);
+        div.innerHTML = '<div class="mensaje-texto">' + construirContenidoMensaje(nuevo) + '</div><div class="mensaje-meta"></div>';
+        contenedor.appendChild(div);
+        contenedor.scrollTop = contenedor.scrollHeight;
+        if (nuevo.archivo_url) cargarYDescifrarAdjunto(nuevo);
+        setTimeout(marcarComoLeidos, 1000);
+      } else {
+        renderizarChats();
+      }
+    })
+    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'mensajes', filter: 'pin_remitente=eq.' + miPIN }, function(payload) {
+      if (payload.new.leido) {
+        document.querySelectorAll('.mensaje-enviado .mensaje-meta span:not(.check-leido)').forEach(function(span) {
+          if (span.innerText === '✓') { 
+            span.className = 'check-leido'; 
+            span.innerText = '✓✓'; 
+          }
+        });
+      }
+    })
+    .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'mensajes' }, function(payload) {
+      if (contactoActual) cargarMensajes();
+    })
+    .subscribe();
+}
 
-    mediaRecorder.start();
-    document.getElementById('btnVoiceRecord').className = 'icon-btn mic-recording';
-    showToast('Grabando...');
-  } catch (err) {
-    showToast('Permiso de micrófono denegado.', true);
+function cancelarSuscripciones() { 
+  if (canalRealtime) { 
+    clienteSupabase.removeChannel(canalRealtime); 
+    canalRealtime = null; 
+  } 
+}
+
+// ============================================
+// SELECCIÓN Y BORRADO
+// ============================================
+async function seleccionarModo() {
+  modoSeleccion = true;
+  mensajesSeleccionados = [];
+  cerrarModalOpcionesChat();
+  await customAlert('Toca los mensajes para seleccionarlos individualmente. Usa la papelera para borrarlos.', '☑️');
+  cargarMensajes();
+}
+
+function toggleSeleccion(id) {
+  var idx = mensajesSeleccionados.indexOf(id);
+  if (idx > -1) mensajesSeleccionados.splice(idx, 1); 
+  else mensajesSeleccionados.push(id);
+  document.querySelectorAll('.mensaje[data-id="' + id + '"]').forEach(div => div.classList.toggle('seleccionado'));
+}
+
+async function borrarSeleccionados() {
+  if (mensajesSeleccionados.length === 0) { 
+    await customAlert('No has seleccionado ningún mensaje.'); 
+    return; 
+  }
+  var confirmado = await customConfirm(
+    '¿Deseas borrar de forma irreversible los ' + mensajesSeleccionados.length + ' mensajes seleccionados?', 
+    '🗑️'
+  );
+  if (!confirmado) return;
+  
+  try {
+    var ids = mensajesSeleccionados.map(id => parseInt(id));
+    var { error } = await clienteSupabase.from('mensajes').delete().in('id', ids);
+    if (error) throw error;
+    await customAlert('✅ Mensajes borrados.', '✅');
+    modoSeleccion = false;
+    mensajesSeleccionados = [];
+    cargarMensajes();
+  } catch (error) { 
+    await customAlert('Error: ' + error.message); 
   }
 }
 
-function stopVoiceRecording() {
-  if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-    mediaRecorder.stop();
-    // Apagar micrófono de manera segura
-    mediaRecorder.stream.getTracks().forEach(track => track.stop());
-    document.getElementById('btnVoiceRecord').className = 'icon-btn mic-idle';
+async function limpiarChatCompleto() {
+  var confirmado = await customConfirm('⚠️ ¿Deseas borrar TODO el historial de este chat? Esta acción es irreversible.', '⚠️');
+  if (!confirmado) return;
+  
+  try {
+    var { error } = await clienteSupabase.from('mensajes').delete()
+      .or('and(pin_remitente.eq.' + miPIN + ',pin_destinatario.eq.' + contactoActual + '),and(pin_remitente.eq.' + contactoActual + ',pin_destinatario.eq.' + miPIN + ')');
+    if (error) throw error;
+    await customAlert('✅ Historial de chat vaciado.', '✅');
+    cerrarModalOpcionesChat();
+    cargarMensajes();
+  } catch (error) { 
+    await customAlert('Error: ' + error.message); 
   }
 }
 
-// --- EVENTOS REALTIME RECIBIDOS ---
-function onNewMessageReceived(newMsg) {
-  // Solo agregar si pertenece a la conversación actual
-  if (activeContactId && 
-     ((newMsg.sender_id === activeContactId && newMsg.receiver_id === myProfile.id) ||
-      (newMsg.sender_id === myProfile.id && newMsg.receiver_id === activeContactId))) {
-    chatMessagesList.push(newMsg);
-    renderMessagesUI();
+// ============================================
+// ARCHIVOS
+// ============================================
+document.getElementById('archivoInput').addEventListener('change', async function(e) {
+  var file = e.target.files[0];
+  if (!file) return;
+  if (file.size > 50 * 1024 * 1024) { 
+    await customAlert('El tamaño máximo de archivo admitido es de 50 MB.'); 
+    return; 
+  }
+  archivoSeleccionado = file;
+  await customAlert('📎 Archivo listo para enviar: ' + file.name, '📎');
+});
+
+function cancelarArchivo() {
+  archivoSeleccionado = null;
+  document.getElementById('archivoInput').value = '';
+}
+
+// ============================================
+// ESTADO Y ACTIVAR
+// ============================================
+async function verificarEstado() {
+  var estadoDiv = document.getElementById('estadoTexto');
+  var form = document.getElementById('formActivacion');
+  
+  if (!clienteSupabase) { 
+    estadoDiv.innerText = '⚠️ Sin conexión'; 
+    form.classList.remove('hidden'); 
+    return; 
   }
   
-  // Actualizar previsualización del listado lateral de chats
-  const chatItem = document.querySelector(`#chatList .chat-item[data-id="${newMsg.sender_id === myProfile.id ? newMsg.receiver_id : newMsg.sender_id}"]`);
-  if (chatItem) {
-    const preview = chatItem.querySelector('.chat-item-preview');
-    const time = chatItem.querySelector('.chat-item-time');
+  try {
+    var { data } = await clienteSupabase.from('usuarios')
+      .select('fecha_expiracion')
+      .eq('pin', miPIN)
+      .maybeSingle();
     
-    preview.textContent = newMsg.type === 'text' ? newMsg.content : `[${newMsg.type}]`;
-    time.textContent = new Date(newMsg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    if (data && data.fecha_expiracion && new Date(data.fecha_expiracion) > new Date()) {
+      estadoDiv.className = 'status active';
+      estadoDiv.innerText = '✅ Servicio Activo';
+      estadoDiv.style.background = 'rgba(0, 168, 132, 0.15)';
+      estadoDiv.style.color = '#00a884';
+      form.classList.add('hidden');
+      document.getElementById('fechaVencimiento').innerText = new Date(data.fecha_expiracion).toLocaleDateString('es-ES');
+      return;
+    }
+    
+    estadoDiv.className = 'status expired';
+    estadoDiv.innerText = '⚠️ Servicio Inactivo';
+    form.classList.remove('hidden');
+  } catch (error) { 
+    estadoDiv.innerText = '❌ Error de conexión'; 
+    form.classList.remove('hidden'); 
   }
 }
 
-// --- SEÑALIZACIÓN WEBRTC Y RECEPCIÓN DE LLAMADAS ---
-function handleIncomingSignals(payload) {
-  if (payload.type === 'offer') {
-    // Recibiendo Oferta - Disparar Ringtone e Interfaz de llamada entrante
-    incomingOfferData = payload;
-    ringtone.play().catch(e => console.log('El navegador restringió el auto-play del audio'));
-    
-    document.getElementById('llamadaEntranteNombre').textContent = escapeHTML(payload.callerName);
-    const incomingAvatar = document.getElementById('llamadaEntranteAvatar');
-    incomingAvatar.textContent = '';
-    if (payload.callerAvatar) {
-      const img = document.createElement('img');
-      img.src = payload.callerAvatar;
-      incomingAvatar.appendChild(img);
+async function activar() {
+  var codigo = document.getElementById('codigoInput').value.trim().toUpperCase();
+  if (codigo.length < 5) { 
+    await customAlert('Código de activación inválido.'); 
+    return; 
+  }
+  
+  var btn = document.getElementById('btnActivar');
+  btn.disabled = true; 
+  btn.innerText = 'Procesando...';
+  
+  try {
+    var resultado = await clienteSupabase.functions.invoke('activar-servicio', { body: { pin: miPIN, codigo: codigo } });
+    if (resultado.error) {
+      await customAlert('Error: ' + resultado.error.message);
+    } else if (resultado.data && resultado.data.exito) {
+      await customAlert('¡Servicio activado! Vence el: ' + resultado.data.nueva_fecha, '🎉');
+      document.getElementById('codigoInput').value = '';
+      verificarEstado();
     } else {
-      incomingAvatar.textContent = (payload.callerName || '?').substring(0, 2).toUpperCase();
+      await customAlert('Error: ' + (resultado.data ? resultado.data.mensaje : 'Código ya utilizado o inválido.'));
     }
-    document.getElementById('llamadaEntranteTipo').textContent = payload.callType === 'video' ? 'Videollamada entrante...' : 'Llamada de voz entrante...';
+  } catch (error) { 
+    await customAlert('Fallo de conexión: ' + error.message); 
+  } finally { 
+    btn.disabled = false; 
+    btn.innerText = 'Activar'; 
+  }
+}
+
+function copiarPIN() { 
+  navigator.clipboard.writeText(miPIN).then(() => {
+    customAlert('Tu PIN ' + miPIN + ' ha sido copiado al portapapeles.', '📋');
+  }); 
+}
+
+// ============================================
+// INICIALIZACIÓN
+// ============================================
+async function generarPIN() {
+  var pinGuardado = localStorage.getItem('chat_pin');
+  if (pinGuardado) {
+    miPIN = pinGuardado;
+  } else {
+    var bytes = new Uint8Array(4);
+    crypto.getRandomValues(bytes);
+    miPIN = Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('').toUpperCase();
+    localStorage.setItem('chat_pin', miPIN);
+  }
+  document.getElementById('menuPin').innerText = miPIN;
+}
+
+async function cargarModoPrivado() {
+  try {
+    var { data } = await clienteSupabase.from('usuarios')
+      .select('modo_privado')
+      .eq('pin', miPIN)
+      .single();
+    modoPrivado = data && data.modo_privado === true;
+    document.getElementById('toggleModoPrivado').checked = modoPrivado;
+  } catch (error) { logError('Error:', error); }
+}
+
+async function cambiarModoPrivado() {
+  modoPrivado = document.getElementById('toggleModoPrivado').checked;
+  try { 
+    await clienteSupabase.from('usuarios').update({ modo_privado: modoPrivado }).eq('pin', miPIN); 
+  } catch (e) { 
+    customAlert('Fallo al actualizar el modo privado.'); 
+  }
+}
+
+async function inicializarTodo() {
+  try {
+    if (typeof supabase === 'undefined') return false;
+    clienteSupabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    await cargarModoPrivado();
+    await cargarPreferencias();
+    cargarPrefsNotificaciones();
+    suscribirseALlamadas();
+    await limpiarLlamadasAntiguas();
+    return true;
+  } catch (error) { 
+    logError('Error:', error); 
+    return false; 
+  }
+}
+
+async function testearStorage() {
+  try {
+    var { data: buckets, error: bucketsError } = await clienteSupabase.storage.listBuckets();
+    if (bucketsError) { 
+      logError('❌ Error listando buckets:', bucketsError); 
+      return; 
+    }
     
-    document.getElementById('modalLlamadaEntrante').classList.remove('hidden');
-  } else {
-    // Pasar resto de señalizaciones al Service WebRTC
-    WebRTCService.handleSignalingMessage(payload);
-  }
-}
-
-// --- EMPEZAR LLAMADA DESDE LA UI ---
-async function makeCall(type) {
-  if (!activeContactId) return;
-  const peer = allProfiles.find(p => p.id === activeContactId);
-  if (!peer) return;
-
-  // Actualizar UI llamada activa
-  document.getElementById('callContactNameLabel').textContent = escapeHTML(peer.username);
-  const callAvatar = document.getElementById('callContactAvatar');
-  callAvatar.textContent = '';
-  if (peer.avatar_url) {
-    const img = document.createElement('img');
-    img.src = peer.avatar_url;
-    callAvatar.appendChild(img);
-  } else {
-    callAvatar.textContent = (peer.username || '?').substring(0, 2).toUpperCase();
-  }
-
-  document.getElementById('callStatusLabel').textContent = 'Llamando...';
-  document.getElementById('callOverlay').classList.remove('hidden');
-  
-  if (type === 'video') {
-    document.getElementById('btnToggleVideo').classList.remove('hidden');
-  } else {
-    document.getElementById('btnToggleVideo').classList.add('hidden');
-  }
-
-  dialback.play().catch(e => {});
-
-  try {
-    await WebRTCService.startCall(myProfile.id, activeContactId, type, myProfile, handleOnTrack, handleOnCallHangup);
-  } catch (err) {
-    showToast(err.message, true);
-    resetCallUI();
-  }
-}
-
-// --- RESPUESTA DE VIDEO/AUDIO WEBRTC ON TRACK ---
-function handleOnTrack(remoteStream, localStream) {
-  // Parar tonos
-  dialback.pause();
-  dialback.currentTime = 0;
-  ringtone.pause();
-  ringtone.currentTime = 0;
-
-  document.getElementById('callStatusLabel').textContent = 'Conectado';
-  
-  const timerLabel = document.getElementById('callTimer');
-  timerLabel.classList.remove('timer-hidden');
-  startCallDurationTimer();
-
-  // Mapear streams a video si es videollamada
-  if (WebRTCService.callState.callType === 'video') {
-    document.getElementById('videoContainer').classList.remove('hidden');
-    document.getElementById('remoteVideo').srcObject = remoteStream;
-    document.getElementById('localVideo').srcObject = localStream;
-  }
-}
-
-function handleOnCallHangup() {
-  resetCallUI();
-}
-
-// --- ACCIONES DE ENTRADA DE LLAMADAS ---
-async function handleAcceptIncomingCall() {
-  document.getElementById('modalLlamadaEntrante').classList.add('hidden');
-  ringtone.pause();
-  ringtone.currentTime = 0;
-
-  if (!incomingOfferData) return;
-
-  // Actualizar UI llamada activa
-  document.getElementById('callContactNameLabel').textContent = escapeHTML(incomingOfferData.callerName);
-  const callAvatar = document.getElementById('callContactAvatar');
-  callAvatar.textContent = '';
-  if (incomingOfferData.callerAvatar) {
-    const img = document.createElement('img');
-    img.src = incomingOfferData.callerAvatar;
-    callAvatar.appendChild(img);
-  } else {
-    callAvatar.textContent = (incomingOfferData.callerName || '?').substring(0, 2).toUpperCase();
-  }
-  document.getElementById('callStatusLabel').textContent = 'Conectando...';
-  document.getElementById('callOverlay').classList.remove('hidden');
-
-  if (incomingOfferData.callType === 'video') {
-    document.getElementById('btnToggleVideo').classList.remove('hidden');
-  } else {
-    document.getElementById('btnToggleVideo').classList.add('hidden');
-  }
-
-  try {
-    await WebRTCService.acceptCall(myProfile.id, incomingOfferData, handleOnTrack, handleOnCallHangup);
-  } catch (err) {
-    showToast(err.message, true);
-    resetCallUI();
-  }
-}
-
-async function handleDeclineIncomingCall() {
-  document.getElementById('modalLlamadaEntrante').classList.add('hidden');
-  ringtone.pause();
-  ringtone.currentTime = 0;
-  if (incomingOfferData) {
-    await WebRTCService.declineCall(incomingOfferData.callerId);
-  }
-  incomingOfferData = null;
-}
-
-async function handleHangupClick() {
-  await WebRTCService.hangup();
-  resetCallUI();
-}
-
-// --- SILENCIAR AUDIO/DESACTIVAR VIDEO ---
-function handleToggleMute() {
-  if (WebRTCService.localStream) {
-    const audioTrack = WebRTCService.localStream.getAudioTracks()[0];
-    if (audioTrack) {
-      audioTrack.enabled = !audioTrack.enabled;
-      document.getElementById('btnToggleMute').textContent = audioTrack.enabled ? '🎙️' : '🔇';
+    var chatFilesBucket = buckets.find(function(b) { return b.name === 'chat-files'; });
+    if (!chatFilesBucket) { 
+      await customAlert('❌ El bucket "chat-files" no existe en la instancia de Supabase.', '❌'); 
+      return; 
     }
-  }
-}
-
-function handleToggleVideoTrack() {
-  if (WebRTCService.localStream) {
-    const videoTrack = WebRTCService.localStream.getVideoTracks()[0];
-    if (videoTrack) {
-      videoTrack.enabled = !videoTrack.enabled;
-      document.getElementById('btnToggleVideo').textContent = videoTrack.enabled ? '📹' : '📵';
+    
+    var testBlob = new Blob(['test'], { type: 'text/plain' });
+    var testFileName = 'test_' + miPIN + '_' + Date.now() + '.txt';
+    var { data: uploadData, error: uploadError } = await clienteSupabase.storage.from('chat-files').upload(testFileName, testBlob);
+    if (uploadError) { 
+      await customAlert(' Error al subir archivo de prueba: ' + uploadError.message, '❌'); 
+      return; 
     }
+    
+    var { data: urlData, error: urlError } = await clienteSupabase.storage.from('chat-files').createSignedUrl(testFileName, 60);
+    if (urlError) { 
+      await customAlert('❌ Error creando URL firmada: ' + urlError.message, '❌'); 
+      return; 
+    }
+    
+    await clienteSupabase.storage.from('chat-files').remove([testFileName]);
+    await customAlert('✅ Storage y buckets de Supabase funcionan correctamente!', '✅');
+  } catch (error) { 
+    await customAlert('Error de conexión con Storage: ' + error.message, '❌'); 
   }
 }
 
-// --- LIMPIEZA DE INTERFAZ DE LLAMADA ---
-function resetCallUI() {
-  dialback.pause();
-  dialback.currentTime = 0;
-  ringtone.pause();
-  ringtone.currentTime = 0;
+// ============================================
+// INICIALIZACIÓN DOM
+// ============================================
+window.addEventListener('DOMContentLoaded', async function() {
+  try {
+    generarPIN();
+    await inicializarTodo();
+    await verificarPINConfigurado();
+    
+    // Auto-crecimiento responsivo para el input del chat
+    const textInput = document.getElementById('nuevoMensaje');
+    if (textInput) {
+      textInput.addEventListener('input', function() {
+        this.style.height = 'auto';
+        this.style.height = (this.scrollHeight) + 'px';
+      });
+    }
+  } catch (error) {
+    logError('Error:', error);
+    document.getElementById('pantallaBloqueo').style.display = 'none';
+    document.getElementById('appPrincipal').style.display = 'block';
+    await customAlert('⚠️ Error durante la inicialización de módulos: ' + error.message);
+  }
+});
 
-  document.getElementById('callOverlay').classList.add('hidden');
-  document.getElementById('modalLlamadaEntrante').classList.add('hidden');
-  document.getElementById('videoContainer').classList.add('hidden');
-  document.getElementById('callTimer').classList.add('timer-hidden');
-  
-  // Limpiar timers
-  clearInterval(callTimerInterval);
-  document.getElementById('callTimer').textContent = '00:00';
-  
-  // Limpiar videos
-  document.getElementById('remoteVideo').srcObject = null;
-  document.getElementById('localVideo').srcObject = null;
-
-  // Restaurar botones de mute/video a sus iconos por defecto
-  document.getElementById('btnToggleMute').textContent = '🎙️';
-  document.getElementById('btnToggleVideo').textContent = '📹';
-
-  incomingOfferData = null;
-  WebRTCService.cleanupCall();
-}
-
-// --- REPRODUCTOR DE DURACIÓN DE LLAMADAS ---
-function startCallDurationTimer() {
-  let seconds = 0;
-  clearInterval(callTimerInterval);
-  callTimerInterval = setInterval(() => {
-    seconds++;
-    const m = Math.floor(seconds / 60).toString().padStart(2, '0');
-    const s = (seconds % 60).toString().padStart(2, '0');
-    document.getElementById('callTimer').textContent = `${m}:${s}`;
-  }, 1000);
-}
-
-// --- ELEMENTO TOAST NO INVASIVO (Evitar alert()) ---
-function showToast(msg, isError = false) {
-  const container = document.getElementById('connection-toast');
-  container.textContent = msg;
-  container.className = `toast ${isError ? 'offline' : 'online'}`;
-  container.classList.remove('hidden');
-
-  setTimeout(() => {
-    container.classList.add('hidden');
-  }, 4000);
-}
+console.log('🚀 Módulo app.js cargado correctamente');
