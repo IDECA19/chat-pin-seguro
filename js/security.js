@@ -205,4 +205,108 @@ async function cambiarPIN() {
   var nuevoPin = await customPrompt('🔐 Nuevo PIN', 'Ingresa tu nuevo PIN (4-6 dígitos):', '••••', 'password');
   if (!nuevoPin || nuevoPin.length < 4 || nuevoPin.length > 6 || !/^\d+$/.test(nuevoPin)) { await customAlert('PIN inválido.'); return; }
   var nuevoPin2 = await customPrompt('🔐 Confirmar PIN', 'Confirma tu nuevo PIN:', '••••', 'password');
- 
+  if (nuevoPin !== nuevoPin2) { await customAlert('No coinciden.'); return; }
+  pinAccesoHash = await hashPIN(nuevoPin);
+  localStorage.setItem('pin_hash_' + miPIN, pinAccesoHash);
+  var claveCifrada = localStorage.getItem('clave_privada_' + miPIN);
+  if (claveCifrada) {
+    try {
+      var privBase64 = await descifrarClaveConPIN(claveCifrada, pinActual);
+      localStorage.setItem('clave_privada_' + miPIN, await cifrarClaveConPIN(privBase64, nuevoPin));
+    } catch (e) { logError('Error:', e); }
+  }
+  pinActualTemporal = nuevoPin;
+  sessionStorage.setItem('pin_temporal_' + miPIN, nuevoPin);
+  await customAlert('✅ PIN modificado.', '✅');
+}
+
+// ============================================
+// CARGAR CLAVE PRIVADA CON RECUPERACIÓN DE PÚBLICA
+// ============================================
+async function cargarClavePrivadaSegura(pin) {
+  var claveCifrada = localStorage.getItem('clave_privada_' + miPIN);
+  if (!claveCifrada) { await generarClaves(); return; }
+  var privBase64 = '';
+  if (claveCifrada.includes('.')) {
+    if (!pin) throw new Error('Se requiere PIN');
+    privBase64 = await descifrarClaveConPIN(claveCifrada, pin);
+  } else { privBase64 = desofuscarClave(claveCifrada); }
+  var privBuf = Uint8Array.from(atob(privBase64), c => c.charCodeAt(0));
+  miClavePrivada = await crypto.subtle.importKey("pkcs8", privBuf, { name: "RSA-OAEP", hash: "SHA-256" }, true, ["decrypt"]);
+  var { data } = await clienteSupabase.from('usuarios').select('clave_publica').eq('pin', miPIN).maybeSingle();
+  if (data && data.clave_publica) {
+    var pubBuf = Uint8Array.from(atob(data.clave_publica), c => c.charCodeAt(0));
+    miClavePublica = await crypto.subtle.importKey("spki", pubBuf, { name: "RSA-OAEP", hash: "SHA-256" }, true, ["encrypt"]);
+  } else {
+    // Autoreconstrucción de clave pública desde la privada
+    try {
+      var jwk = await crypto.subtle.exportKey("jwk", miClavePrivada);
+      var { d, p, q, dp, dq, qi, ...publicJwk } = jwk;
+      publicJwk.key_ops = ["encrypt"];
+      miClavePublica = await crypto.subtle.importKey("jwk", publicJwk, { name: "RSA-OAEP", hash: "SHA-256" }, true, ["encrypt"]);
+      var pubExp = await crypto.subtle.exportKey("spki", miClavePublica);
+      var pubBase64 = btoa(String.fromCharCode.apply(null, new Uint8Array(pubExp)));
+      await subirClavePublica(pubBase64);
+    } catch (e) {
+      logError('No se pudo derivar clave pública. Regenerando...', e);
+      await generarClaves();
+    }
+  }
+}
+
+// ============================================
+// RATE LIMITING
+// ============================================
+function verificarRateLimit(clave, maxPeticiones, ventanaMs) {
+  var ahora = Date.now();
+  if (!rateLimiters[clave]) rateLimiters[clave] = { peticiones: [] };
+  var limiter = rateLimiters[clave];
+  limiter.peticiones = limiter.peticiones.filter(function(t) { return ahora - t < ventanaMs; });
+  if (limiter.peticiones.length >= maxPeticiones) return false;
+  limiter.peticiones.push(ahora);
+  return true;
+}
+
+function puedeEnviarMensaje() { return verificarRateLimit('mensajes', 10, 60000); }
+function puedeBuscar() { return verificarRateLimit('busquedas', 30, 60000); }
+function puedeLlamar() { return verificarRateLimit('llamadas', 5, 60000); }
+
+// ============================================
+// VALIDACIÓN
+// ============================================
+function validarPIN(pin) {
+  if (!pin || typeof pin !== 'string') return { valido: false, error: 'PIN requerido' };
+  pin = pin.trim().toUpperCase();
+  if (pin.length !== 8) return { valido: false, error: 'El PIN debe tener 8 caracteres' };
+  if (!/^[0-9A-F]{8}$/.test(pin)) return { valido: false, error: 'Solo caracteres hexadecimales (0-9, A-F)' };
+  return { valido: true, valor: pin };
+}
+
+function validarMensaje(texto, maxLongitud) {
+  maxLongitud = maxLongitud || 5000;
+  if (!texto || typeof texto !== 'string') return { valido: false, error: 'Mensaje requerido' };
+  texto = texto.trim();
+  if (texto.length === 0) return { valido: false, error: 'Mensaje vacío' };
+  if (texto.length > maxLongitud) return { valido: false, error: 'Excede ' + maxLongitud + ' caracteres' };
+  return { valido: true, valor: texto };
+}
+
+function validarArchivo(archivo, maxBytes) {
+  maxBytes = maxBytes || (50 * 1024 * 1024);
+  if (!archivo) return { valido: false, error: 'No se seleccionó archivo' };
+  if (archivo.size > maxBytes) return { valido: false, error: 'Excede ' + Math.round(maxBytes / (1024*1024)) + ' MB' };
+  if (archivo.size === 0) return { valido: false, error: 'Archivo vacío' };
+  return { valido: true };
+}
+
+// ============================================
+// LISTENERS
+// ============================================
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Enter' && document.getElementById('pantallaBloqueo').style.display === 'flex') {
+    var inputPIN = document.getElementById('pinAccesoInput');
+    if (inputPIN.value) desbloquearApp();
+  }
+});
+
+console.log('🛡️ Módulo security.js cargado correctamente');
