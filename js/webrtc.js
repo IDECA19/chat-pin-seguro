@@ -3,9 +3,10 @@
  * Sistema completo de llamadas WebRTC: voz y video
  * 
  * Depende de:
- * - app.js (miPIN, clienteSupabase, contactoActual, obtenerNombreContacto, 
- *           customAlert, customConfirm, logError)
+ * - app.js (miPIN, clienteSupabase, contactoActual, obtenerNombreContacto, customAlert, customConfirm, logError)
  * - notifications.js (opcional, para notificaciones de llamada entrante)
+ * 
+ * IMPORTANTE: Este archivo se carga DESPUÉS de app.js, por lo que puede usar customAlert/customConfirm
  */
 
 // ============================================
@@ -43,17 +44,19 @@ function formatearTiempo(segundos) {
 
 function iniciarTimerLlamada() {
   segundosLlamada = 0;
-  document.getElementById('llamadaTimer').innerText = '00:00';
+  var timerLabel = document.getElementById('llamadaTimer');
+  if (timerLabel) timerLabel.innerText = '00:00';
   timerLlamada = setInterval(function() {
     segundosLlamada++;
-    document.getElementById('llamadaTimer').innerText = formatearTiempo(segundosLlamada);
+    var timerLabel = document.getElementById('llamadaTimer');
+    if (timerLabel) timerLabel.innerText = formatearTiempo(segundosLlamada);
   }, 1000);
 }
 
 function detenerTimerLlamada() {
-  if (timerLlamada) { 
-    clearInterval(timerLlamada); 
-    timerLlamada = null; 
+  if (timerLlamada) {
+    clearInterval(timerLlamada);
+    timerLlamada = null;
   }
 }
 
@@ -69,7 +72,9 @@ async function obtenerStreamMedia(esVideo) {
     return await navigator.mediaDevices.getUserMedia(constraints);
   } catch (error) {
     logError('Error obteniendo media:', error);
-    await customAlert('❌ No se pudo acceder al ' + (esVideo ? 'micrófono y cámara' : 'micrófono') + '.\nVerifica los permisos del navegador.', '❌');
+    if (typeof customAlert !== 'undefined') {
+      await customAlert('❌ No se pudo acceder al ' + (esVideo ? 'micrófono y cámara' : 'micrófono') + '.\nVerifica los permisos del navegador.', '❌');
+    }
     return null;
   }
 }
@@ -78,13 +83,13 @@ async function obtenerStreamMedia(esVideo) {
 // 📞 INICIAR LLAMADA
 // ============================================
 async function iniciarLlamada(tipo) {
-  if (!contactoActual) { 
-    await customAlert('❌ Debes estar en un chat para llamar.', '❌'); 
-    return; 
+  if (!contactoActual) {
+    if (typeof customAlert !== 'undefined') await customAlert('❌ Debes estar en un chat para llamar.', '❌');
+    return;
   }
-  if (llamadaActiva) { 
-    await customAlert('⚠️ Ya tienes una llamada activa.', '⚠️'); 
-    return; 
+  if (llamadaActiva) {
+    if (typeof customAlert !== 'undefined') await customAlert('⚠️ Ya tienes una llamada activa.', '⚠️');
+    return;
   }
   
   tipoLlamadaActual = tipo;
@@ -92,10 +97,10 @@ async function iniciarLlamada(tipo) {
   esIniciador = true;
   
   var tipoTexto = tipo === 'video' ? 'videollamada' : 'llamada de voz';
-  var confirmado = await customConfirm(
-    '📞 ¿Iniciar ' + tipoTexto + ' con ' + obtenerNombreContacto(contactoActual) + '?', 
-    tipo === 'video' ? '📹' : ''
-  );
+  var confirmado = true;
+  if (typeof customConfirm !== 'undefined') {
+    confirmado = await customConfirm('📞 ¿Iniciar ' + tipoTexto + ' con ' + obtenerNombreContacto(contactoActual) + '?', tipo === 'video' ? '📹' : '📞');
+  }
   if (!confirmado) return;
   
   streamLocal = await obtenerStreamMedia(tipo === 'video');
@@ -119,12 +124,18 @@ async function iniciarLlamada(tipo) {
     streamRemoto.addTrack(event.track);
     
     if (tipo === 'video') {
-      document.getElementById('videoRemoto').srcObject = streamRemoto;
-      document.getElementById('videoContainer').style.display = 'block';
-      document.getElementById('audioContainer').style.display = 'none';
-      document.getElementById('btnCamara').style.display = 'flex';
+      var videoRemoto = document.getElementById('videoRemoto');
+      var videoContainer = document.getElementById('videoContainer');
+      var audioContainer = document.getElementById('audioContainer');
+      var btnCamara = document.getElementById('btnCamara');
+      
+      if (videoRemoto) videoRemoto.srcObject = streamRemoto;
+      if (videoContainer) videoContainer.style.display = 'block';
+      if (audioContainer) audioContainer.style.display = 'none';
+      if (btnCamara) btnCamara.style.display = 'flex';
     } else {
-      document.getElementById('audioRemoto').srcObject = streamRemoto;
+      var audioRemoto = document.getElementById('audioRemoto');
+      if (audioRemoto) audioRemoto.srcObject = streamRemoto;
     }
     
     actualizarEstadoLlamada('✅ Conectado');
@@ -149,7 +160,7 @@ async function iniciarLlamada(tipo) {
     suscribirseALlamadas();
   } catch (error) {
     logError('Error creando oferta:', error);
-    await customAlert('❌ Error al iniciar la llamada.', '❌');
+    if (typeof customAlert !== 'undefined') await customAlert('❌ Error al iniciar la llamada.', '❌');
     colgarLlamada();
   }
 }
@@ -175,8 +186,8 @@ async function enviarICECandidate(candidate) {
     }).eq('pin_remitente', pinLlamadaActual)
       .eq('pin_destinatario', miPIN)
       .eq('estado', 'conectando');
-  } catch (error) { 
-    logError('Error enviando ICE:', error); 
+  } catch (error) {
+    logError('Error enviando ICE:', error);
   }
 }
 
@@ -186,9 +197,9 @@ async function enviarICECandidate(candidate) {
 async function recibirLlamada(pinRemitente, oferta, tipo) {
   if (llamadaActiva) {
     try {
-      await clienteSupabase.from('llamadas').update({ 
-        estado: 'rechazada', 
-        fin: new Date().toISOString() 
+      await clienteSupabase.from('llamadas').update({
+        estado: 'rechazada',
+        fin: new Date().toISOString()
       }).eq('pin_remitente', pinRemitente)
         .eq('pin_destinatario', miPIN)
         .eq('estado', 'llamando');
@@ -201,24 +212,30 @@ async function recibirLlamada(pinRemitente, oferta, tipo) {
   esIniciador = false;
   
   var tipoTexto = tipoLlamadaActual === 'video' ? '📹 Videollamada entrante' : '📞 Llamada de voz entrante';
-  document.getElementById('llamadaEntranteNombre').innerText = obtenerNombreContacto(pinRemitente);
-  document.getElementById('llamadaEntranteTipo').innerText = tipoTexto;
-  document.getElementById('llamadaEntranteAvatar').innerText = obtenerNombreContacto(pinRemitente).substring(0, 2).toUpperCase();
-  document.getElementById('modalLlamadaEntrante').classList.add('active');
+  
+  var lblNombre = document.getElementById('llamadaEntranteNombre');
+  var lblTipo = document.getElementById('llamadaEntranteTipo');
+  var lblAvatar = document.getElementById('llamadaEntranteAvatar');
+  var modal = document.getElementById('modalLlamadaEntrante');
+  
+  if (lblNombre) lblNombre.innerText = obtenerNombreContacto(pinRemitente);
+  if (lblTipo) lblTipo.innerText = tipoTexto;
+  if (lblAvatar) lblAvatar.innerText = obtenerNombreContacto(pinRemitente).substring(0, 2).toUpperCase();
+  if (modal) modal.classList.add('active');
   
   reproducirSonidoLlamadaEntrante();
   
-  if (Notification.permission === 'granted') {
+  if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
     var notif = new Notification(tipoTexto, {
       body: obtenerNombreContacto(pinRemitente) + ' te está llamando',
       tag: 'llamada-' + pinRemitente,
       requireInteraction: true,
       vibrate: [500, 200, 500, 200, 500]
     });
-    notif.onclick = function() { 
-      window.focus(); 
-      aceptarLlamada(); 
-      notif.close(); 
+    notif.onclick = function() {
+      window.focus();
+      aceptarLlamada();
+      notif.close();
     };
   }
 }
@@ -233,25 +250,25 @@ function reproducirSonidoLlamadaEntrante() {
     function tocarTono() {
       var osc = audioCtx.createOscillator();
       var gain = audioCtx.createGain();
-      osc.connect(gain); 
+      osc.connect(gain);
       gain.connect(audioCtx.destination);
       osc.frequency.setValueAtTime(440, audioCtx.currentTime);
       gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
       gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.8);
-      osc.start(audioCtx.currentTime); 
+      osc.start(audioCtx.currentTime);
       osc.stop(audioCtx.currentTime + 0.8);
     }
     tocarTono();
     sonidoEntranteInterval = setInterval(tocarTono, 1500);
-  } catch (error) { 
-    logError('Error sonido entrante:', error); 
+  } catch (error) {
+    logError('Error sonido entrante:', error);
   }
 }
 
 function detenerSonidoLlamadaEntrante() {
-  if (sonidoEntranteInterval) { 
-    clearInterval(sonidoEntranteInterval); 
-    sonidoEntranteInterval = null; 
+  if (sonidoEntranteInterval) {
+    clearInterval(sonidoEntranteInterval);
+    sonidoEntranteInterval = null;
   }
 }
 
@@ -260,25 +277,25 @@ function reproducirSonidoLlamadaSaliente() {
     var audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     var osc = audioCtx.createOscillator();
     var gain = audioCtx.createGain();
-    osc.connect(gain); 
+    osc.connect(gain);
     gain.connect(audioCtx.destination);
     osc.frequency.setValueAtTime(440, audioCtx.currentTime);
     gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
     gain.gain.setValueAtTime(0, audioCtx.currentTime + 1);
     gain.gain.setValueAtTime(0.15, audioCtx.currentTime + 1.5);
     gain.gain.setValueAtTime(0, audioCtx.currentTime + 2.5);
-    osc.start(audioCtx.currentTime); 
+    osc.start(audioCtx.currentTime);
     osc.stop(audioCtx.currentTime + 3);
     sonidoLlamadaSaliente = osc;
   } catch (e) {}
 }
 
 function detenerSonidoLlamadaSaliente() {
-  try { 
-    if (sonidoLlamadaSaliente) { 
-      sonidoLlamadaSaliente.stop(); 
-      sonidoLlamadaSaliente = null; 
-    } 
+  try {
+    if (sonidoLlamadaSaliente) {
+      sonidoLlamadaSaliente.stop();
+      sonidoLlamadaSaliente = null;
+    }
   } catch (e) {}
 }
 
@@ -286,20 +303,22 @@ function detenerSonidoLlamadaSaliente() {
 // ✅ ACEPTAR LLAMADA
 // ============================================
 async function aceptarLlamada() {
-  document.getElementById('modalLlamadaEntrante').classList.remove('active');
+  var modal = document.getElementById('modalLlamadaEntrante');
+  if (modal) modal.classList.remove('active');
+  
   detenerSonidoLlamadaEntrante();
   
   streamLocal = await obtenerStreamMedia(tipoLlamadaActual === 'video');
-  if (!streamLocal) { 
-    rechazarLlamada(); 
-    return; 
+  if (!streamLocal) {
+    rechazarLlamada();
+    return;
   }
   
-  mostrarPantallaLlamada(pinLlamadaActual, ' Conectando...', tipoLlamadaActual);
+  mostrarPantallaLlamada(pinLlamadaActual, '🔄 Conectando...', tipoLlamadaActual);
   
   peerConnection = new RTCPeerConnection(rtcConfig);
-  streamLocal.getTracks().forEach(function(track) { 
-    peerConnection.addTrack(track, streamLocal); 
+  streamLocal.getTracks().forEach(function(track) {
+    peerConnection.addTrack(track, streamLocal);
   });
   
   peerConnection.onicecandidate = function(event) {
@@ -311,12 +330,18 @@ async function aceptarLlamada() {
     streamRemoto.addTrack(event.track);
     
     if (tipoLlamadaActual === 'video') {
-      document.getElementById('videoRemoto').srcObject = streamRemoto;
-      document.getElementById('videoContainer').style.display = 'block';
-      document.getElementById('audioContainer').style.display = 'none';
-      document.getElementById('btnCamara').style.display = 'flex';
+      var videoRemoto = document.getElementById('videoRemoto');
+      var videoContainer = document.getElementById('videoContainer');
+      var audioContainer = document.getElementById('audioContainer');
+      var btnCamara = document.getElementById('btnCamara');
+      
+      if (videoRemoto) videoRemoto.srcObject = streamRemoto;
+      if (videoContainer) videoContainer.style.display = 'block';
+      if (audioContainer) audioContainer.style.display = 'none';
+      if (btnCamara) btnCamara.style.display = 'flex';
     } else {
-      document.getElementById('audioRemoto').srcObject = streamRemoto;
+      var audioRemoto = document.getElementById('audioRemoto');
+      if (audioRemoto) audioRemoto.srcObject = streamRemoto;
     }
     
     actualizarEstadoLlamada('✅ Conectado');
@@ -339,10 +364,10 @@ async function aceptarLlamada() {
       .limit(1)
       .single();
     
-    if (!data || !data.oferta) { 
-      await customAlert('❌ No se encontró la oferta.', '❌'); 
-      colgarLlamada(); 
-      return; 
+    if (!data || !data.oferta) {
+      if (typeof customAlert !== 'undefined') await customAlert('❌ No se encontró la oferta.', '❌');
+      colgarLlamada();
+      return;
     }
     
     var offer = JSON.parse(data.oferta);
@@ -351,9 +376,9 @@ async function aceptarLlamada() {
     var answer = await peerConnection.createAnswer();
     await peerConnection.setLocalDescription(answer);
     
-    await clienteSupabase.from('llamadas').update({ 
-      respuesta: JSON.stringify(answer), 
-      estado: 'conectando' 
+    await clienteSupabase.from('llamadas').update({
+      respuesta: JSON.stringify(answer),
+      estado: 'conectando'
     }).eq('pin_remitente', pinLlamadaActual)
       .eq('pin_destinatario', miPIN)
       .eq('estado', 'llamando');
@@ -369,13 +394,15 @@ async function aceptarLlamada() {
 // ❌ RECHAZAR Y COLGAR
 // ============================================
 async function rechazarLlamada() {
-  document.getElementById('modalLlamadaEntrante').classList.remove('active');
+  var modal = document.getElementById('modalLlamadaEntrante');
+  if (modal) modal.classList.remove('active');
+  
   detenerSonidoLlamadaEntrante();
   
   try {
-    await clienteSupabase.from('llamadas').update({ 
-      estado: 'rechazada', 
-      fin: new Date().toISOString() 
+    await clienteSupabase.from('llamadas').update({
+      estado: 'rechazada',
+      fin: new Date().toISOString()
     }).eq('pin_remitente', pinLlamadaActual)
       .eq('pin_destinatario', miPIN)
       .eq('estado', 'llamando');
@@ -389,30 +416,35 @@ async function colgarLlamada() {
   detenerSonidoLlamadaSaliente();
   detenerSonidoLlamadaEntrante();
   
-  if (streamLocal) { 
-    streamLocal.getTracks().forEach(function(t) { t.stop(); }); 
-    streamLocal = null; 
+  if (streamLocal) {
+    streamLocal.getTracks().forEach(function(t) { t.stop(); });
+    streamLocal = null;
   }
-  if (streamRemoto) { 
-    streamRemoto.getTracks().forEach(function(t) { t.stop(); }); 
-    streamRemoto = null; 
+  if (streamRemoto) {
+    streamRemoto.getTracks().forEach(function(t) { t.stop(); });
+    streamRemoto = null;
   }
-  if (peerConnection) { 
-    peerConnection.close(); 
-    peerConnection = null; 
+  if (peerConnection) {
+    peerConnection.close();
+    peerConnection = null;
   }
   
-  document.getElementById('videoRemoto').srcObject = null;
-  document.getElementById('audioRemoto').srcObject = null;
-  document.getElementById('pantallaLlamada').style.display = 'none';
-  document.getElementById('modalLlamadaEntrante').classList.remove('active');
+  var videoRemoto = document.getElementById('videoRemoto');
+  var audioRemoto = document.getElementById('audioRemoto');
+  var pantallaLlamada = document.getElementById('pantallaLlamada');
+  var modalEntrante = document.getElementById('modalLlamadaEntrante');
+  
+  if (videoRemoto) videoRemoto.srcObject = null;
+  if (audioRemoto) audioRemoto.srcObject = null;
+  if (pantallaLlamada) pantallaLlamada.style.display = 'none';
+  if (modalEntrante) modalEntrante.classList.remove('active');
   
   if (pinLlamadaActual) {
     try {
-      await clienteSupabase.from('llamadas').update({ 
-        estado: 'finalizada', 
-        fin: new Date().toISOString(), 
-        duracion: segundosLlamada 
+      await clienteSupabase.from('llamadas').update({
+        estado: 'finalizada',
+        fin: new Date().toISOString(),
+        duracion: segundosLlamada
       }).eq('pin_remitente', esIniciador ? miPIN : pinLlamadaActual)
         .eq('pin_destinatario', esIniciador ? pinLlamadaActual : miPIN)
         .in('estado', ['llamando', 'conectando', 'activa']);
@@ -431,38 +463,56 @@ function mostrarPantallaLlamada(pin, estado, tipo) {
   llamadaActiva = true;
   var nombre = obtenerNombreContacto(pin);
   
-  document.getElementById('llamadaNombre').innerText = nombre;
-  document.getElementById('llamadaNombreGrande').innerText = nombre;
-  document.getElementById('llamadaEstado').innerText = estado;
-  document.getElementById('llamadaEstadoGrande').innerText = estado;
-  document.getElementById('llamadaAvatar').innerText = nombre.substring(0, 2).toUpperCase();
+  var lblNombre = document.getElementById('llamadaNombre');
+  var lblNombreGrande = document.getElementById('llamadaNombreGrande');
+  var lblEstado = document.getElementById('llamadaEstado');
+  var lblEstadoGrande = document.getElementById('llamadaEstadoGrande');
+  var lblAvatar = document.getElementById('llamadaAvatar');
+  
+  if (lblNombre) lblNombre.innerText = nombre;
+  if (lblNombreGrande) lblNombreGrande.innerText = nombre;
+  if (lblEstado) lblEstado.innerText = estado;
+  if (lblEstadoGrande) lblEstadoGrande.innerText = estado;
+  if (lblAvatar) lblAvatar.innerText = nombre.substring(0, 2).toUpperCase();
   
   if (tipo === 'video') {
-    document.getElementById('videoContainer').style.display = 'block';
-    document.getElementById('audioContainer').style.display = 'none';
-    document.getElementById('btnCamara').style.display = 'flex';
-    if (streamLocal) document.getElementById('videoLocal').srcObject = streamLocal;
+    var videoContainer = document.getElementById('videoContainer');
+    var audioContainer = document.getElementById('audioContainer');
+    var btnCamara = document.getElementById('btnCamara');
+    var videoLocal = document.getElementById('videoLocal');
+    
+    if (videoContainer) videoContainer.style.display = 'block';
+    if (audioContainer) audioContainer.style.display = 'none';
+    if (btnCamara) btnCamara.style.display = 'flex';
+    if (videoLocal && streamLocal) videoLocal.srcObject = streamLocal;
   } else {
-    document.getElementById('videoContainer').style.display = 'none';
-    document.getElementById('audioContainer').style.display = 'flex';
-    document.getElementById('btnCamara').style.display = 'none';
+    var videoContainer = document.getElementById('videoContainer');
+    var audioContainer = document.getElementById('audioContainer');
+    var btnCamara = document.getElementById('btnCamara');
+    
+    if (videoContainer) videoContainer.style.display = 'none';
+    if (audioContainer) audioContainer.style.display = 'flex';
+    if (btnCamara) btnCamara.style.display = 'none';
   }
   
-  document.getElementById('pantallaLlamada').style.display = 'flex';
+  var pantallaLlamada = document.getElementById('pantallaLlamada');
+  if (pantallaLlamada) pantallaLlamada.style.display = 'flex';
 }
 
 function actualizarEstadoLlamada(estado) {
-  document.getElementById('llamadaEstado').innerText = estado;
-  document.getElementById('llamadaEstadoGrande').innerText = estado;
+  var lblEstado = document.getElementById('llamadaEstado');
+  var lblEstadoGrande = document.getElementById('llamadaEstadoGrande');
+  if (lblEstado) lblEstado.innerText = estado;
+  if (lblEstadoGrande) lblEstadoGrande.innerText = estado;
 }
 
 // ============================================
 // 📡 SUSCRIPCIÓN WEBRTC
 // ============================================
 function suscribirseALlamadas() {
-  if (canalLlamada) { 
-    clienteSupabase.removeChannel(canalLlamada); 
-    canalLlamada = null; 
+  if (canalLlamada) {
+    clienteSupabase.removeChannel(canalLlamada);
+    canalLlamada = null;
   }
   
   canalLlamada = clienteSupabase.channel('llamadas_cambios')
@@ -482,12 +532,12 @@ function suscribirseALlamadas() {
               await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
               actualizarEstadoLlamada('🔄 Conectando...');
             }
-          } catch (error) { 
-            logError('Error procesando respuesta:', error); 
+          } catch (error) {
+            logError('Error procesando respuesta:', error);
           }
         }
         if (nuevo.estado === 'rechazada') {
-          await customAlert('📞 La llamada fue rechazada.', '📞');
+          if (typeof customAlert !== 'undefined') await customAlert('📞 La llamada fue rechazada.', '📞');
           colgarLlamada();
         }
       }
@@ -501,7 +551,7 @@ function suscribirseALlamadas() {
       
       // Sincronización mutua para colgar llamadas activas
       if (nuevo.estado === 'finalizada' && llamadaActiva) {
-        await customAlert('📞 La llamada ha finalizado.', '📞');
+        if (typeof customAlert !== 'undefined') await customAlert('📞 La llamada ha finalizado.', '📞');
         colgarLlamada();
       }
     })
@@ -509,7 +559,7 @@ function suscribirseALlamadas() {
 }
 
 // ============================================
-// ️ CONTROLES DE LLAMADA
+// 🎛️ CONTROLES DE LLAMADA
 // ============================================
 function toggleSilenciar() {
   if (!streamLocal) return;
@@ -517,8 +567,10 @@ function toggleSilenciar() {
   if (audioTrack) {
     audioTrack.enabled = !audioTrack.enabled;
     var btn = document.getElementById('btnSilenciar');
-    btn.innerText = audioTrack.enabled ? '🎤' : '🔇';
-    btn.style.background = audioTrack.enabled ? '#2a3942' : '#ef4444';
+    if (btn) {
+      btn.innerText = audioTrack.enabled ? '🎤' : '🔇';
+      btn.style.background = audioTrack.enabled ? '#2a3942' : '#ef4444';
+    }
   }
 }
 
@@ -528,8 +580,10 @@ function toggleCamara() {
   if (videoTrack) {
     videoTrack.enabled = !videoTrack.enabled;
     var btn = document.getElementById('btnCamara');
-    btn.innerText = videoTrack.enabled ? '📷' : '🚫';
-    btn.style.background = videoTrack.enabled ? '#2a3942' : '#ef4444';
+    if (btn) {
+      btn.innerText = videoTrack.enabled ? '📷' : '🚫';
+      btn.style.background = videoTrack.enabled ? '#2a3942' : '#ef4444';
+    }
   }
 }
 
@@ -539,10 +593,10 @@ function toggleAltavoz() {
   if (audioRemoto) {
     if (audioRemoto.volume === 1) {
       audioRemoto.volume = 0.5;
-      btn.innerText = '🔉';
+      if (btn) btn.innerText = '🔉';
     } else {
       audioRemoto.volume = 1;
-      btn.innerText = '🔊';
+      if (btn) btn.innerText = '🔊';
     }
   }
 }
@@ -553,13 +607,13 @@ async function limpiarLlamadasAntiguas() {
     await clienteSupabase.from('llamadas').delete()
       .or('pin_remitente.eq.' + miPIN + ',pin_destinatario.eq.' + miPIN)
       .lt('inicio', hace24h);
-  } catch (error) { 
-    logError('Error limpiando llamadas:', error); 
+  } catch (error) {
+    logError('Error limpiando llamadas:', error);
   }
 }
 
 // ============================================
-//  EVENTOS DE VISIBILIDAD
+// 🔄 EVENTOS DE VISIBILIDAD
 // ============================================
 document.addEventListener('visibilitychange', function() {
   if (!llamadaActiva) return;
@@ -571,4 +625,4 @@ window.addEventListener('beforeunload', function() {
   if (llamadaActiva) colgarLlamada();
 });
 
-console.log(' Módulo webrtc.js cargado correctamente');
+console.log('📞 Módulo webrtc.js cargado correctamente');
