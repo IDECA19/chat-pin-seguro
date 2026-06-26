@@ -1,20 +1,41 @@
-var CACHE_NAME = 'kerix-cache-v1';
+/**
+ * sw.js
+ * Service Worker oficial para Kerix que intercepta peticiones locales
+ * y garantiza la resiliencia offline de los recursos estáticos.
+ */
 
-self.addEventListener('install', function(event) {
+const CACHE_NAME = 'kerix-v2-cache';
+const ASSETS = [
+  '/',
+  '/index.html',
+  '/css/styles.css',
+  '/js/supabase-client.js',
+  '/js/webrtc.js',
+  '/js/app.js',
+  '/manifest.json'
+];
+
+// Instalar Service Worker y Almacenar Assets de forma preventiva
+self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then(function(cache) {
-      return cache.addAll(['/']);
+    caches.open(CACHE_NAME).then((cache) => {
+      console.log('SW: Inicializando almacenamiento estático...');
+      return cache.addAll(ASSETS);
     })
   );
   self.skipWaiting();
 });
 
-self.addEventListener('activate', function(event) {
+// Limpieza de caches antiguos al activar
+self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then(function(cacheNames) {
+    caches.keys().then((keys) => {
       return Promise.all(
-        cacheNames.map(function(cacheName) {
-          if (cacheName !== CACHE_NAME) return caches.delete(cacheName);
+        keys.map((key) => {
+          if (key !== CACHE_NAME) {
+            console.log('SW: Eliminando caché obsoleto:', key);
+            return caches.delete(key);
+          }
         })
       );
     })
@@ -22,23 +43,36 @@ self.addEventListener('activate', function(event) {
   self.clients.claim();
 });
 
-self.addEventListener('fetch', function(event) {
-  event.respondWith(
-    caches.match(event.request).then(function(response) {
-      return response || fetch(event.request);
-    })
-  );
-});
+// Interceptar peticiones y servir desde caché o red
+self.addEventListener('fetch', (event) => {
+  // Evitar interceptar solicitudes de Supabase o CDNs dinámicos para escritura directa
+  if (event.request.url.includes('supabase.co') || event.request.method !== 'GET') {
+    return;
+  }
 
-self.addEventListener('notificationclick', function(event) {
-  event.notification.close();
-  event.waitUntil(
-    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function(clientList) {
-      for (var i = 0; i < clientList.length; i++) {
-        var client = clientList[i];
-        if ('focus' in client) return client.focus();
+  event.respondWith(
+    caches.match(event.request).then((cachedResponse) => {
+      if (cachedResponse) {
+        return cachedResponse;
       }
-      if (clients.openWindow) return clients.openWindow('/');
+      return fetch(event.request).then((networkResponse) => {
+        if (!networkResponse || networkResponse.status !== 200 || networkResponse.type !== 'basic') {
+          return networkResponse;
+        }
+        
+        // Clonar la respuesta y guardarla en caché si corresponde
+        const responseToCache = networkResponse.clone();
+        caches.open(CACHE_NAME).then((cache) => {
+          cache.put(event.request, responseToCache);
+        });
+
+        return networkResponse;
+      }).catch(() => {
+        // Fallback si no hay conexión y no está en caché
+        if (event.request.mode === 'navigate') {
+          return caches.match('/index.html');
+        }
+      });
     })
   );
 });
