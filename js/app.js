@@ -25,9 +25,10 @@ var miClavePrivada = null;
 var miClavePublica = null;
 var mensajesNoLeidos = {};
 var modoPrivado = false;
-var pinAccesoHash = null;
-var codigoRecuperacionHash = null;
-var pinActualTemporal = null;
+// Estas variables ya están definidas en security.js
+// var pinAccesoHash = null;
+// var codigoRecuperacionHash = null;
+// var pinActualTemporal = null;
 var modoSeleccion = false;
 var mensajesSeleccionados = [];
 var tabActual = 'chats';
