@@ -329,4 +329,16 @@ window.validarPIN = validarPIN;
 window.validarMensaje = validarMensaje;
 window.validarArchivo = validarArchivo;
 
+// ============================================
+// LISTENERS
+// ============================================
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Enter' && document.getElementById('pantallaBloqueo').style.display === 'flex') {
+    var inputPIN = document.getElementById('pinAccesoInput');
+    if (inputPIN.value) desbloquearApp();
+  }
+});
+
+console.log('🛡️ Módulo security.js cargado correctamente');
+
 console.log('🛡️ Módulo security.js cargado y expuesto correctamente.');
