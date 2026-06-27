@@ -28,7 +28,8 @@ body {
   width: 100%; 
   height: 100%; 
   background: linear-gradient(135deg, #00a884 0%, #075e54 100%); 
-  z-index: 9999; 
+  /* 🛠️ AJUSTE: z-index elevado al nivel máximo sobre modales sueltos */
+  z-index: 99999 !important; 
   display: none; 
   flex-direction: column; 
   justify-content: center; 
@@ -95,6 +96,8 @@ body {
   cursor: pointer; 
   margin-bottom: 10px; 
   transition: all 0.2s; 
+  position: relative;
+  z-index: 10;
 }
 
 .bloqueo-btn-primary { 
@@ -129,14 +132,15 @@ body {
 }
 
 /* ============================================
-   APP PRINCIPAL
+   APP PRINCIPAL (MAQUETA RESPONSIVA)
    ============================================ */
 .app-container { 
   max-width: 480px; 
   margin: 0 auto; 
   min-height: 100vh; 
   background: #0b141a; 
-  position: relative; 
+  position: relative;
+  z-index: 1;
 }
 
 .header-main { 
@@ -218,7 +222,7 @@ body {
 }
 
 /* ============================================
-   ITEMS DE CHAT
+   ELEMENTOS DE LISTA (CHATS / CONTACTOS)
    ============================================ */
 .chat-item { 
   display: flex; 
@@ -368,7 +372,7 @@ body {
 }
 
 /* ============================================
-   CHAT INDIVIDUAL
+   ENTORNO INDIVIDUAL DE CONVERSACIÓN
    ============================================ */
 .chat-header { 
   background: #1f2c34; 
@@ -428,8 +432,8 @@ body {
 .chat-mensajes { 
   background: #0b141a; 
   padding: 16px; 
-  min-height: calc(100vh - 180px); 
-  max-height: calc(100vh - 180px); 
+  min-height: calc(100vh - 122px); 
+  max-height: calc(100vh - 122px); 
   overflow-y: auto; 
 }
 
@@ -549,7 +553,108 @@ body {
 }
 
 /* ============================================
-   MENÚ LATERAL
+   📞 ENTORNO DE LLAMADAS WEBRTC (VOZ / VIDEO)
+   ============================================ */
+#pantallaLlamada { 
+  position: fixed !important; 
+  top: 0; 
+  left: 0; 
+  width: 100vw; 
+  height: 100vh; 
+  background: #0b141a !important; 
+  /* 🛠️ AJUSTE: Capa por encima de la sala de chat activo para no ser obstruida */
+  z-index: 10100 !important; 
+  display: none; 
+  flex-direction: column; 
+  justify-content: space-between; 
+  padding: 40px 20px; 
+}
+
+.llamada-header { 
+  text-align: center; 
+}
+
+.llamada-nombre { 
+  font-size: 24px; 
+  font-weight: 700; 
+  margin-bottom: 8px; 
+  color: #fff;
+}
+
+.llamada-duracion { 
+  font-size: 14px; 
+  color: #00a884; 
+  font-family: monospace; 
+}
+
+.llamada-video-container { 
+  flex: 1; 
+  display: flex; 
+  position: relative; 
+  margin: 20px 0; 
+  background: #000; 
+  border-radius: 16px; 
+  overflow: hidden; 
+  justify-content: center; 
+  align-items: center; 
+}
+
+#videoRemoto { 
+  width: 100%; 
+  height: 100%; 
+  object-fit: cover; 
+}
+
+#videoLocal { 
+  width: 120px; 
+  height: 160px; 
+  object-fit: cover; 
+  position: absolute; 
+  bottom: 16px; 
+  right: 16px; 
+  border-radius: 8px; 
+  border: 2px solid #fff; 
+  background: #222; 
+}
+
+.llamada-controles { 
+  display: flex; 
+  justify-content: center; 
+  gap: 16px; 
+}
+
+.btn-control-llamada { 
+  width: 56px; 
+  height: 56px; 
+  border-radius: 50%; 
+  border: none; 
+  color: #fff; 
+  font-size: 22px; 
+  cursor: pointer; 
+  display: flex; 
+  align-items: center; 
+  justify-content: center; 
+  transition: 0.2s; 
+}
+
+.btn-control-llamada.hangup { 
+  background: #ef4444; 
+}
+
+.btn-control-llamada.hangup:hover { 
+  background: #dc2626; 
+}
+
+.btn-control-llamada.media { 
+  background: #2a3942; 
+}
+
+.btn-control-llamada.media:hover { 
+  background: #3d4c56; 
+}
+
+/* ============================================
+   🍔 MENÚ LATERAL DESPLEGABLE
    ============================================ */
 .menu-overlay { 
   position: fixed; 
@@ -557,7 +662,7 @@ body {
   left: 0; 
   width: 100%; 
   height: 100%; 
-  background: #2a3942; 
+  background: rgba(0,0,0,0.5); 
   z-index: 200; 
   display: none; 
 }
@@ -566,13 +671,14 @@ body {
   display: block; 
 }
 
+/* 🛠️ AJUSTE: Quitada la transparencia dándole un fondo oscuro opaco sólido */
 .menu-lateral { 
   position: fixed; 
   top: 0; 
   right: -300px; 
   width: 280px; 
   height: 100%; 
-  background: #1f2c34; 
+  background: #1f2c34 !important; 
   z-index: 201; 
   transition: right 0.3s ease; 
   overflow-y: auto; 
@@ -632,7 +738,7 @@ body {
 }
 
 /* ============================================
-   MODALES
+   VENTANAS MODALES GLOBALES
    ============================================ */
 .modal-overlay { 
   position: fixed; 
@@ -641,7 +747,8 @@ body {
   width: 100%; 
   height: 100%; 
   background: rgba(0,0,0,0.7); 
-  z-index: 300; 
+  /* 🛠️ AJUSTE: Elevado para pasar por encima de la interfaz de la app */
+  z-index: 10200 !important; 
   display: none; 
   align-items: center; 
   justify-content: center; 
@@ -649,7 +756,7 @@ body {
 }
 
 .modal-overlay.active { 
-  display: flex; 
+  display: flex !important; 
 }
 
 .modal { 
@@ -661,6 +768,8 @@ body {
   overflow-y: auto; 
   border: 1px solid #2a3942; 
   box-shadow: 0 10px 25px rgba(0,0,0,0.5); 
+  position: relative; 
+  z-index: 10201; 
 }
 
 .modal-header { 
@@ -715,6 +824,8 @@ body {
   cursor: pointer; 
   margin-bottom: 8px; 
   text-align: center; 
+  position: relative; 
+  z-index: 10202; 
 }
 
 .modal-btn-primary { 
@@ -722,14 +833,16 @@ body {
   color: #fff; 
 }
 
+.modal-btn-primary:hover { 
+  background: #008f72; 
+}
+
 .modal-btn-secondary { 
   background: #2a3942; 
   color: #e9edef; 
 }
 
-/* ============================================
-   CONFIGURACIÓN
-   ============================================ */
+/* CONFIGURACIÓN */
 .config-seccion { 
   padding: 20px; 
   border-bottom: 1px solid #2a3942; 
@@ -749,13 +862,7 @@ body {
   font-weight: 600; 
 }
 
-.config-desc { 
-  font-size: 12px; 
-  color: #8696a0; 
-  margin-bottom: 8px; 
-}
-
-.config-select, .config-input { 
+.config-select { 
   width: 100%; 
   padding: 10px; 
   border-radius: 8px; 
@@ -765,86 +872,8 @@ body {
   font-size: 14px; 
 }
 
-.config-toggle { 
-  display: flex; 
-  justify-content: space-between; 
-  align-items: center; 
-  padding: 12px; 
-  background: #2a3942; 
-  border-radius: 8px; 
-  margin-bottom: 8px; 
-}
-
-.config-toggle-label { 
-  font-size: 14px; 
-  color: #e9edef; 
-}
-
-.switch { 
-  position: relative; 
-  width: 44px; 
-  height: 24px; 
-}
-
-.switch input { 
-  opacity: 0; 
-  width: 0; 
-  height: 0; 
-}
-
-.slider { 
-  position: absolute; 
-  cursor: pointer; 
-  top: 0; 
-  left: 0; 
-  right: 0; 
-  bottom: 0; 
-  background: #8696a0; 
-  border-radius: 24px; 
-  transition: 0.3s; 
-}
-
-.slider:before { 
-  content: ""; 
-  position: absolute; 
-  height: 18px; 
-  width: 18px; 
-  left: 3px; 
-  bottom: 3px; 
-  background: white; 
-  border-radius: 50%; 
-  transition: 0.3s; 
-}
-
-input:checked + .slider { 
-  background: #00a884; 
-}
-
-input:checked + .slider:before { 
-  transform: translateX(20px); 
-}
-
 .hidden { 
   display: none !important; 
-}
-
-.status { 
-  padding: 10px; 
-  border-radius: 8px; 
-  font-size: 13px; 
-  font-weight: 600; 
-  margin: 10px 0; 
-  text-align: center; 
-}
-
-.active { 
-  background: rgba(0, 255, 136, 0.15); 
-  color: #00a884; 
-}
-
-.expired { 
-  background: rgba(255, 59, 48, 0.15); 
-  color: #ef4444; 
 }
 
 ::-webkit-scrollbar { 
@@ -858,14 +887,4 @@ input:checked + .slider:before {
 ::-webkit-scrollbar-thumb { 
   background: #2a3942; 
   border-radius: 3px; 
-}
-
-@keyframes slideInRight { 
-  from { transform: translateX(400px); opacity: 0; } 
-  to { transform: translateX(0); opacity: 1; } 
-}
-
-@keyframes slideOutRight { 
-  from { transform: translateX(0); opacity: 1; } 
-  to { transform: translateX(400px); opacity: 0; } 
 }
