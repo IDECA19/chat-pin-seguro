@@ -6,10 +6,10 @@
   <title>Kerix - Chat PIN Seguro</title>
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#00a884">
-  <meta name="apple-mobile-web-app-capable" content=\"yes\">
-  <meta name="mobile-web-app-capable" content=\"yes\">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://dksmoteiidjpymextrgj.supabase.co; media-src 'self' blob: https://dksmoteiidjpymextrgj.supabase.co; connect-src 'self' https://dksmoteiidjpymextrgj.supabase.co wss://dksmoteiidjpymextrgj.supabase.co https://cdn.jsdelivr.net; font-src 'self';">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; img-src 'self' data: blob:; connect-src 'self' https://*.supabase.co https://cdn.jsdelivr.net;">
   <link rel="stylesheet" href="css/styles.css">
   <script>
     if ('serviceWorker' in navigator) {
@@ -28,7 +28,7 @@
     <div class="modal" style="max-width:340px;">
       <div class="modal-body" id="customAlertText" style="text-align:center; padding:20px; font-size:15px;">Alerta</div>
       <div class="modal-footer" style="padding:10px; justify-content:center; background:transparent; border:none;">
-        <button class="btn btn-primary" id="customAlertBtn" style="padding:8px 24px;">OK</button>
+        <button class="modal-btn modal-btn-primary" id="customAlertBtn" style="padding:8px 24px;">OK</button>
       </div>
     </div>
   </div>
@@ -37,8 +37,8 @@
     <div class="modal" style="max-width:340px;">
       <div class="modal-body" id="customConfirmText" style="text-align:center; padding:20px; font-size:15px;">¿Confirmar acción?</div>
       <div class="modal-footer" style="padding:10px; justify-content:center; background:transparent; border:none; gap:12px;">
-        <button class="btn btn-secondary" id="customConfirmBtnCancel" style="padding:8px 20px;">Cancelar</button>
-        <button class="btn btn-primary" id="customConfirmBtnOk" style="padding:8px 20px; background:#ef4444;">Confirmar</button>
+        <button class="modal-btn modal-btn-secondary" id="customConfirmBtnCancel" style="padding:8px 20px;">Cancelar</button>
+        <button class="modal-btn modal-btn-primary" id="customConfirmBtnOk" style="padding:8px 20px; background:#ef4444;">Confirmar</button>
       </div>
     </div>
   </div>
@@ -50,8 +50,8 @@
         <input type="text" id="customPromptInput" class="modal-input" style="margin-bottom:0;">
       </div>
       <div class="modal-footer" style="padding:10px; justify-content:center; background:transparent; border:none; gap:12px;">
-        <button class="btn btn-secondary" id="customPromptBtnCancel" style="padding:8px 20px;">Cancelar</button>
-        <button class="btn btn-primary" id="customPromptBtnOk" style="padding:8px 20px;">Aceptar</button>
+        <button class="modal-btn modal-btn-secondary" id="customPromptBtnCancel" style="padding:8px 20px;">Cancelar</button>
+        <button class="modal-btn modal-btn-primary" id="customPromptBtnOk" style="padding:8px 20px;">Aceptar</button>
       </div>
     </div>
   </div>
@@ -61,7 +61,7 @@
       <div class="bloqueo-icono">🔑</div>
       <div class="bloqueo-titulo">Kerix Chat</div>
       <div class="bloqueo-subtitulo">Introduce tu PIN de seguridad para acceder al entorno seguro</div>
-      <input type="password" id="pinAccesoInput" placeholder="••••" maxlength="6">
+      <input type="password" id="pinAccesoInput" placeholder="••••••••" maxlength="8">
       <div id="errorPIN">❌ PIN de acceso incorrecto</div>
       
       <div class="bloqueo-acciones">
@@ -79,7 +79,10 @@
       <div class="header-main">
         <div class="header-titulo">KERIX_SECURE</div>
         <div class="header-iconos">
-          <button class="header-icon" title="Modo Privado"><input type="checkbox" id="toggleModoPrivado" style="display:none;">🔒</button>
+          <label class="header-icon" title="Modo Privado" for="toggleModoPrivado" style="cursor:pointer;">
+            <input type="checkbox" id="toggleModoPrivado" style="display:none;">
+            🔒
+          </label>
           <button class="header-icon" id="btnAbrirMenu" title="Menú">☰</button>
         </div>
       </div>
@@ -208,7 +211,7 @@
     <div id="modalLlamadaEntrante" class="modal-overlay" style="z-index:10500 !important;">
       <div class="modal" style="max-width:340px;">
         <div class="modal-body" style="text-align:center; padding:30px;">
-          <div id="llamadaEntranteAvatar" style="width:80px; height:80px; border-radius:50%; background:linear-gradient(135deg, #00a884, #075e54); display:flex; align-items:center; justify-content:center; font-size:32px; font-weight:700; color:#fff; font-family:'Courier New', monospace; margin:0 auto 16px;">?</div>
+          <div id="llamadaEntranteAvatar" style="width:80px; height:80px; border-radius:50%; background:linear-gradient(135deg, #00a884, #075e54); display:flex; align-items:center; justify-content:center; margin:0 auto;">?</div>
           <div id="llamadaEntranteNombre" style="font-size:20px; font-weight:700; color:#e9edef; margin-bottom:8px;">Contacto</div>
           <div id="llamadaEntranteTipo" style="font-size:14px; color:#8696a0; margin-bottom:24px;">Llamada entrante</div>
           <div style="display:flex; gap:16px; justify-content:center;">
