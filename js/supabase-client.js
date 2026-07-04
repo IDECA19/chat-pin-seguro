@@ -1,170 +1,126 @@
 /**
  * js/supabase-client.js
- * Cliente de comunicación con Supabase
- * * Correcciones:
- * - Remoción absoluta de caracteres de escape corruptos (\\n).
- * - Prevención de re-declaración destructiva de la variable global 'clienteSupabase'.
- * - Robustez en consultas asíncronas para chats anónimos basados en PIN.
+ * Conexión, inicialización y gestión de canales Realtime/Storage con Supabase.
  */
 
-// Se inicializa como nulo únicamente si no existe previamente
-if (typeof clienteSupabase === 'undefined') {
-  var clienteSupabase = null;
-}
+var clienteSupabase = null;
+var canalRealtime = null;
 
 function inicializarSupabase() {
+  if (clienteSupabase) return;
   if (typeof supabase === 'undefined') {
-    console.error('❌ Módulo principal de Supabase no cargado en index.html');
-    return false;
+    console.error('❌ La librería global de Supabase no está cargada en el navegador.');
+    return;
   }
-  try {
-    if (!clienteSupabase) {
-      clienteSupabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-      console.log('✅ Cliente Supabase correctamente inicializado.');
-    }
-    return true;
-  } catch (error) {
-    console.error('Error al inicializar Supabase:', error);
-    return false;
-  }
+  
+  // Inicializar cliente con variables globales de app.js
+  clienteSupabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  console.log('📡 Cliente Supabase correctamente inicializado.');
+
+  // Configurar Canal Único Realtime Broadcast para Mensajes y Señalización WebRTC (Llamadas)
+  conectarCanalRealtime();
 }
 
-// ============================================
-// WRAPPERS PARA BASE DE DATOS (SISTEMA PIN)
-// ============================================
-var SupabaseUsuarios = {
-  async obtenerUsuario(pin) {
-    try {
-      var { data, error } = await clienteSupabase.from('usuarios')
-        .select('*')
-        .eq('pin', pin)
-        .maybeSingle();
-      if (error) throw error;
-      return data;
-    } catch (error) {
-      console.error('Error al buscar usuario:', error);
-      return null;
-    }
-  },
+function conectarCanalRealtime() {
+  if (!clienteSupabase) return;
+  
+  var pinCanal = typeof miPIN !== 'undefined' && miPIN ? miPIN : 'global_room';
+  canalRealtime = clienteSupabase.channel('kerix_room_' + pinCanal, {
+    config: { broadcast: { self: false } }
+  });
 
-  async registrarUsuario(pin, clavePublica) {
-    try {
-      var { data, error } = await clienteSupabase.from('usuarios')
-        .insert([{ pin: pin, clave_publica: clavePublica }])
-        .select();
-      if (error) throw error;
-      return data ? data[0] : null;
-    } catch (error) {
-      console.error('Error registrando usuario:', error);
-      return null;
-    }
-  },
+  canalRealtime
+    .on('broadcast', { event: 'nuevo-mensaje' }, function(response) {
+      console.log('✉️ Mensaje recibido via Realtime:', response);
+      if (typeof window.procesarMensajeEntrante === 'function') {
+        window.procesarMensajeEntrante(response.payload);
+      }
+    })
+    .on('broadcast', { event: 'llamada-oferta' }, function(response) {
+      console.log('📞 Oferta de llamada WebRTC entrante:', response);
+      if (response.payload && response.payload.para === miPIN) {
+        if (typeof window.procesarOfertaLlamada === 'function') {
+          window.procesarOfertaLlamada(response.payload);
+        }
+      }
+    })
+    .on('broadcast', { event: 'llamada-respuesta' }, function(response) {
+      console.log('📱 Respuesta de llamada WebRTC recibida:', response);
+      if (response.payload && response.payload.para === miPIN) {
+        if (typeof window.procesarRespuestaLlamada === 'function') {
+          window.procesarRespuestaLlamada(response.payload);
+        }
+      }
+    })
+    .on('broadcast', { event: 'ice-candidate' }, function(response) {
+      if (response.payload && response.payload.para === miPIN) {
+        if (typeof window.procesarIceCandidate === 'function') {
+          window.procesarIceCandidate(response.payload);
+        }
+      }
+    })
+    .subscribe(function(status) {
+      if (status === 'SUBSCRIBED') {
+        console.log('✅ Canal Realtime Kerix suscrito y escuchando eventos.');
+      }
+    });
+}
 
-  async actualizarClavePublica(pin, nuevaClavePublica) {
-    try {
-      var { data, error } = await clienteSupabase.from('usuarios')
-        .update({ clave_publica: nuevaClavePublica })
-        .eq('pin', pin)
-        .select();
-      if (error) throw error;
-      return data ? data[0] : null;
-    } catch (error) {
-      console.error('Error actualizando clave pública:', error);
-      return null;
-    }
-  }
-};
-
-// ============================================
-// WRAPPERS PARA MENSAJERÍA E2EE
-// ============================================
+// Interfaz para interactuar con la Base de Datos desde app.js sin saturación
 var SupabaseMensajes = {
-  async enviarMensajePayload(payload) {
-    try {
-      var { data, error } = await clienteSupabase.from('mensajes')
-        .insert([payload])
-        .select();
-      if (error) throw error;
-      return data ? data[0] : null;
-    } catch (error) {
-      console.error('Error insertando mensaje payload:', error);
-      return null;
+  enviarMensajePayload: async function(mensajeObj) {
+    if (!clienteSupabase) inicializarSupabase();
+    
+    // 1. Guardar en BD para el historial asíncrono
+    var { data, error } = await clienteSupabase
+      .from('mensajes')
+      .insert([mensajeObj])
+      .select();
+      
+    if (error) throw error;
+
+    // 2. Transmitir en tiempo real al destinatario de forma paralela si está conectado
+    if (canalRealtime) {
+      canalRealtime.send({
+        type: 'broadcast',
+        event: 'nuevo-mensaje',
+        payload: mensajeObj
+      });
     }
+    return data;
   },
 
-  async descargarHistorial(miPin, contactoPin) {
-    try {
-      var { data, error } = await clienteSupabase.from('mensajes')
-        .select('*')
-        .or(`and(pin_remitente.eq.${miPin},pin_destinatario.eq.${contactoPin}),and(pin_remitente.eq.${contactoPin},pin_destinatario.eq.${miPin})`)
-        .order('creado_en', { ascending: true });
-      if (error) throw error;
-      return data || [];
-    } catch (error) {
-      console.error('Error descargando historial:', error);
-      return [];
-    }
+  descargarHistorial: async function(miPin, contactoPin) {
+    if (!clienteSupabase) inicializarSupabase();
+    var { data, error } = await clienteSupabase
+      .from('mensajes')
+      .select('*')
+      .or('and(pin_remitente.eq.' + miPin + ',pin_destinatario.eq.' + contactoPin + '),and(pin_remitente.eq.' + contactoPin + ',pin_destinatario.eq.' + miPin + ')')
+      .order('creado_en', { ascending: true });
+
+    if (error) throw error;
+    return data;
   }
 };
 
-// ============================================
-// WRAPPERS PARA CONTROL DE LLAMADAS WEBRTC
-// ============================================
-var SupabaseLlamadas = {
-  async crearLlamada(pinRemitente, pinDestinatario, tipo, oferta) {
-    try {
-      var { data, error } = await clienteSupabase.from('llamadas')
-        .insert([{
-          pin_remitente: pinRemitente,
-          pin_destinatario: pinDestinatario,
-          tipo: tipo,
-          oferta: oferta,
-          estado: 'pendiente'
-        }])
-        .select();
-      if (error) throw error;
-      return data ? data[0] : null;
-    } catch (error) {
-      console.error('Error creando llamada:', error);
-      return null;
-    }
-  },
+var SupabaseUsuarios = {
+  obtenerUsuario: async function(pin) {
+    if (!clienteSupabase) inicializarSupabase();
+    var { data, error } = await clienteSupabase
+      .from('usuarios')
+      .select('*')
+      .eq('pin', pin)
+      .maybeSingle();
 
-  async actualizarLlamada(id, campos) {
-    try {
-      var { data, error } = await clienteSupabase.from('llamadas')
-        .update(campos)
-        .eq('id', id)
-        .select();
-      if (error) throw error;
-      return data ? data[0] : null;
-    } catch (error) {
-      console.error('Error actualizando llamada:', error);
-      return null;
-    }
-  },
-
-  async obtenerLlamada(id) {
-    try {
-      var { data, error } = await clienteSupabase.from('llamadas')
-        .select('*')
-        .eq('id', id)
-        .maybeSingle();
-      if (error) throw error;
-      return data;
-    } catch (error) {
-      console.error('Error cargando llamada:', error);
-      return null;
-    }
+    if (error) throw error;
+    return data;
   }
 };
 
-// ============================================
-// 🌍 EXPOSICIÓN GLOBAL
-// ============================================
+// Exposición Global
 window.inicializarSupabase = inicializarSupabase;
-window.SupabaseUsuarios = SupabaseUsuarios;
+window.canalRealtime = canalRealtime;
 window.SupabaseMensajes = SupabaseMensajes;
-window.SupabaseLlamadas = SupabaseLlamadas;
+window.SupabaseUsuarios = SupabaseUsuarios;
 
 console.log('📡 Módulo cliente de Supabase (supabase-client.js) saneado y activo.');
