@@ -1,4 +1,3 @@
-/* updated security.js content */
 /**
  * js/security.js
  * Módulo de seguridad profesional: PIN, bloqueo, rate limiting, validación y derivación criptográfica.
@@ -11,13 +10,14 @@ var pinAccesoHash = null;
 var codigoRecuperacionHash = null;
 var pinActualTemporal = null;
 
-// Rate limiting & Lockout
 var rateLimiters = {};
 var INTENTOS_MAXIMOS = 3;
-var TIEMPO_BLOQUEO_MS = 30000; // 30 segundos de penalización por PIN incorrecto
+var TIEMPO_BLOQUEO_MS = 30000;
 
-// Salt estático y seguro para la derivación PBKDF2 del PIN
 var PBKDF2_SALT = new TextEncoder().encode("kerix-pbkdf2-salt-secure-2026");
+
+// IDENTIFICADOR DE PERFIL ESTÁTICO FIJO (CORREGIDO)
+var idUsuario = 'kerix_secure_profile';
 
 // ============================================
 // HASH Y CIFRADO DE PIN
@@ -136,7 +136,6 @@ async function descifrarClaveConCodigo(claveCifrada, codigo) {
 // GESTIÓN DE PIN DE ACCESO
 // ============================================
 async function verificarPINConfigurado() {
-  var idUsuario = typeof miPIN !== 'undefined' && miPIN ? miPIN : 'default';
   pinAccesoHash = localStorage.getItem('pin_hash_' + idUsuario);
   codigoRecuperacionHash = localStorage.getItem('codigo_recuperacion_hash_' + idUsuario);
 
@@ -171,7 +170,6 @@ async function verificarPINConfigurado() {
 }
 
 async function configurarPIN() {
-  var idUsuario = typeof miPIN !== 'undefined' && miPIN ? miPIN : 'default';
   var pin1 = await customPrompt('🔐 Configurar PIN', 'Ingresa un PIN de acceso (4-6 dígitos):', '••••', 'password');
   if (!pin1 || pin1.length < 4 || pin1.length > 6 || !/^\d+$/.test(pin1)) {
     await customAlert('PIN inválido (debe contener entre 4 y 6 números).');
@@ -200,15 +198,12 @@ async function configurarPIN() {
   var clavePrivadaActual = localStorage.getItem('clave_privada_' + idUsuario);
   if (clavePrivadaActual) {
     try {
-      // Si ya está cifrada (contiene '.'), asumimos que está protegida por un PIN y NO intentamos descifrar sin el PIN antiguo.
       if (!clavePrivadaActual.includes('.')) {
-        // Está ofuscada o en texto claro -> desofuscar y cifrar con el nuevo PIN
         var privBase64 = typeof desofuscarClave === 'function' ? desofuscarClave(clavePrivadaActual) : clavePrivadaActual;
         var nuevoCifrado = await cifrarClaveConPIN(privBase64, pin1);
         localStorage.setItem('clave_privada_' + idUsuario, nuevoCifrado);
       } else {
-        // Ya está cifrada, dejamos como está (usuario no proporcionó PIN antiguo para re-encriptar)
-        console.log('Clave privada ya cifrada; no se re-encriptó (falta PIN antiguo).');
+        console.log('Clave privada ya cifrada; no se re-encriptó.');
       }
     } catch (e) {
       console.error('Error cifrando clave:', e);
@@ -219,7 +214,6 @@ async function configurarPIN() {
 }
 
 async function recuperarAcceso() {
-  var idUsuario = typeof miPIN !== 'undefined' && miPIN ? miPIN : 'default';
   var codigo = await customPrompt('🔑 Recuperación', 'Ingresa tu código de recuperación:', 'XXXX-XXXX-XXXX-XXXX');
   if (!codigo) return;
   var hashIngresado = await hashCodigo(codigo);
@@ -239,7 +233,6 @@ async function recuperarAcceso() {
 }
 
 async function resetEmergencia() {
-  var idUsuario = typeof miPIN !== 'undefined' && miPIN ? miPIN : 'default';
   var c1 = await customConfirm('⚠️ RESET DE EMERGENCIA\nEsto eliminará tu PIN, tu código de recuperación y tus llaves locales. ¿Continuar?', '⚠️');
   if (!c1) return;
   var texto = await customPrompt('Confirmación final', 'Escribe "RESET" para confirmar:', 'RESET');
@@ -256,7 +249,6 @@ async function resetEmergencia() {
 }
 
 async function desbloquearApp() {
-  var idUsuario = typeof miPIN !== 'undefined' && miPIN ? miPIN : 'default';
   var inputPIN = document.getElementById('pinAccesoInput');
   if (!inputPIN) return;
   var pinIngresado = inputPIN.value;
@@ -271,7 +263,6 @@ async function desbloquearApp() {
     document.getElementById('appPrincipal').style.display = 'block';
 
     try {
-      // Importar la clave privada en memoria si existe
       await cargarClavePrivadaSegura(pinIngresado);
     } catch (e) {
       console.warn('No se pudo cargar clave privada tras desbloquear:', e);
@@ -285,7 +276,6 @@ async function desbloquearApp() {
 }
 
 async function cambiarPIN() {
-  var idUsuario = typeof miPIN !== 'undefined' && miPIN ? miPIN : 'default';
   var pinActual = await customPrompt('🔐 Cambiar PIN', 'Ingresa tu PIN actual:', '••••', 'password');
   if (!pinActual) return;
   if (await hashPIN(pinActual) !== pinAccesoHash) {
@@ -303,15 +293,12 @@ async function cambiarPIN() {
 }
 
 async function cargarClavePrivadaSegura(pin) {
-  // Intenta leer la clave privada desde localStorage e importarla como CryptoKey
   try {
-    var idUsuario = typeof miPIN !== 'undefined' && miPIN ? miPIN : 'default';
     var almacen = localStorage.getItem('clave_privada_' + idUsuario);
     if (!almacen) return;
 
     var privBase64 = null;
     if (almacen.includes('.')) {
-      // Cifrado con PIN: IV.CIPHERTEXT
       var p = pin || sessionStorage.getItem('pin_temporal_' + idUsuario);
       if (!p) {
         console.warn('Se requiere PIN temporal para descifrar clave privada.');
@@ -324,7 +311,6 @@ async function cargarClavePrivadaSegura(pin) {
         return;
       }
     } else {
-      // Posible ofuscación o texto base64 claro
       if (typeof desofuscarClave === 'function') privBase64 = desofuscarClave(almacen);
       else privBase64 = almacen;
     }
@@ -332,7 +318,6 @@ async function cargarClavePrivadaSegura(pin) {
     if (!privBase64) return;
 
     var binary = Uint8Array.from(atob(privBase64), function(c) { return c.charCodeAt(0); }).buffer;
-    // Importar como clave privada PKCS8 para RSA-OAEP
     miClavePrivada = await crypto.subtle.importKey(
       'pkcs8',
       binary,
@@ -360,7 +345,7 @@ function validarMensaje(texto) {
 
 function validarArchivo(file) {
   if (!file) return { valido: false, error: 'Sin archivo' };
-  var maxTam = 15 * 1024 * 1024; // 15MB Máximo
+  var maxTam = 15 * 1024 * 1024;
   if (file.size > maxTam) return { valido: false, error: 'Excede el límite de 15MB' };
   if (file.size === 0) return { valido: false, error: 'Archivo vacío' };
   return { valido: true };
