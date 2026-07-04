@@ -1,11 +1,6 @@
 /**
  * js/app.js
  * Orquestador principal: UI, navegación, mensajes, contactos, inicialización e integraciones.
- * * Correcciones añadidas:
- * - Integración de E2EE en enviarMensaje y descarga de historial.
- * - Subida básica de archivos a Supabase Storage y mensajería con metadatos.
- * - Gestión local de contactos y alias.
- * - Utilidades: obtenerNombreContacto, actualizarBadgeChats, copiarPIN, testearStorage.
  */
 
 var SUPABASE_URL = 'https://dksmoteiidjpymextrgj.supabase.co';
@@ -38,6 +33,111 @@ var prefsNotificaciones = {
   vibracion: true,
   mostrarContenido: true
 };
+
+// ============================================
+// FUNCIONES DE INTERFAZ Y MODALES (CORREGIDO)
+// ============================================
+function customAlert(texto, icono) {
+  return new Promise(function(resolve) {
+    var modal = document.getElementById('customAlert');
+    var txt = document.getElementById('customAlertText');
+    var btn = document.getElementById('customAlertBtn');
+    if (!modal || !txt || !btn) { alert(texto); resolve(); return; }
+    txt.innerText = (icono ? icono + " " : "") + texto;
+    modal.classList.add('active');
+    
+    // Clonar para limpiar listeners previos
+    var newBtn = btn.cloneNode(true);
+    btn.parentNode.replaceChild(newBtn, btn);
+    
+    newBtn.addEventListener('click', function() {
+      modal.classList.remove('active');
+      resolve();
+    });
+  });
+}
+
+function customConfirm(texto, icono) {
+  return new Promise(function(resolve) {
+    var modal = document.getElementById('customConfirm');
+    var txt = document.getElementById('customConfirmText');
+    var btnOk = document.getElementById('customConfirmBtnOk');
+    var btnCancel = document.getElementById('customConfirmBtnCancel');
+    if (!modal || !txt || !btnOk || !btnCancel) { var r = confirm(texto); resolve(r); return; }
+    txt.innerText = (icono ? icono + " " : "") + texto;
+    modal.classList.add('active');
+    
+    var newOk = btnOk.cloneNode(true);
+    btnOk.parentNode.replaceChild(newOk, btnOk);
+    var newCancel = btnCancel.cloneNode(true);
+    btnCancel.parentNode.replaceChild(newCancel, btnCancel);
+    
+    newOk.addEventListener('click', function() {
+      modal.classList.remove('active');
+      resolve(true);
+    });
+    newCancel.addEventListener('click', function() {
+      modal.classList.remove('active');
+      resolve(false);
+    });
+  });
+}
+
+function customPrompt(titulo, texto, placeholder, tipo) {
+  return new Promise(function(resolve) {
+    var modal = document.getElementById('customPrompt');
+    var txt = document.getElementById('customPromptText');
+    var input = document.getElementById('customPromptInput');
+    var btnOk = document.getElementById('customPromptBtnOk');
+    var btnCancel = document.getElementById('customPromptBtnCancel');
+    if (!modal || !txt || !input || !btnOk || !btnCancel) { var r = prompt(texto); resolve(r); return; }
+    
+    txt.innerText = titulo + "\n" + texto;
+    input.placeholder = placeholder || '';
+    input.type = tipo || 'text';
+    input.value = '';
+    modal.classList.add('active');
+    input.focus();
+    
+    var newOk = btnOk.cloneNode(true);
+    btnOk.parentNode.replaceChild(newOk, btnOk);
+    var newCancel = btnCancel.cloneNode(true);
+    btnCancel.parentNode.replaceChild(newCancel, btnCancel);
+    
+    newOk.addEventListener('click', function() {
+      modal.classList.remove('active');
+      resolve(input.value);
+    });
+    newCancel.addEventListener('click', function() {
+      modal.classList.remove('active');
+      resolve(null);
+    });
+  });
+}
+
+function mostrarModalAgregar() {
+  var modal = document.getElementById('modalAgregarContacto');
+  if (modal) modal.classList.add('active');
+}
+
+function cerrarModalAgregar() {
+  var modal = document.getElementById('modalAgregarContacto');
+  if (modal) modal.classList.remove('active');
+}
+
+function abrirChat(pin) {
+  contactoActual = pin;
+  var panel = document.getElementById('panelDerechoPrincipal');
+  if (panel) panel.classList.add('active');
+  var nombre = document.getElementById('chatHeaderNombre');
+  if (nombre) nombre.innerText = obtenerNombreContacto(pin);
+}
+
+function cerrarChat() {
+  contactoActual = '';
+  var panel = document.getElementById('panelDerechoPrincipal');
+  if (panel) panel.classList.remove('active');
+}
 
 // ============================================
 // INICIALIZACIÓN GENERAL
@@ -120,7 +220,6 @@ function renderContactosList() {
   var cont = document.getElementById('contenedorContactos');
   if (!cont) return;
   cont.innerHTML = '';
-  // iterate localStorage keys for contactos
   for (var i = 0; i < localStorage.length; i++) {
     var k = localStorage.key(i);
     if (!k || !k.startsWith('contacto_')) continue;
@@ -146,11 +245,9 @@ function agregarContacto() {
   }
   if (pin === miPIN) { customAlert('No puedes agregarte a ti mismo.'); return; }
 
-  // Guardar localmente
   guardarContactoLocal(pin, '');
   renderContactosList();
 
-  // Intentar obtener clave pública del backend y guardarla
   if (typeof SupabaseUsuarios !== 'undefined') {
     SupabaseUsuarios.obtenerUsuario(pin).then(function(u){
       if (u && u.clave_publica) {
@@ -189,7 +286,6 @@ async function enviarMensaje() {
   if (!texto) return;
   if (!contactoActual) { await customAlert('Selecciona un contacto primero.'); return; }
 
-  // Intentar obtener clave pública del contacto
   var clavePub = localStorage.getItem('clave_pub_' + contactoActual);
   if (!clavePub && typeof SupabaseUsuarios !== 'undefined') {
     try {
@@ -205,10 +301,9 @@ async function enviarMensaje() {
   var tipo = 'text';
 
   if (clavePub && typeof cifrarMensajeE2EE === 'function') {
-    // cifrado E2EE
     try {
       var cif = await cifrarMensajeE2EE(texto, clavePub);
-      payloadToStore = cif; // object with iv, ciphertext, key_receptor, key_emisor
+      payloadToStore = cif;
       tipo = 'text_e2ee';
     } catch (e) {
       console.error('Error cifrando mensaje:', e);
@@ -217,12 +312,10 @@ async function enviarMensaje() {
       tipo = 'text_plain';
     }
   } else {
-    // sin clave pública, enviar en texto claro (temporal)
     payloadToStore = { plaintext: texto };
     tipo = 'text_plain';
   }
 
-  // Construir objeto para DB
   var mensajeDB = {
     pin_remitente: miPIN,
     pin_destinatario: contactoActual,
@@ -257,7 +350,6 @@ async function enviarArchivo(file) {
   try {
     var up = await clienteSupabase.storage.from(bucket).upload(path, file, { cacheControl: '3600', upsert: false });
     if (up.error) throw up.error;
-    // Crear URL firmada corta
     var urlRes = await clienteSupabase.storage.from(bucket).createSignedUrl(path, 60*60);
     var fileUrl = urlRes.data && urlRes.data.signedUrl ? urlRes.data.signedUrl : null;
 
@@ -283,7 +375,6 @@ async function descargarYDescifrarArchivo(url, claveCifrada) {
     var res = await fetch(url);
     if (!res.ok) throw new Error('Error descargando archivo: ' + res.status);
     var blob = await res.blob();
-    // TODO: Si se aplica cifrado de archivo, descifrar aquí usando claveCifrada
     return blob;
   } catch (e) {
     console.error('Error en descarga/descifrado:', e);
@@ -350,7 +441,6 @@ async function testearStorage() {
     if (typeof inicializarSupabase === 'function') inicializarSupabase();
     if (!clienteSupabase) { await customAlert('Supabase no inicializado.'); return; }
     var bucket = 'chat-files';
-    // Intentar listar u obtener info
     var { data, error } = await clienteSupabase.storage.list(bucket);
     if (error) { await customAlert('Error accediendo storage: ' + error.message); return; }
     await customAlert('✅ Storage accesible. Objetos: ' + (data.length || 0));
@@ -372,7 +462,6 @@ window.addEventListener('DOMContentLoaded', async function() {
     }
     renderContactosList();
 
-    // Hook archivo input
     var fileInput = document.getElementById('archivoInput');
     if (fileInput) {
       fileInput.addEventListener('change', function(e){
@@ -381,7 +470,6 @@ window.addEventListener('DOMContentLoaded', async function() {
       });
     }
 
-    // Crecimiento elástico para textarea de chat
     var textInput = document.getElementById('nuevoMensaje');
     if (textInput) {
       textInput.addEventListener('input', function() {
