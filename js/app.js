@@ -335,29 +335,95 @@ function actualizarBadgeChats() {
   }
 }
 
-async function copiarPIN() {
-  try {
-    await navigator.clipboard.writeText(miPIN);
-    await customAlert('✅ PIN copiado al portapapeles.');
-  } catch (e) {
-    console.warn('No se pudo copiar al portapapeles', e);
-    await customAlert('No se pudo copiar al portapapeles.');
-  }
+// ------------------------------------------------------------------
+// Implementaciones faltantes necesarias para evitar errores en tiempo
+// de ejecución: abrirChat, cerrarChat y modales customAlert/Confirm/Prompt
+// ------------------------------------------------------------------
+
+function abrirChat(pin) {
+  contactoActual = pin;
+  var panel = document.getElementById('panelDerechoPrincipal');
+  var nombreEl = document.getElementById('chatHeaderNombre');
+  var avatarEl = document.getElementById('chatHeaderAvatar');
+  if (nombreEl) nombreEl.innerText = obtenerNombreContacto(pin) || 'Contacto';
+  if (avatarEl) avatarEl.innerText = (obtenerNombreContacto(pin) || '?').charAt(0).toUpperCase();
+  if (panel) panel.classList.add('active');
+  // cargar historial
+  if (typeof cargarHistorial === 'function') cargarHistorial(pin);
 }
 
-async function testearStorage() {
-  try {
-    if (typeof inicializarSupabase === 'function') inicializarSupabase();
-    if (!clienteSupabase) { await customAlert('Supabase no inicializado.'); return; }
-    var bucket = 'chat-files';
-    // Intentar listar u obtener info
-    var { data, error } = await clienteSupabase.storage.list(bucket);
-    if (error) { await customAlert('Error accediendo storage: ' + error.message); return; }
-    await customAlert('✅ Storage accesible. Objetos: ' + (data.length || 0));
-  } catch (e) {
-    console.error('Error testearStorage:', e);
-    await customAlert('Error testando storage: ' + e.message);
-  }
+function cerrarChat() {
+  var panel = document.getElementById('panelDerechoPrincipal');
+  if (panel) panel.classList.remove('active');
+  contactoActual = '';
+}
+
+function _showOverlayById(id) {
+  var el = document.getElementById(id);
+  if (!el) return;
+  el.classList.add('active');
+}
+function _hideOverlayById(id) {
+  var el = document.getElementById(id);
+  if (!el) return;
+  el.classList.remove('active');
+}
+
+function mostrarModalAgregar() { _showOverlayById('modalAgregarContacto'); }
+function cerrarModalAgregar() { _hideOverlayById('modalAgregarContacto'); }
+function mostrarOpcionesChat() { _showOverlayById('modalOpcionesChat'); }
+function cerrarModalOpcionesChat() { _hideOverlayById('modalOpcionesChat'); }
+
+async function customAlert(text, title) {
+  return new Promise(function(resolve) {
+    var overlay = document.getElementById('customAlert');
+    var textEl = document.getElementById('customAlertText');
+    var btn = document.getElementById('customAlertBtn');
+    if (textEl) textEl.innerText = text || title || 'Alerta';
+    if (!overlay || !btn) { alert(text); resolve(true); return; }
+    overlay.classList.add('active');
+    var handler = function() { overlay.classList.remove('active'); btn.removeEventListener('click', handler); resolve(true); };
+    btn.addEventListener('click', handler);
+  });
+}
+
+async function customConfirm(text, title) {
+  return new Promise(function(resolve) {
+    var overlay = document.getElementById('customConfirm');
+    var textEl = document.getElementById('customConfirmText');
+    var btnCancel = document.getElementById('customConfirmBtnCancel');
+    var btnOk = document.getElementById('customConfirmBtnOk');
+    if (textEl) textEl.innerText = text || title || '¿Confirmar?';
+    if (!overlay || !btnCancel || !btnOk) { var r = confirm(text); resolve(r); return; }
+    overlay.classList.add('active');
+    var onCancel = function() { overlay.classList.remove('active'); btnCancel.removeEventListener('click', onCancel); btnOk.removeEventListener('click', onOk); resolve(false); };
+    var onOk = function() { overlay.classList.remove('active'); btnCancel.removeEventListener('click', onCancel); btnOk.removeEventListener('click', onOk); resolve(true); };
+    btnCancel.addEventListener('click', onCancel);
+    btnOk.addEventListener('click', onOk);
+  });
+}
+
+async function customPrompt(title, text, placeholder, type) {
+  return new Promise(function(resolve) {
+    var overlay = document.getElementById('customPrompt');
+    var textEl = document.getElementById('customPromptText');
+    var input = document.getElementById('customPromptInput');
+    var btnCancel = document.getElementById('customPromptBtnCancel');
+    var btnOk = document.getElementById('customPromptBtnOk');
+    if (textEl) textEl.innerText = (title ? title + '\n' : '') + (text || '');
+    if (!overlay || !input || !btnCancel || !btnOk) { var r = prompt(text); resolve(r); return; }
+    input.value = '';
+    input.placeholder = placeholder || '';
+    if (type === 'password') input.type = 'password'; else input.type = 'text';
+    overlay.classList.add('active');
+
+    var onCancel = function() { overlay.classList.remove('active'); btnCancel.removeEventListener('click', onCancel); btnOk.removeEventListener('click', onOk); resolve(null); };
+    var onOk = function() { overlay.classList.remove('active'); btnCancel.removeEventListener('click', onCancel); btnOk.removeEventListener('click', onOk); resolve(input.value); };
+    btnCancel.addEventListener('click', onCancel);
+    btnOk.addEventListener('click', onOk);
+    // focus
+    setTimeout(function(){ input.focus(); }, 50);
+  });
 }
 
 // ============================================
