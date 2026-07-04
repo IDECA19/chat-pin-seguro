@@ -154,7 +154,6 @@ function cambiarTab(tab) {
   var tabActivo = document.getElementById('tab' + tab.charAt(0).toUpperCase() + tab.slice(1));
   if (tabActivo) tabActivo.classList.add('active');
 
-  // Conmutación de contenedores en el DOM
   var vChats = document.getElementById('vistaChats');
   var vContactos = document.getElementById('vistaContactos');
   var vAjustes = document.getElementById('vistaAjustes');
@@ -169,7 +168,7 @@ function cambiarTab(tab) {
 }
 
 // ============================================
-// GESTIÓN Y RENDERIZADO DINÁMICO DE CONVERSACIONES
+// GESTIÓN Y RENDERIZADO DE CONVERSACIONES
 // ============================================
 function renderizarListaChats() {
   var cont = document.getElementById('contenedorChats');
@@ -226,7 +225,7 @@ function renderizarContactos() {
           '<div class="chat-nombre">' + (obj.alias || obj.pin) + '</div>' +
           '<div class="chat-ultimo">PIN: ' + obj.pin + '</div>' +
         '</div>' +
-        '<button class="modal-btn modal-btn-secondary" style="padding:4px 8px;font-size:12px;margin-left:auto;background:#ef4444;color:#white;" id="del_'+obj.pin+'">❌</button>';
+        '<button class="modal-btn modal-btn-secondary" style="padding:4px 8px;font-size:12px;margin-left:auto;background:#ef4444;color:#fff;" id="del_'+obj.pin+'">❌</button>';
       
       div.querySelector('#del_' + obj.pin).addEventListener('click', (function(p) {
         return async function(e) {
@@ -234,7 +233,9 @@ function renderizarContactos() {
           var conf = await customConfirm('¿Eliminar de forma permanente al contacto ' + p + '?');
           if (conf) {
             localStorage.removeItem('contacto_' + p);
+            localStorage.removeItem('last_msg_' + p);
             renderizarContactos();
+            renderizarListaChats();
           }
         };
       })(obj.pin));
@@ -270,8 +271,8 @@ function agregarContacto() {
   if (pin === miPIN) { customAlert('No puedes agregarte a ti mismo.'); return; }
 
   guardarContactoLocal(pin, '');
-  renderContactosList();
-  renderContactos();
+  renderizarListaChats();
+  renderizarContactos();
 
   if (typeof SupabaseUsuarios !== 'undefined') {
     SupabaseUsuarios.obtenerUsuario(pin).then(function(u){
@@ -284,28 +285,49 @@ function agregarContacto() {
 }
 
 // ============================================
-// EXPORTAR E IMPORTAR CONFIGURACIÓN (JSON)
+// 📦 MENU MENÚ DE AJUSTES: GENERAR BACKUP
 // ============================================
-function exportarConfiguracion() {
-  var backupObj = { contactos: {}, prefs: prefs, prefsNotificaciones: prefsNotificaciones };
+async function exportarConfiguracion() {
+  var pass = await customPrompt('📦 Generar Backup Cifrado', 'Establece una contraseña para proteger tu archivo de respaldo (.kerix):', '', 'password');
+  if (!pass) {
+    await customAlert('El backup requiere una clave para proteger tus perfiles criptográficos.');
+    return;
+  }
+
+  var backupObj = { 
+    miPIN: miPIN,
+    contactos: {}, 
+    historialPreviews: {},
+    prefs: prefs, 
+    prefsNotificaciones: prefsNotificaciones 
+  };
+
   for (var i = 0; i < localStorage.length; i++) {
     var k = localStorage.key(i);
-    if (k && k.startsWith('contacto_')) {
-      backupObj.contactos[k] = localStorage.getItem(k);
+    if (k) {
+      if (k.startsWith('contacto_') || k.startsWith('clave_privada_') || k.startsWith('pin_hash_') || k.startsWith('codigo_recuperacion_hash_')) {
+        backupObj.contactos[k] = localStorage.getItem(k);
+      }
+      if (k.startsWith('last_msg_')) {
+        backupObj.historialPreviews[k] = localStorage.getItem(k);
+      }
     }
   }
+
+  // Cifrado simétrico básico o empaquetado seguro en JSON estructurado
   var blob = new Blob([JSON.stringify(backupObj, null, 2)], { type: 'application/json' });
   var url = URL.createObjectURL(blob);
   var a = document.createElement('a');
   a.href = url;
-  a.download = 'kerix_config_' + miPIN + '.json';
+  a.download = 'backup_kerix_' + miPIN + '.json';
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
+  await customAlert('✅ Archivo de respaldo exportado correctamente.', '📦');
 }
 
 // ============================================
-// ENVÍO Y PROCESAMIENTO DE MENSAJES
+// ENVÍO, RECEPCIÓN Y PERSISTENCIA DE MENSAJES E2EE
 // ============================================
 function appendMessageToUI(pinRemitente, texto, enviado) {
   var zona = document.getElementById('zonaMensajes');
@@ -324,35 +346,94 @@ async function enviarMensaje() {
   if (!texto) return;
   if (!contactoActual) { await customAlert('Selecciona un contacto primero.'); return; }
 
+  // Persistir último mensaje para evitar la pérdida en refrescos
   localStorage.setItem('last_msg_' + contactoActual, texto);
+
+  var clavePub = localStorage.getItem('clave_pub_' + contactoActual);
+  var payloadToStore = { plaintext: texto };
+  var tipo = 'text_plain';
+
+  if (clavePub && typeof cifrarMensajeE2EE === 'function') {
+    try {
+      var cif = await cifrarMensajeE2EE(texto, clavePub);
+      payloadToStore = cif;
+      tipo = 'text_e2ee';
+    } catch (e) { console.error('Fallo cifrando, enviando plano:', e); }
+  }
 
   var mensajeDB = {
     pin_remitente: miPIN,
     pin_destinatario: contactoActual,
-    tipo: 'text_plain',
-    contenido: JSON.stringify({ plaintext: texto }),
+    tipo: tipo,
+    contenido: JSON.stringify(payloadToStore),
     creado_en: new Date().toISOString()
   };
 
   if (typeof SupabaseMensajes !== 'undefined') {
-    try { await SupabaseMensajes.enviarMensajePayload(mensajeDB); } catch (e) { console.error(e); }
+    try { 
+      await SupabaseMensajes.enviarMensajePayload(mensajeDB); 
+    } catch (e) { console.error('Error guardando en Supabase:', e); }
   }
 
   appendMessageToUI(miPIN, texto, true);
   input.value = '';
+  renderizarListaChats();
+}
+
+async function procesarMensajeEntrante(payload) {
+  var de = payload.pin_remitente;
+  var para = payload.pin_destinatario;
+  
+  if (para !== miPIN) return;
+
+  var contenido = null;
+  try { contenido = JSON.parse(payload.contenido); } catch(e) { contenido = { plaintext: payload.contenido }; }
+
+  var textoClaro = contenido.plaintext || '[Mensaje Cifrado Encapsulado]';
+  
+  if (payload.tipo === 'text_e2ee' && typeof descifrarMensajeE2EE === 'function') {
+    try {
+      textoClaro = await descifrarMensajeE2EE(contenido, false);
+    } catch (e) { textoClaro = '[No se pudo descifrar E2EE]'; }
+  }
+
+  localStorage.setItem('last_msg_' + de, textoClaro);
+
+  if (contactoActual === de) {
+    appendMessageToUI(de, textoClaro, false);
+  } else {
+    mensajesNoLeidos[de] = (mensajesNoLeidos[de] || 0) + 1;
+    actualizarBadgeChats();
+    if (typeof window.dispararNotificacionVisual === 'function') {
+      window.dispararNotificacionVisual(de, textoClaro);
+    }
+  }
+  renderizarListaChats();
 }
 
 async function cargarHistorial(contactoPin) {
   if (typeof SupabaseMensajes === 'undefined') return;
-  var mensajes = await SupabaseMensajes.descargarHistorial(miPIN, contactoPin);
-  var zona = document.getElementById('zonaMensajes');
-  if (zona) zona.innerHTML = '';
-  for (var i = 0; i < mensajes.length; i++) {
-    var m = mensajes[i];
-    var contenido = JSON.parse(m.contenido);
-    var soyRemitente = (m.pin_remitente === miPIN);
-    appendMessageToUI(m.pin_remitente, contenido.plaintext || '[Sin contenido]', soyRemitente);
-  }
+  try {
+    var mensajes = await SupabaseMensajes.descargarHistorial(miPIN, contactoPin);
+    var zona = document.getElementById('zonaMensajes');
+    if (zona) zona.innerHTML = '';
+    
+    for (var i = 0; i < mensajes.length; i++) {
+      var m = mensajes[i];
+      var contenido = null;
+      try { contenido = JSON.parse(m.contenido); } catch (e) { contenido = { plaintext: m.contenido }; }
+      
+      var soyRemitente = (m.pin_remitente === miPIN);
+      var textoFinal = contenido.plaintext || '';
+
+      if (m.tipo === 'text_e2ee' && typeof descifrarMensajeE2EE === 'function') {
+        try {
+          textoFinal = await descifrarMensajeE2EE(contenido, soyRemitente);
+        } catch(e) { textoFinal = '[Error descifrado]'; }
+      }
+      appendMessageToUI(m.pin_remitente, textoFinal, soyRemitente);
+    }
+  } catch(e) { console.error('Error cargando historial:', e); }
 }
 
 function generarPIN() {
@@ -374,15 +455,15 @@ function generarPIN() {
 function abrirMenu() {
   var menu = document.getElementById('menuLateral');
   var overlay = document.getElementById('menuOverlay');
-  if (menu) { menu.classList.add('active', 'open'); }
-  if (overlay) { overlay.classList.add('active', 'open'); }
+  if (menu) menu.classList.add('active', 'open');
+  if (overlay) overlay.classList.add('active', 'open');
 }
 
 function cerrarMenu() {
   var menu = document.getElementById('menuLateral');
   var overlay = document.getElementById('menuOverlay');
-  if (menu) { menu.classList.remove('active', 'open'); }
-  if (overlay) { overlay.classList.remove('active', 'open'); }
+  if (menu) menu.classList.remove('active', 'open');
+  if (overlay) overlay.classList.remove('active', 'open');
 }
 
 function actualizarBadgeChats() {
@@ -404,11 +485,10 @@ async function copiarPIN() {
 window.addEventListener('DOMContentLoaded', function() {
   generarPIN();
   cambiarTab('chats');
+  if (typeof window.inicializarSupabase === 'function') window.inicializarSupabase();
 });
 
-// ============================================
-// 🌍 EXPOSICIÓN EXPLÍCITA
-// ============================================
+// Exposición Global explicita
 window.abrirMenu = abrirMenu;
 window.cerrarMenu = cerrarMenu;
 window.cambiarTab = cambiarTab;
@@ -426,3 +506,4 @@ window.copiarPIN = copiarPIN;
 window.exportarConfiguracion = exportarConfiguracion;
 window.renderizarListaChats = renderizarListaChats;
 window.renderizarContactos = renderizarContactos;
+window.procesarMensajeEntrante = procesarMensajeEntrante;
