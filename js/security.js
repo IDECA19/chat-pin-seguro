@@ -1,6 +1,7 @@
 /**
  * js/security.js
- * Módulo de seguridad profesional: PIN, bloqueo, rate limiting, validación y derivación criptográfica.
+ * Módulo de seguridad profesional: PIN, bloqueo, rate limiting, validación,
+ * derivación criptográfica y Reset Nuclear de Emergencia.
  */
 
 // ============================================
@@ -16,11 +17,11 @@ var TIEMPO_BLOQUEO_MS = 30000;
 
 var PBKDF2_SALT = new TextEncoder().encode("kerix-pbkdf2-salt-secure-2026");
 
-// IDENTIFICADOR DE PERFIL ESTÁTICO FIJO (CORREGIDO)
+// IDENTIFICADOR DE PERFIL ESTÁTICO FIJO (Soluciona el bug de pérdida de sesión)
 var idUsuario = 'kerix_secure_profile';
 
 // ============================================
-// HASH Y CIFRADO DE PIN
+// HASH Y CIFRADO DE CONFIGURACIONES / PIN
 // ============================================
 async function hashPIN(pin) {
   var encoder = new TextEncoder();
@@ -133,7 +134,7 @@ async function descifrarClaveConCodigo(claveCifrada, codigo) {
 }
 
 // ============================================
-// GESTIÓN DE PIN DE ACCESO
+// GESTIÓN DEL PIN DE ACCESO Y BLOQUEOS
 // ============================================
 async function verificarPINConfigurado() {
   pinAccesoHash = localStorage.getItem('pin_hash_' + idUsuario);
@@ -153,7 +154,7 @@ async function verificarPINConfigurado() {
     try {
       if (typeof cargarClavePrivadaSegura === 'function') await cargarClavePrivadaSegura(null);
     } catch (e) {
-      console.error('Error:', e);
+      console.error('Error cargando inicializador seguro:', e);
     }
   } else {
     if (pantalla) pantalla.style.display = 'flex';
@@ -202,11 +203,9 @@ async function configurarPIN() {
         var privBase64 = typeof desofuscarClave === 'function' ? desofuscarClave(clavePrivadaActual) : clavePrivadaActual;
         var nuevoCifrado = await cifrarClaveConPIN(privBase64, pin1);
         localStorage.setItem('clave_privada_' + idUsuario, nuevoCifrado);
-      } else {
-        console.log('Clave privada ya cifrada; no se re-encriptó.');
       }
     } catch (e) {
-      console.error('Error cifrando clave:', e);
+      console.error('Error re-cifrando par asimétrico:', e);
     }
   }
   await customAlert('✅ PIN configurado exitosamente.', '✅');
@@ -232,22 +231,6 @@ async function recuperarAcceso() {
   }
 }
 
-async function resetEmergencia() {
-  var c1 = await customConfirm('⚠️ RESET DE EMERGENCIA\nEsto eliminará tu PIN, tu código de recuperación y tus llaves locales. ¿Continuar?', '⚠️');
-  if (!c1) return;
-  var texto = await customPrompt('Confirmación final', 'Escribe "RESET" para confirmar:', 'RESET');
-  if (texto !== 'RESET') {
-    await customAlert('❌ Cancelado.');
-    return;
-  }
-  localStorage.removeItem('pin_hash_' + idUsuario);
-  localStorage.removeItem('codigo_recuperacion_hash_' + idUsuario);
-  localStorage.removeItem('clave_privada_' + idUsuario);
-  sessionStorage.removeItem('pin_temporal_' + idUsuario);
-  await customAlert('✅ Sistema restablecido de fábrica.', '✅');
-  location.reload();
-}
-
 async function desbloquearApp() {
   var inputPIN = document.getElementById('pinAccesoInput');
   if (!inputPIN) return;
@@ -265,7 +248,7 @@ async function desbloquearApp() {
     try {
       await cargarClavePrivadaSegura(pinIngresado);
     } catch (e) {
-      console.warn('No se pudo cargar clave privada tras desbloquear:', e);
+      console.warn('Advertencia en carga asimétrica tras login:', e);
     }
   } else {
     var errorPIN = document.getElementById('errorPIN');
@@ -292,6 +275,35 @@ async function cambiarPIN() {
   await customAlert('✅ PIN modificado con éxito.', '✅');
 }
 
+// ============================================
+// ⚠️ RESET NUCLEAR DE EMERGENCIA (COMPLETO)
+// ============================================
+async function resetEmergenciaCompleto() {
+  var c1 = await customConfirm('⚠️ ADVERTENCIA CRÍTICA (RESET DE EMERGENCIA)\nEsto eliminará de forma irreversible tus claves criptográficas, contactos, historiales de mensajes, configuraciones y perfiles de este dispositivo local.\n¿Deseas continuar?');
+  if (!c1) return;
+
+  var confirmacionText = await customPrompt(
+    'CONFIRMACIÓN CRÍTICA REQUERIDA', 
+    'Para ejecutar la acción nuclear destructiva de datos, escribe exactamente "BORRAR TODO" en el cuadro inferior:', 
+    'BORRAR TODO'
+  );
+  
+  if (confirmacionText !== 'BORRAR_TODO' && confirmacionText !== 'BORRAR TODO') {
+    await customAlert('❌ Cancelado. La frase de confirmación no coincide.');
+    return;
+  }
+
+  // Limpieza absoluta y purga de Storage local y de sesión
+  localStorage.clear();
+  sessionStorage.clear();
+
+  await customAlert('☢️ Sistema restablecido de fábrica con éxito. Todos los datos han sido destruidos de forma segura.', '⚠️');
+  location.reload();
+}
+
+// ============================================
+// CARGA CRIPTOGRÁFICA EN MEMORIA VOLÁTIL
+// ============================================
 async function cargarClavePrivadaSegura(pin) {
   try {
     var almacen = localStorage.getItem('clave_privada_' + idUsuario);
@@ -301,13 +313,13 @@ async function cargarClavePrivadaSegura(pin) {
     if (almacen.includes('.')) {
       var p = pin || sessionStorage.getItem('pin_temporal_' + idUsuario);
       if (!p) {
-        console.warn('Se requiere PIN temporal para descifrar clave privada.');
+        console.warn('Se requiere PIN en sesión para descifrar clave privada.');
         return;
       }
       try {
         privBase64 = await descifrarClaveConPIN(almacen, p);
       } catch (e) {
-        console.error('Error descifrando clave privada con PIN proporcionado:', e);
+        console.error('Fallo crítico descifrando llave privada con PBKDF2:', e);
         return;
       }
     } else {
@@ -326,12 +338,15 @@ async function cargarClavePrivadaSegura(pin) {
       ['decrypt']
     );
 
-    console.log('Clave privada cargada e importada en memoria.');
+    console.log('🔒 Llave privada cargada de forma segura e importada en memoria volátil.');
   } catch (e) {
     console.error('Error cargando clave privada segura:', e);
   }
 }
 
+// ============================================
+// VALIDACIONES DE INTEGRIDAD DE INPUTS
+// ============================================
 function validarPIN(pin) {
   if (!pin || pin.trim().length !== 8) return false;
   return /^[0-9A-F]{8}$/.test(pin.toUpperCase());
@@ -345,14 +360,21 @@ function validarMensaje(texto) {
 
 function validarArchivo(file) {
   if (!file) return { valido: false, error: 'Sin archivo' };
-  var maxTam = 15 * 1024 * 1024;
+  var maxTam = 15 * 1024 * 1024; // Límite de 15MB
   if (file.size > maxTam) return { valido: false, error: 'Excede el límite de 15MB' };
   if (file.size === 0) return { valido: false, error: 'Archivo vacío' };
   return { valido: true };
 }
 
 // ============================================
-// 🌍 EXPOSICIÓN GLOBAL
+// DISPARADORES E INICIALIZACIÓN DE CARGA DOM
+// ============================================
+window.addEventListener('DOMContentLoaded', function() {
+  verificarPINConfigurado();
+});
+
+// ============================================
+// 🌍 EXPOSICIÓN GLOBAL COMPATIBLE CON CSP
 // ============================================
 window.hashPIN = hashPIN;
 window.generarCodigoRecuperacion = generarCodigoRecuperacion;
@@ -363,12 +385,12 @@ window.descifrarClaveConCodigo = descifrarClaveConCodigo;
 window.verificarPINConfigurado = verificarPINConfigurado;
 window.configurarPIN = configurarPIN;
 window.recuperarAcceso = recuperarAcceso;
-window.resetEmergencia = resetEmergencia;
 window.desbloquearApp = desbloquearApp;
 window.cambiarPIN = cambiarPIN;
+window.resetEmergenciaCompleto = resetEmergenciaCompleto;
 window.cargarClavePrivadaSegura = cargarClavePrivadaSegura;
 window.validarPIN = validarPIN;
 window.validarMensaje = validarMensaje;
 window.validarArchivo = validarArchivo;
 
-console.log('🛡️ Módulo de seguridad (security.js) reparado y activo.');
+console.log('🛡️ Módulo de seguridad completo (security.js) unificado con éxito.');
