@@ -1,241 +1,242 @@
 /**
  * js/webrtc.js
- * Señalización WebRTC usando Supabase como canal de señalización (oferta/respuesta/candidatos)
- * Implementa funciones: iniciarLlamada, aceptarLlamada, rechazarLlamada, colgarLlamada
+ * Control de streams multimedia P2P directos para llamadas y videollamadas E2EE nativas.
  */
 
+var localStream = null;
 var peerConnection = null;
-var streamLocal = null;
-var streamRemoto = null;
-var llamadaActiva = false;
-var tipoLlamadaActual = 'voz';
-var pinLlamadaActual = '';
-var esIniciador = false;
-var timerLlamada = null;
-var segundosLlamada = 0;
-var canalLlamada = null;
-var sonidoEntranteInterval = null;
-var sonidoLlamadaSaliente = null;
-
-var idLlamadaActual = null;
-var candidatosLocalesAcumulados = [];
+var llamanteActualPin = null;
+var llamadaConVideo = false;
 
 var rtcConfig = {
   iceServers: [
     { urls: 'stun:stun.l.google.com:19302' },
-    { urls: 'stun:stun1.l.google.com:19302' },
-    { urls: 'stun:stun2.l.google.com:19302' }
+    { urls: 'stun:stun1.l.google.com:19302' }
   ]
 };
 
-// Helpers
-function setLlamadaTimer() {
-  clearInterval(timerLlamada);
-  segundosLlamada = 0;
-  var el = document.getElementById('llamadaTimer');
-  timerLlamada = setInterval(function(){ segundosLlamada++; if (el) el.innerText = formatearTiempo(segundosLlamada); }, 1000);
-}
+// ============================================
+// EMISIÓN: INICIAR LLAMADA OUTBOUND
+// ============================================
+async function iniciarLlamadaWebRTC(pinDestinatario, conVideo) {
+  try {
+    console.log('📞 Preparando llamada P2P hacia: ' + pinDestinatario);
+    llamadaConVideo = conVideo;
 
-function limpiarLlamadaState() {
-  llamadaActiva = false;
-  pinLlamadaActual = '';
-  idLlamadaActual = null;
-  esIniciador = false;
-  candidatosLocalesAcumulados = [];
-  if (peerConnection) { try { peerConnection.close(); } catch(e){} peerConnection = null; }
-  if (streamLocal) { try { streamLocal.getTracks().forEach(t=>t.stop()); } catch(e){} streamLocal = null; }
-  if (streamRemoto) { streamRemoto = null; }
-  clearInterval(timerLlamada);
-}
+    // 1. Mostrar pantalla de llamada activa
+    var panelLlamada = document.getElementById('pantallaLlamada');
+    if (panelLlamada) panelLlamada.style.display = 'flex';
+    
+    var txtNombre = document.getElementById('llamadaContactoNombre');
+    if (txtNombre && typeof window.obtenerNombreContacto === 'function') {
+      txtNombre.innerText = window.obtenerNombreContacto(pinDestinatario);
+    }
 
-async function crearPeerConnection() {
-  peerConnection = new RTCPeerConnection(rtcConfig);
+    // 2. Adquirir hardware multimedia local
+    localStream = await navigator.mediaDevices.getUserMedia({
+      audio: true,
+      video: conVideo
+    });
 
-  peerConnection.onicecandidate = function(event) {
-    if (event.candidate) {
-      // enviar candidato al backend (append to llamada.candidatos)
-      if (idLlamadaActual && typeof SupabaseLlamadas !== 'undefined') {
-        SupabaseLlamadas.actualizarLlamada(idLlamadaActual, { candidatos: JSON.stringify([event.candidate]) }).catch(e=>console.warn('No pudo enviar candidato', e));
+    var videoLocal = document.getElementById('videoLocal');
+    if (videoLocal) {
+      videoLocal.srcObject = localStream;
+      videoLocal.style.display = conVideo ? 'block' : 'none';
+    }
+
+    // 3. Crear conexión P2P
+    peerConnection = new RTCPeerConnection(rtcConfig);
+
+    localStream.getTracks().forEach(function(track) {
+      peerConnection.addTrack(track, localStream);
+    });
+
+    peerConnection.ontrack = function(event) {
+      var videoRemoto = document.getElementById('videoRemoto');
+      if (videoRemoto && event.streams[0]) {
+        videoRemoto.srcObject = event.streams[0];
       }
+    };
+
+    peerConnection.onicecandidate = function(event) {
+      if (event.candidate && canalRealtime) {
+        canalRealtime.send({
+          type: 'broadcast',
+          event: 'ice-candidate',
+          payload: { de: miPIN, para: pinDestinatario, candidate: event.candidate }
+        });
+      }
+    };
+
+    // 4. Crear Oferta SDP y enviarla por Realtime Broadcast sin persistencia
+    var offer = await peerConnection.createOffer();
+    await peerConnection.setLocalDescription(offer);
+
+    if (canalRealtime) {
+      canalRealtime.send({
+        type: 'broadcast',
+        event: 'llamada-oferta',
+        payload: { de: miPIN, para: pinDestinatario, sdp: offer, video: conVideo }
+      });
     }
-  };
 
-  peerConnection.ontrack = function(event) {
-    streamRemoto = event.streams[0];
-    var videoRemoto = document.getElementById('videoRemoto');
-    if (videoRemoto) videoRemoto.srcObject = streamRemoto;
-  };
-
-  return peerConnection;
-}
-
-async function iniciarLlamada(tipo) {
-  if (!contactoActual) { await customAlert('Selecciona un contacto para llamar.'); return; }
-  tipoLlamadaActual = tipo || 'voz';
-  esIniciador = true;
-
-  try {
-    await inicializarSupabase();
-    streamLocal = await navigator.mediaDevices.getUserMedia({ audio: true, video: tipo === 'video' });
-    var videoLocal = document.getElementById('videoLocal');
-    if (videoLocal) videoLocal.srcObject = streamLocal;
-
-    var pc = await crearPeerConnection();
-    // añadir tracks
-    streamLocal.getTracks().forEach(track => pc.addTrack(track, streamLocal));
-
-    // crear oferta
-    var oferta = await pc.createOffer();
-    await pc.setLocalDescription(oferta);
-
-    // crear registro de llamada en Supabase
-    var llamada = await SupabaseLlamadas.crearLlamada(miPIN, contactoActual, tipoLlamadaActual, JSON.stringify(oferta));
-    if (!llamada) throw new Error('No se pudo crear registro de llamada');
-    idLlamadaActual = llamada.id;
-    llamadaActiva = true;
-    pinLlamadaActual = contactoActual;
-
-    // listen for updates (respuesta, candidatos)
-    // Nota: en producción usar realtime subscription; aquí se hace polling sencillo
-    var poller = setInterval(async function(){
-      try {
-        var l = await SupabaseLlamadas.obtenerLlamada(idLlamadaActual);
-        if (l && l.respuesta && !pc.remoteDescription) {
-          var answer = JSON.parse(l.respuesta);
-          await pc.setRemoteDescription(answer);
-        }
-        if (l && l.candidatos) {
-          var candidatos = JSON.parse(l.candidatos || '[]');
-          for (var i=0;i<candidatos.length;i++) {
-            try { await pc.addIceCandidate(candidatos[i]); } catch(e){}
-          }
-        }
-        if (l && l.estado === 'finalizada') {
-          clearInterval(poller);
-          limpiarLlamadaState();
-        }
-      } catch(e){ console.warn('Polling llamada error', e); }
-    }, 1500);
-
-    setLlamadaTimer();
   } catch (e) {
-    console.error('Error iniciando llamada:', e);
-    await customAlert('No se pudo iniciar la llamada: ' + (e.message || e));
-    limpiarLlamadaState();
+    console.error('Error al iniciar WebRTC:', e);
+    if (typeof window.customAlert === 'function') window.customAlert('Fallo al acceder al hardware multimedia.');
+    colgarLlamada();
   }
 }
 
-async function aceptarLlamada(id) {
+// ============================================
+// RECEPCIÓN: PROCESAR SEÑALIZACIÓN ENTRANTE
+// ============================================
+async function procesarOfertaLlamada(payload) {
+  llamanteActualPin = payload.de;
+  llamadaConVideo = payload.video;
+
+  // Mostrar modal de llamada entrante en UI
+  var modal = document.getElementById('modalLlamadaEntrante');
+  var txtNombre = document.getElementById('llamadaEntranteNombre');
+  var txtTipo = document.getElementById('llamadaEntranteTipo');
+
+  if (modal) {
+    if (txtNombre && typeof window.obtenerNombreContacto === 'function') {
+      txtNombre.innerText = window.obtenerNombreContacto(payload.de);
+    }
+    if (txtTipo) {
+      txtTipo.innerText = payload.video ? 'Videollamada entrante...' : 'Llamada de voz entrante...';
+    }
+    modal.classList.add('active');
+  }
+
+  // Guardar la sesión SDP remota inicialmente
+  peerConnection = new RTCPeerConnection(rtcConfig);
+  await peerConnection.setRemoteDescription(new RTCSessionDescription(payload.sdp));
+}
+
+async function aceptarLlamadaEntrante() {
+  var modal = document.getElementById('modalLlamadaEntrante');
+  if (modal) modal.classList.remove('active');
+
   try {
-    await inicializarSupabase();
-    var llamada = await SupabaseLlamadas.obtenerLlamada(id);
-    if (!llamada) throw new Error('Llamada no encontrada');
+    // 1. Mostrar pantalla activa de llamada
+    var panelLlamada = document.getElementById('pantallaLlamada');
+    if (panelLlamada) panelLlamada.style.display = 'flex';
+    var txtNombre = document.getElementById('llamadaContactoNombre');
+    if (txtNombre && typeof window.obtenerNombreContacto === 'function') {
+      txtNombre.innerText = window.obtenerNombreContacto(llamanteActualPin);
+    }
 
-    pinLlamadaActual = llamada.pin_remitente;
-    tipoLlamadaActual = llamada.tipo;
-    esIniciador = false;
+    // 2. Capturar Hardware local del receptor
+    localStream = await navigator.mediaDevices.getUserMedia({
+      audio: true,
+      video: llamadaConVideo
+    });
 
-    streamLocal = await navigator.mediaDevices.getUserMedia({ audio: true, video: tipoLlamadaActual === 'video' });
     var videoLocal = document.getElementById('videoLocal');
-    if (videoLocal) videoLocal.srcObject = streamLocal;
+    if (videoLocal) {
+      videoLocal.srcObject = localStream;
+      videoLocal.style.display = llamadaConVideo ? 'block' : 'none';
+    }
 
-    var pc = await crearPeerConnection();
-    streamLocal.getTracks().forEach(track => pc.addTrack(track, streamLocal));
+    // 3. Vincular flujos locales
+    localStream.getTracks().forEach(function(track) {
+      peerConnection.addTrack(track, localStream);
+    });
 
-    // set remote offer
-    var oferta = JSON.parse(llamada.oferta);
-    await pc.setRemoteDescription(oferta);
-    var respuesta = await pc.createAnswer();
-    await pc.setLocalDescription(respuesta);
+    peerConnection.ontrack = function(event) {
+      var videoRemoto = document.getElementById('videoRemoto');
+      if (videoRemoto && event.streams[0]) {
+        videoRemoto.srcObject = event.streams[0];
+      }
+    };
 
-    // actualizar registro con la respuesta
-    await SupabaseLlamadas.actualizarLlamada(id, { respuesta: JSON.stringify(respuesta), estado: 'activa' });
-    idLlamadaActual = id;
-    llamadaActiva = true;
-    setLlamadaTimer();
+    peerConnection.onicecandidate = function(event) {
+      if (event.candidate && canalRealtime) {
+        canalRealtime.send({
+          type: 'broadcast',
+          event: 'ice-candidate',
+          payload: { de: miPIN, para: llamanteActualPin, candidate: event.candidate }
+        });
+      }
+    };
+
+    // 4. Crear Respuesta SDP y enviarla de regreso
+    var answer = await peerConnection.createAnswer();
+    await peerConnection.setLocalDescription(answer);
+
+    if (canalRealtime) {
+      canalRealtime.send({
+        type: 'broadcast',
+        event: 'llamada-respuesta',
+        payload: { de: miPIN, para: llamanteActualPin, sdp: answer }
+      });
+    }
+
   } catch (e) {
-    console.error('Error aceptando llamada:', e);
-    await customAlert('No se pudo aceptar la llamada: ' + (e.message || e));
-    limpiarLlamadaState();
+    console.error('Error al aceptar llamada:', e);
+    colgarLlamada();
   }
 }
 
-async function rechazarLlamada(id) {
-  try {
-    await SupabaseLlamadas.actualizarLlamada(id, { estado: 'rechazada' });
-    await customAlert('Llamada rechazada.');
-  } catch (e) { console.error('Error rechazando llamada:', e); }
+function rechazarLlamadaEntrante() {
+  var modal = document.getElementById('modalLlamadaEntrante');
+  if (modal) modal.classList.remove('active');
+  colgarLlamada();
 }
 
-async function colgarLlamada() {
-  if (idLlamadaActual) {
+async function procesarRespuestaLlamada(payload) {
+  if (peerConnection) {
+    await peerConnection.setRemoteDescription(new RTCSessionDescription(payload.sdp));
+  }
+}
+
+async function procesarIceCandidate(payload) {
+  if (peerConnection && payload.candidate) {
     try {
-      await SupabaseLlamadas.actualizarLlamada(idLlamadaActual, { estado: 'finalizada' });
-    } catch (e) { console.warn('Error marcando llamada finalizada:', e); }
-  }
-  limpiarLlamadaState();
-}
-
-// ============================================
-// AUXILIARES
-// ============================================
-function formatearTiempo(segundos) {
-  var m = Math.floor(segundos / 60).toString().padStart(2, '0');
-  var s = (segundos % 60).toString().padStart(2, '0');
-  return m + ':' + s;
-}
-
-// ============================================
-// GESTIÓN DE AUDIO / MULTIMEDIA EXTERNA
-// ============================================
-function detenerSonidos() {
-  if (sonidoLlamadaSaliente) {
-    sonidoLlamadaSaliente.pause();
-    sonidoLlamadaSaliente = null;
-  }
-  if (sonidoEntranteInterval) {
-    sonidoEntranteInterval.pause();
-    sonidoEntranteInterval = null;
-  }
-}
-
-// ============================================
-// BOTONES INTERACTIVOS DE LLAMADA
-// ============================================
-function toggleSilenciar() {
-  if (!streamLocal) return;
-  var audioTrack = streamLocal.getAudioTracks()[0];
-  if (audioTrack) {
-    audioTrack.enabled = !audioTrack.enabled;
-    var btn = document.getElementById('btnSilenciar');
-    if (btn) {
-      btn.innerText = audioTrack.enabled ? '🎙️' : '🔇';
-      btn.style.background = audioTrack.enabled ? '#2a3942' : '#ef4444';
+      await peerConnection.addIceCandidate(new RTCIceCandidate(payload.candidate));
+    } catch (e) {
+      console.warn('Error agregando candidato ICE:', e);
     }
   }
 }
 
-function toggleCamara() {
-  if (!streamLocal) return;
-  var videoTrack = streamLocal.getVideoTracks()[0];
-  if (videoTrack) {
-    videoTrack.enabled = !videoTrack.enabled;
-    var btn = document.getElementById('btnCamara');
-    if (btn) {
-      btn.innerText = videoTrack.enabled ? '📷' : '🚫';
-      btn.style.background = videoTrack.enabled ? '#2a3942' : '#ef4444';
-    }
+function colgarLlamada() {
+  console.log('🔇 Terminando comunicación WebRTC.');
+  if (localStream) {
+    localStream.getTracks().forEach(function(track) { track.stop(); });
+    localStream = null;
   }
+  if (peerConnection) {
+    peerConnection.close();
+    peerConnection = null;
+  }
+  var panelLlamada = document.getElementById('pantallaLlamada');
+  if (panelLlamada) panelLlamada.style.display = 'none';
+  
+  var modal = document.getElementById('modalLlamadaEntrante');
+  if (modal) modal.classList.remove('active');
 }
 
 // ============================================
-// EXPOSICIÓN GLOBAL EXPLÍCITA
+// VINCULACIÓN DIRECTA DE ACCIONES MULTIMEDIA
 // ============================================
-window.iniciarLlamada = iniciarLlamada;
-window.aceptarLlamada = aceptarLlamada;
-window.rechazarLlamada = rechazarLlamada;
+window.addEventListener('DOMContentLoaded', function() {
+  var btnAceptar = document.getElementById('btnAceptarLlamada');
+  if (btnAceptar) btnAceptar.addEventListener('click', aceptarLlamadaEntrante);
+
+  var btnRechazar = document.getElementById('btnRechazarLlamada');
+  if (btnRechazar) btnRechazar.addEventListener('click', rechazarLlamadaEntrante);
+
+  var btnColgar = document.getElementById('btnColgar');
+  if (btnColgar) btnColgar.addEventListener('click', colgarLlamada);
+});
+
+// Exposición Global
+window.iniciarLlamadaWebRTC = iniciarLlamadaWebRTC;
+window.procesarOfertaLlamada = procesarOfertaLlamada;
+window.procesarRespuestaLlamada = procesarRespuestaLlamada;
+window.procesarIceCandidate = procesarIceCandidate;
 window.colgarLlamada = colgarLlamada;
-window.toggleSilenciar = toggleSilenciar;
-window.toggleCamara = toggleCamara;
 
-console.log('📡 Módulo WebRTC (señalización) cargado correctamente.');
+console.log('📡 Módulo WebRTC (webrtc.js) completamente conectado via P2P Realtime.');
