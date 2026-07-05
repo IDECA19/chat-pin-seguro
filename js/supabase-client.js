@@ -9,15 +9,12 @@ var canalRealtime = null;
 function inicializarSupabase() {
   if (clienteSupabase) return;
   if (typeof supabase === 'undefined') {
-    console.error('❌ La librería global de Supabase no está cargada en el navegador.');
+    console.error('❌ La librería global de Supabase no está cargada.');
     return;
   }
   
-  // Inicializar cliente con variables globales de app.js
   clienteSupabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
   console.log('📡 Cliente Supabase correctamente inicializado.');
-
-  // Configurar Canal Único Realtime Broadcast para Mensajes y Señalización WebRTC (Llamadas)
   conectarCanalRealtime();
 }
 
@@ -31,13 +28,13 @@ function conectarCanalRealtime() {
 
   canalRealtime
     .on('broadcast', { event: 'nuevo-mensaje' }, function(response) {
-      console.log('✉️ Mensaje recibido via Realtime:', response);
-      if (typeof window.procesarMensajeEntrante === 'function') {
-        window.procesarMensajeEntrante(response.payload);
+      if (response.payload && response.payload.pin_destinatario === miPIN) {
+        if (typeof window.procesarMensajeEntrante === 'function') {
+          window.procesarMensajeEntrante(response.payload);
+        }
       }
     })
     .on('broadcast', { event: 'llamada-oferta' }, function(response) {
-      console.log('📞 Oferta de llamada WebRTC entrante:', response);
       if (response.payload && response.payload.para === miPIN) {
         if (typeof window.procesarOfertaLlamada === 'function') {
           window.procesarOfertaLlamada(response.payload);
@@ -45,7 +42,6 @@ function conectarCanalRealtime() {
       }
     })
     .on('broadcast', { event: 'llamada-respuesta' }, function(response) {
-      console.log('📱 Respuesta de llamada WebRTC recibida:', response);
       if (response.payload && response.payload.para === miPIN) {
         if (typeof window.procesarRespuestaLlamada === 'function') {
           window.procesarRespuestaLlamada(response.payload);
@@ -61,17 +57,16 @@ function conectarCanalRealtime() {
     })
     .subscribe(function(status) {
       if (status === 'SUBSCRIBED') {
-        console.log('✅ Canal Realtime Kerix suscrito y escuchando eventos.');
+        console.log('✅ Canal Realtime Kerix suscrito de forma estable.');
       }
     });
 }
 
-// Interfaz para interactuar con la Base de Datos desde app.js sin saturación
 var SupabaseMensajes = {
   enviarMensajePayload: async function(mensajeObj) {
     if (!clienteSupabase) inicializarSupabase();
     
-    // 1. Guardar en BD para el historial asíncrono
+    // Guardar en base de datos cifrado
     var { data, error } = await clienteSupabase
       .from('mensajes')
       .insert([mensajeObj])
@@ -79,7 +74,7 @@ var SupabaseMensajes = {
       
     if (error) throw error;
 
-    // 2. Transmitir en tiempo real al destinatario de forma paralela si está conectado
+    // Emitir ráfaga realtime paralela instantánea
     if (canalRealtime) {
       canalRealtime.send({
         type: 'broadcast',
@@ -117,10 +112,7 @@ var SupabaseUsuarios = {
   }
 };
 
-// Exposición Global
 window.inicializarSupabase = inicializarSupabase;
 window.canalRealtime = canalRealtime;
 window.SupabaseMensajes = SupabaseMensajes;
 window.SupabaseUsuarios = SupabaseUsuarios;
-
-console.log('📡 Módulo cliente de Supabase (supabase-client.js) saneado y activo.');
