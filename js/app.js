@@ -219,13 +219,15 @@ function renderizarContactos() {
       var obj = JSON.parse(localStorage.getItem(k));
       var div = document.createElement('div');
       div.className = 'chat-item';
+      
+      // CORREGIDO: El botón ahora usa un estilo en línea flotante minimalista para no encimarse
       div.innerHTML = 
         '<div class="chat-avatar" style="background:#075e54;">' + (obj.alias ? obj.alias.charAt(0).toUpperCase() : obj.pin.charAt(0)) + '</div>' +
         '<div class="chat-info">' +
-          '<div class="chat-nombre">' + (obj.alias || obj.pin) + '</div>' +
+          '<div class="chat-nombre">' + (obj.alias || "Sin Identificación") + '</div>' +
           '<div class="chat-ultimo">PIN: ' + obj.pin + '</div>' +
         '</div>' +
-        '<button class="modal-btn modal-btn-secondary" style="padding:4px 8px;font-size:12px;margin-left:auto;background:#ef4444;color:#fff;" id="del_'+obj.pin+'">❌</button>';
+        '<button style="background:none; border:none; color:#ef4444; font-size:18px; cursor:pointer; margin-left:auto; padding:0 10px;" id="del_'+obj.pin+'">✕</button>';
       
       div.querySelector('#del_' + obj.pin).addEventListener('click', (function(p) {
         return async function(e) {
@@ -260,17 +262,23 @@ function guardarContactoLocal(pin, alias) {
   localStorage.setItem('contacto_' + pin, JSON.stringify(obj));
 }
 
-function agregarContacto() {
-  var input = document.getElementById('nuevoContactoPin');
-  if (!input) return;
-  var pin = input.value.trim().toUpperCase();
+// CORREGIDO: Permite asignar una identificación (Alias) en tiempo de ejecución
+async function agregarContacto() {
+  var inputPin = document.getElementById('nuevoContactoPin');
+  if (!inputPin) return;
+  var pin = inputPin.value.trim().toUpperCase();
+  
   if (!window.validarPIN || !window.validarPIN(pin)) {
     customAlert('El PIN debe tener 8 caracteres hexadecimales.');
     return;
   }
   if (pin === miPIN) { customAlert('No puedes agregarte a ti mismo.'); return; }
 
-  guardarContactoLocal(pin, '');
+  // Preguntar por la identificación de forma interactiva
+  var alias = await customPrompt('👤 Identificación de Contacto', 'Asigna un nombre o alias para guardar este PIN:', 'Ej: Mi Amigo Seguro');
+  if (alias === null) return; // Cancelado
+
+  guardarContactoLocal(pin, alias.trim());
   renderizarListaChats();
   renderizarContactos();
 
@@ -280,8 +288,9 @@ function agregarContacto() {
     }).catch(function(e){ console.warn(e); });
   }
 
-  input.value = '';
+  inputPin.value = '';
   cerrarModalAgregar();
+  await customAlert('✅ Contacto guardado con éxito.');
 }
 
 async function exportarConfiguracion() {
@@ -349,14 +358,12 @@ async function enviarMensaje() {
   if (clavePub && typeof window.cifrarMensajeE2EE === 'function') {
     try {
       var cif = await window.cifrarMensajeE2EE(texto, clavePub);
-      // Serializar en los campos string individuales esperados por la DB
       mensajeCifradoString = cif.ciphertext || texto;
       nonceString = cif.iv || "";
       tipoMsg = 'e2ee';
     } catch (e) { console.error(e); }
   }
 
-  // ENLACE EXACTO CON COLUMNAS DE TU TABLA REAL: pin_remitente, pin_destinatario, mensaje_cifrado, nonce, enviado_en, leido, tipo_mensaje
   var mensajeDB = {
     pin_remitente: miPIN,
     pin_destinatario: contactoActual,
