@@ -28,7 +28,7 @@ function conectarCanalRealtime() {
 
   canalRealtime
     .on('broadcast', { event: 'nuevo-mensaje' }, function(response) {
-      if (response.payload && response.payload.pin_destinatario === miPIN) {
+      if (response.payload && response.payload.receptor_pin === miPIN) {
         if (typeof window.procesarMensajeEntrante === 'function') {
           window.procesarMensajeEntrante(response.payload);
         }
@@ -66,7 +66,7 @@ var SupabaseMensajes = {
   enviarMensajePayload: async function(mensajeObj) {
     if (!clienteSupabase) inicializarSupabase();
     
-    // Guardar en base de datos cifrado
+    // Guardar en base de datos usando el formato exacto de tu esquema
     var { data, error } = await clienteSupabase
       .from('mensajes')
       .insert([mensajeObj])
@@ -74,7 +74,7 @@ var SupabaseMensajes = {
       
     if (error) throw error;
 
-    // Emitir ráfaga realtime paralela instantánea
+    // Emitir broadcast en tiempo real instantáneo
     if (canalRealtime) {
       canalRealtime.send({
         type: 'broadcast',
@@ -87,11 +87,13 @@ var SupabaseMensajes = {
 
   descargarHistorial: async function(miPin, contactoPin) {
     if (!clienteSupabase) inicializarSupabase();
+    
+    // CORREGIDO: Consulta relacional filtrando exactamente por emisor_pin y receptor_pin
     var { data, error } = await clienteSupabase
       .from('mensajes')
       .select('*')
-      .or('and(pin_remitente.eq.' + miPin + ',pin_destinatario.eq.' + contactoPin + '),and(pin_remitente.eq.' + contactoPin + ',pin_destinatario.eq.' + miPin + ')')
-      .order('creado_en', { ascending: true });
+      .or('and(emisor_pin.eq.' + miPin + ',receptor_pin.eq.' + contactoPin + '),and(emisor_pin.eq.' + contactoPin + ',receptor_pin.eq.' + miPin + ')')
+      .order('timestamp', { ascending: true });
 
     if (error) throw error;
     return data;
