@@ -1,6 +1,7 @@
 /**
  * js/supabase-client.js
- * Conexión, inicialización y gestión de canales Realtime/Storage con Supabase.
+ * Conexión, inicialización y gestión de canales Realtime con Supabase.
+ * Alineado al 100% con 'mensajes_rows.sql' y 'usuarios_rows.sql'.
  */
 
 var clienteSupabase = null;
@@ -14,7 +15,7 @@ function inicializarSupabase() {
   }
   
   clienteSupabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-  console.log('📡 Cliente Supabase correctamente inicializado.');
+  console.log('📡 Cliente Supabase sincronizado con el esquema de producción.');
   conectarCanalRealtime();
 }
 
@@ -28,7 +29,7 @@ function conectarCanalRealtime() {
 
   canalRealtime
     .on('broadcast', { event: 'nuevo-mensaje' }, function(response) {
-      if (response.payload && response.payload.receptor_pin === miPIN) {
+      if (response.payload && response.payload.pin_destinatario === miPIN) {
         if (typeof window.procesarMensajeEntrante === 'function') {
           window.procesarMensajeEntrante(response.payload);
         }
@@ -57,7 +58,7 @@ function conectarCanalRealtime() {
     })
     .subscribe(function(status) {
       if (status === 'SUBSCRIBED') {
-        console.log('✅ Canal Realtime Kerix suscrito de forma estable.');
+        console.log('✅ Canal Realtime Kerix en línea.');
       }
     });
 }
@@ -66,15 +67,16 @@ var SupabaseMensajes = {
   enviarMensajePayload: async function(mensajeObj) {
     if (!clienteSupabase) inicializarSupabase();
     
-    // Guardar en base de datos usando el formato exacto de tu esquema
     var { data, error } = await clienteSupabase
       .from('mensajes')
       .insert([mensajeObj])
       .select();
       
-    if (error) throw error;
+    if (error) {
+      console.error('❌ Supabase rechazó la fila. Verifica políticas RLS:', error.message);
+      throw error;
+    }
 
-    // Emitir broadcast en tiempo real instantáneo
     if (canalRealtime) {
       canalRealtime.send({
         type: 'broadcast',
@@ -88,12 +90,11 @@ var SupabaseMensajes = {
   descargarHistorial: async function(miPin, contactoPin) {
     if (!clienteSupabase) inicializarSupabase();
     
-    // CORREGIDO: Consulta relacional filtrando exactamente por emisor_pin y receptor_pin
     var { data, error } = await clienteSupabase
       .from('mensajes')
       .select('*')
-      .or('and(emisor_pin.eq.' + miPin + ',receptor_pin.eq.' + contactoPin + '),and(emisor_pin.eq.' + contactoPin + ',receptor_pin.eq.' + miPin + ')')
-      .order('timestamp', { ascending: true });
+      .or('and(pin_remitente.eq.' + miPin + ',pin_destinatario.eq.' + contactoPin + '),and(pin_remitente.eq.' + contactoPin + ',pin_destinatario.eq.' + miPin + ')')
+      .order('enviado_en', { ascending: true });
 
     if (error) throw error;
     return data;
