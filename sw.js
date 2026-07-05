@@ -1,78 +1,80 @@
 /**
- * sw.js
- * Service Worker oficial para Kerix que intercepta peticiones locales
- * y garantiza la resiliencia offline de los recursos estáticos.
+ * sw.js - Service Worker robusto para KERIX_SECURE
  */
 
-const CACHE_NAME = 'kerix-v2-cache';
-const ASSETS = [
-  '/',
-  '/index.html',
-  '/css/styles.css',
-  '/js/supabase-client.js',
-  '/js/webrtc.js',
-  '/js/app.js',
-  '/manifest.json'
+var CACHE_NAME = 'kerix-secure-v2';
+var ASSETS = [
+  './',
+  './index.html',
+  './css/styles.css',
+  './manifest.json',
+  './icon.png',
+  './badge.png',
+  './js/app.js',
+  './js/crypto.js',
+  './js/security.js',
+  './js/supabase-client.js',
+  './js/notifications.js',
+  './js/webrtc.js',
+  './js/event-listeners.js'
 ];
 
-// Instalar Service Worker y Almacenar Assets de forma preventiva
-self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      console.log('SW: Inicializando almacenamiento estático...');
-      return cache.addAll(ASSETS);
+// Instalación con tolerancia a fallos individuales de archivos
+self.addEventListener('install', function(e) {
+  console.log('sw: Instalando service worker y asegurando entorno...');
+  e.waitUntil(
+    caches.open(CACHE_NAME).then(function(cache) {
+      // Usamos promesas individuales para que si un archivo da 404, no rompa la instalación
+      return Promise.all(
+        ASSETS.map(function(url) {
+          return cache.add(url).catch(function(err) {
+            console.warn('sw: No se pudo pre-cargar en caché el archivo de la ruta: ' + url, err);
+          });
+        })
+      );
+    }).then(function() {
+      return self.skipWaiting();
     })
   );
-  self.skipWaiting();
 });
 
-// Limpieza de caches antiguos al activar
-self.addEventListener('activate', (event) => {
-  event.waitUntil(
-    caches.keys().then((keys) => {
+// Activación y purga de cachés obsoletos
+self.addEventListener('activate', function(e) {
+  e.waitUntil(
+    caches.keys().then(function(keys) {
       return Promise.all(
-        keys.map((key) => {
-          if (key !== CACHE_NAME) {
-            console.log('SW: Eliminando caché obsoleto:', key);
-            return caches.delete(key);
+        keys.map(function(k) {
+          if (k !== CACHE_NAME) {
+            console.log('sw: Eliminando caché obsoleto:', k);
+            return caches.delete(k);
           }
         })
       );
+    }).then(function() {
+      return self.clients.claim();
     })
   );
-  self.clients.claim();
 });
 
-// Interceptar peticiones y servir desde caché o red
-self.addEventListener('fetch', (event) => {
-  // Evitar interceptar solicitudes de Supabase o CDNs dinámicos para escritura directa
-  if (event.request.url.includes('supabase.co') || event.request.method !== 'GET') {
+// Estrategia: Network First, Fallback to Cache
+self.addEventListener('fetch', function(e) {
+  // Evitar interceptar llamadas externas a Supabase o WebSockets
+  if (e.request.url.includes('supabase.co') || e.request.url.includes('websocket')) {
     return;
   }
-
-  event.respondWith(
-    caches.match(event.request).then((cachedResponse) => {
-      if (cachedResponse) {
-        return cachedResponse;
+  
+  e.respondWith(
+    fetch(e.request).then(function(res) {
+      if (!res || res.status !== 200 || res.type !== 'basic') {
+        return res;
       }
-      return fetch(event.request).then((networkResponse) => {
-        if (!networkResponse || networkResponse.status !== 200 || networkResponse.type !== 'basic') {
-          return networkResponse;
-        }
-        
-        // Clonar la respuesta y guardarla en caché si corresponde
-        const responseToCache = networkResponse.clone();
-        caches.open(CACHE_NAME).then((cache) => {
-          cache.put(event.request, responseToCache);
-        });
-
-        return networkResponse;
-      }).catch(() => {
-        // Fallback si no hay conexión y no está en caché
-        if (event.request.mode === 'navigate') {
-          return caches.match('/index.html');
-        }
+      var resClone = res.clone();
+      caches.open(CACHE_NAME).then(function(cache) {
+        cache.put(e.request, resClone);
       });
+      return res;
+    }).catch(function() {
+      return caches.match(e.request);
     })
   );
 });
