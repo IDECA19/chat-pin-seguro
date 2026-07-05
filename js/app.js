@@ -219,16 +219,34 @@ function renderizarContactos() {
       var obj = JSON.parse(localStorage.getItem(k));
       var div = document.createElement('div');
       div.className = 'chat-item';
+      div.style.position = 'relative';
       
-      // CORREGIDO: El botón ahora usa un estilo en línea flotante minimalista para no encimarse
+      // SOLUCIÓN VISUAL: Estructura limpia y compacta. Se añade botón para cambiar identificación (✏️) y eliminar (✕) alineados correctamente.
       div.innerHTML = 
         '<div class="chat-avatar" style="background:#075e54;">' + (obj.alias ? obj.alias.charAt(0).toUpperCase() : obj.pin.charAt(0)) + '</div>' +
-        '<div class="chat-info">' +
-          '<div class="chat-nombre">' + (obj.alias || "Sin Identificación") + '</div>' +
-          '<div class="chat-ultimo">PIN: ' + obj.pin + '</div>' +
+        '<div class="chat-info" style="flex: 1; padding-right: 70px;">' +
+          '<div class="chat-nombre">' + (obj.alias || obj.pin) + '</div>' +
+          '<div class="chat-ultimo" style="font-family: monospace; color:#8696a0;">PIN: ' + obj.pin + '</div>' +
         '</div>' +
-        '<button style="background:none; border:none; color:#ef4444; font-size:18px; cursor:pointer; margin-left:auto; padding:0 10px;" id="del_'+obj.pin+'">✕</button>';
+        '<div style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); display: flex; gap: 8px;">' +
+          '<button style="background:none; border:none; color:#00a884; font-size:16px; cursor:pointer; padding: 5px;" id="edit_'+obj.pin+'" title="Asignar Nombre">✏️</button>' +
+          '<button style="background:none; border:none; color:#ef4444; font-size:18px; cursor:pointer; padding: 5px;" id="del_'+obj.pin+'" title="Eliminar Contacto">✕</button>' +
+        '</div>';
       
+      // Lógica para asignar o cambiar identificación a un contacto guardado
+      div.querySelector('#edit_' + obj.pin).addEventListener('click', (function(p, currentAlias) {
+        return async function(e) {
+          e.stopPropagation();
+          var nuevoAlias = await customPrompt('👤 Asignar Identificación', 'Escribe el nombre o alias para el contacto (' + p + '):', currentAlias);
+          if (nuevoAlias !== null) {
+            guardarContactoLocal(p, nuevoAlias.trim());
+            renderizarContactos();
+            renderizarListaChats();
+          }
+        };
+      })(obj.pin, obj.alias || ""));
+
+      // Lógica para eliminar contacto
       div.querySelector('#del_' + obj.pin).addEventListener('click', (function(p) {
         return async function(e) {
           e.stopPropagation();
@@ -262,7 +280,7 @@ function guardarContactoLocal(pin, alias) {
   localStorage.setItem('contacto_' + pin, JSON.stringify(obj));
 }
 
-// CORREGIDO: Permite asignar una identificación (Alias) en tiempo de ejecución
+// SOLUCIÓN: Permite asignar una identificación opcional al guardar un PIN por primera vez
 async function agregarContacto() {
   var inputPin = document.getElementById('nuevoContactoPin');
   if (!inputPin) return;
@@ -274,9 +292,9 @@ async function agregarContacto() {
   }
   if (pin === miPIN) { customAlert('No puedes agregarte a ti mismo.'); return; }
 
-  // Preguntar por la identificación de forma interactiva
-  var alias = await customPrompt('👤 Identificación de Contacto', 'Asigna un nombre o alias para guardar este PIN:', 'Ej: Mi Amigo Seguro');
-  if (alias === null) return; // Cancelado
+  // Preguntar interactivamente por la identificación al guardar
+  var alias = await customPrompt('👤 Nueva Identificación', 'Asigna un nombre o alias para guardar este PIN (Dejar vacío para usar el PIN como nombre):', 'Ej: Jean Franco');
+  if (alias === null) return; // Cancelado por el usuario
 
   guardarContactoLocal(pin, alias.trim());
   renderizarListaChats();
@@ -290,7 +308,6 @@ async function agregarContacto() {
 
   inputPin.value = '';
   cerrarModalAgregar();
-  await customAlert('✅ Contacto guardado con éxito.');
 }
 
 async function exportarConfiguracion() {
