@@ -29,7 +29,8 @@ function conectarCanalRealtime() {
 
   canalRealtime
     .on('broadcast', { event: 'nuevo-mensaje' }, function(response) {
-      if (response.payload && response.payload.pin_destinatario === miPIN) {
+      console.log('✉️ Evento broadcast de mensaje entrante:', response);
+      if (response.payload) {
         if (typeof window.procesarMensajeEntrante === 'function') {
           window.procesarMensajeEntrante(response.payload);
         }
@@ -58,7 +59,7 @@ function conectarCanalRealtime() {
     })
     .subscribe(function(status) {
       if (status === 'SUBSCRIBED') {
-        console.log('✅ Canal Realtime Kerix en línea.');
+        console.log('✅ Canal Realtime Kerix en línea y escuchando activamente.');
       }
     });
 }
