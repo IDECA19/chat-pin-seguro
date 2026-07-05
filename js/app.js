@@ -284,15 +284,9 @@ function agregarContacto() {
   cerrarModalAgregar();
 }
 
-// ============================================
-// MENU MENÚ DE AJUSTES: GENERAR BACKUP
-// ============================================
 async function exportarConfiguracion() {
-  var pass = await customPrompt('📦 Generar Backup Cifrado', 'Establece una contraseña para proteger tu archivo de respaldo (.kerix):', '', 'password');
-  if (!pass) {
-    await customAlert('El backup requiere una clave para proteger tus perfiles criptográficos.');
-    return;
-  }
+  var pass = await customPrompt('📦 Generar Backup Cifrado', 'Establece una contraseña para proteger tu archivo de respaldo (.json):', '', 'password');
+  if (!pass) return;
 
   var backupObj = { 
     miPIN: miPIN,
@@ -322,11 +316,11 @@ async function exportarConfiguracion() {
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
-  await customAlert('✅ Archivo de respaldo exportado correctamente.', '📦');
+  await customAlert('✅ Respaldo exportado correctamente.', '📦');
 }
 
 // ============================================
-// ENVÍO, RECEPCIÓN Y PERSISTENCIA DE MENSAJES E2EE
+// ENVÍO, RECEPCIÓN Y PERSISTENCIA REAL E2EE
 // ============================================
 function appendMessageToUI(pinRemitente, texto, enviado) {
   var zona = document.getElementById('zonaMensajes');
@@ -348,31 +342,35 @@ async function enviarMensaje() {
   localStorage.setItem('last_msg_' + contactoActual, texto);
 
   var clavePub = localStorage.getItem('clave_pub_' + contactoActual);
-  var payloadToStore = { plaintext: texto };
-  var tipo = 'texto';
+  var mensajeCifradoString = texto; 
+  var nonceString = "";
+  var tipoMsg = 'texto';
 
-  // Si existe clave pública del destinatario, ciframos E2EE
   if (clavePub && typeof window.cifrarMensajeE2EE === 'function') {
     try {
       var cif = await window.cifrarMensajeE2EE(texto, clavePub);
-      payloadToStore = cif;
-      tipo = 'texto';
-    } catch (e) { console.error('Fallo cifrando E2EE, usando plano:', e); }
+      // Serializar en los campos string individuales esperados por la DB
+      mensajeCifradoString = cif.ciphertext || texto;
+      nonceString = cif.iv || "";
+      tipoMsg = 'e2ee';
+    } catch (e) { console.error(e); }
   }
 
-  // CORREGIDO: Mapeo exacto con los nombres de columna de la Base de Datos de Supabase
+  // ENLACE EXACTO CON COLUMNAS DE TU TABLA REAL: pin_remitente, pin_destinatario, mensaje_cifrado, nonce, enviado_en, leido, tipo_mensaje
   var mensajeDB = {
-    emisor_pin: miPIN,
-    receptor_pin: contactoActual,
-    tipo: tipo,
-    contenido_cifrado: payloadToStore,
-    timestamp: new Date().toISOString()
+    pin_remitente: miPIN,
+    pin_destinatario: contactoActual,
+    mensaje_cifrado: mensajeCifradoString,
+    nonce: nonceString,
+    enviado_en: new Date().toISOString(),
+    leido: false,
+    tipo_mensaje: tipoMsg
   };
 
   if (typeof SupabaseMensajes !== 'undefined') {
     try { 
       await SupabaseMensajes.enviarMensajePayload(mensajeDB); 
-    } catch (e) { console.error('Error guardando en Supabase:', e); }
+    } catch (e) { console.error('Error enviando a Supabase:', e); }
   }
 
   appendMessageToUI(miPIN, texto, true);
@@ -381,20 +379,19 @@ async function enviarMensaje() {
 }
 
 async function procesarMensajeEntrante(payload) {
-  // CORREGIDO: Extraer campos usando el formato real de Supabase (emisor_pin / receptor_pin)
-  var de = payload.emisor_pin;
-  var para = payload.receptor_pin;
+  var de = payload.pin_remitente;
+  var para = payload.pin_destinatario;
   
   if (para !== miPIN) return;
 
-  var contenido = payload.contenido_cifrado;
-  var textoClaro = '[Mensaje Cifrado]';
+  var cipherText = payload.mensaje_cifrado;
+  var nonce = payload.nonce;
+  var textoClaro = cipherText;
 
-  if (contenido && contenido.plaintext) {
-    textoClaro = contenido.plaintext;
-  } else if (typeof window.descifrarMensajeE2EE === 'function') {
+  if (payload.tipo_mensaje === 'e2ee' && typeof window.descifrarMensajeE2EE === 'function') {
     try {
-      textoClaro = await window.descifrarMensajeE2EE(contenido, false);
+      var fullCif = { ciphertext: cipherText, iv: nonce };
+      textoClaro = await window.descifrarMensajeE2EE(fullCif, false);
     } catch (e) { textoClaro = '[No se pudo descifrar E2EE]'; }
   }
 
@@ -421,18 +418,16 @@ async function cargarHistorial(contactoPin) {
     
     for (var i = 0; i < mensajes.length; i++) {
       var m = mensajes[i];
-      var contenido = m.contenido_cifrado;
-      var soyRemitente = (m.emisor_pin === miPIN);
-      var textoFinal = '[Mensaje Cifrado]';
+      var soyRemitente = (m.pin_remitente === miPIN);
+      var textoFinal = m.mensaje_cifrado;
 
-      if (contenido && contenido.plaintext) {
-        textoFinal = contenido.plaintext;
-      } else if (typeof window.descifrarMensajeE2EE === 'function') {
+      if (m.tipo_mensaje === 'e2ee' && typeof window.descifrarMensajeE2EE === 'function') {
         try {
-          textoFinal = await window.descifrarMensajeE2EE(contenido, soyRemitente);
+          var fullCif = { ciphertext: m.mensaje_cifrado, iv: m.nonce };
+          textoFinal = await window.descifrarMensajeE2EE(fullCif, soyRemitente);
         } catch(e) { textoFinal = '[Error descifrado]'; }
       }
-      appendMessageToUI(m.emisor_pin, textoFinal, soyRemitente);
+      appendMessageToUI(m.pin_remitente, textoFinal, soyRemitente);
     }
   } catch(e) { console.error('Error cargando historial:', e); }
 }
