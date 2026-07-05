@@ -9,7 +9,6 @@ var DEBUG = false;
 
 var miPIN = '';
 var contactoActual = '';
-var canalRealtime = null;
 var archivoSeleccionado = null;
 var miClavePrivada = null;
 var miClavePublica = null;
@@ -399,7 +398,6 @@ async function enviarMensaje() {
   renderizarListaChats();
 }
 
-// CORREGIDO: Procesa e inyecta el mensaje directamente en pantalla y suma pendientes de forma reactiva
 async function procesarMensajeEntrante(payload) {
   var de = payload.pin_remitente;
   var para = payload.pin_destinatario;
@@ -417,21 +415,17 @@ async function procesarMensajeEntrante(payload) {
     } catch (e) { textoClaro = '[No se pudo descifrar E2EE]'; }
   }
 
-  // Persistir en caché el último preview del chat
   localStorage.setItem('last_msg_' + de, textoClaro);
 
-  // Si tienes la conversación abierta con esa persona en este momento, inyéctala
   if (contactoActual === de) {
     appendMessageToUI(de, textoClaro, false);
   } else {
-    // Si estás en otra pantalla, súmalo como mensaje pendiente de leer
     mensajesNoLeidos[de] = (mensajesNoLeidos[de] || 0) + 1;
     actualizarBadgeChats();
     if (typeof window.dispararNotificacionVisual === 'function') {
       window.dispararNotificacionVisual(de, textoClaro);
     }
   }
-  // Refrescar la barra de previsualizaciones laterales instantáneamente
   renderizarListaChats();
 }
 
@@ -504,10 +498,12 @@ async function copiarPIN() {
   } catch (e) { await customAlert('No se pudo copiar al portapapeles.'); }
 }
 
+// SOLUCIÓN: El WebSocket se levanta exactamente después de asegurar que la app calculó e inicializó el PIN del dispositivo.
 window.addEventListener('DOMContentLoaded', function() {
   generarPIN();
   cambiarTab('chats');
   if (typeof window.inicializarSupabase === 'function') window.inicializarSupabase();
+  if (typeof window.conectarCanalRealtime === 'function') window.conectarCanalRealtime();
 });
 
 // Exposición Global explícita
