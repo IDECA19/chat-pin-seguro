@@ -4,9 +4,9 @@
  */
 
 window.addEventListener('DOMContentLoaded', function() {
-  console.log('🎯 Vinculando listeners centralizados del mapa de menús Kerix...');
+  console.log('🎯 Vinculando todos los listeners del mapa de menús Kerix...');
 
-  // --- HEADER PRINCIPAL & MENÚ LATERAL ---
+  // --- MENU HEADER Y SOBREPOSICIONES ---
   var btnAbrirMenu = document.getElementById('btnAbrirMenu');
   if (btnAbrirMenu) {
     btnAbrirMenu.addEventListener('click', function() {
@@ -21,7 +21,7 @@ window.addEventListener('DOMContentLoaded', function() {
     });
   }
 
-  // --- NAVEGACIÓN PRINCIPAL (TABS) ---
+  // --- NAVEGACIÓN DE VISTAS ---
   var tabChats = document.getElementById('tabChats');
   if (tabChats) {
     tabChats.addEventListener('click', function() {
@@ -43,7 +43,7 @@ window.addEventListener('DOMContentLoaded', function() {
     });
   }
 
-  // --- CONTROL DE SALA DE CHAT INDIVIDUAL ---
+  // --- CONTROLES DE LA SALA DE CHAT ---
   var btnCerrarChat = document.getElementById('btnCerrarChat');
   if (btnCerrarChat) {
     btnCerrarChat.addEventListener('click', function() {
@@ -68,7 +68,7 @@ window.addEventListener('DOMContentLoaded', function() {
     });
   }
 
-  // --- MODAL AGREGAR CONTACTO (+) ---
+  // --- MODAL AGREGAR CONTACTOS ---
   var fabAgregar = document.getElementById('fabAgregar');
   if (fabAgregar) {
     fabAgregar.addEventListener('click', function() {
@@ -90,7 +90,7 @@ window.addEventListener('DOMContentLoaded', function() {
     });
   }
 
-  // --- LLAMADAS Y VIDEOLLAMADAS E2EE VIA WEBRTC P2P ---
+  // --- LLAMADAS Y VIDEOLLAMADAS E2EE ---
   var btnLlamadaVoz = document.getElementById('btnLlamadaVoz');
   if (btnLlamadaVoz) {
     btnLlamadaVoz.addEventListener('click', function() {
@@ -99,7 +99,7 @@ window.addEventListener('DOMContentLoaded', function() {
         return;
       }
       if (typeof window.iniciarLlamadaWebRTC === 'function') {
-        window.iniciarLlamadaWebRTC(contactoActual, false); // Solo Audio
+        window.iniciarLlamadaWebRTC(contactoActual, false);
       }
     });
   }
@@ -112,12 +112,12 @@ window.addEventListener('DOMContentLoaded', function() {
         return;
       }
       if (typeof window.iniciarLlamadaWebRTC === 'function') {
-        window.iniciarLlamadaWebRTC(contactoActual, true); // Video + Audio
+        window.iniciarLlamadaWebRTC(contactoActual, true);
       }
     });
   }
 
-  // --- ELEMENTOS DEL PANEL DE AJUSTES LATERAL ---
+  // --- ENLACES DEL PANEL LATERAL DE AJUSTES ---
   var btnCopiarPIN = document.getElementById('btnCopiarPIN');
   if (btnCopiarPIN) {
     btnCopiarPIN.addEventListener('click', function() {
@@ -132,7 +132,7 @@ window.addEventListener('DOMContentLoaded', function() {
     });
   }
 
-  // Mapear opciones de texto en la lista del menú lateral
+  // Búsqueda de ítems genéricos del menú
   var menuItems = document.querySelectorAll('.menu-item');
   menuItems.forEach(function(item) {
     if (item.classList.contains('danger') || item.innerText.includes('Reset')) {
@@ -145,9 +145,18 @@ window.addEventListener('DOMContentLoaded', function() {
         if (typeof window.cambiarPIN === 'function') window.cambiarPIN();
       });
     }
+    if (item.innerText.includes('Notificaciones')) {
+      item.addEventListener('click', function() {
+        if (typeof window.solicitarPermisoNotificaciones === 'function') {
+          window.solicitarPermisoNotificaciones().then(function() {
+            window.customAlert('🔔 Preferencias de Notificaciones de sistema sincronizadas.');
+          });
+        }
+      });
+    }
   });
 
-  // --- PANTALLA DE LOGUEO/BLOQUEO ---
+  // --- BOTONES DE DESBLOQUEO DE PANTALLA ---
   var btnDesbloquear = document.getElementById('btnDesbloquear');
   if (btnDesbloquear) {
     btnDesbloquear.addEventListener('click', function() {
