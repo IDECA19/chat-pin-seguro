@@ -23,7 +23,6 @@ async function iniciarLlamadaWebRTC(pinDestinatario, conVideo) {
     console.log('📞 Preparando llamada P2P hacia: ' + pinDestinatario);
     llamadaConVideo = conVideo;
 
-    // 1. Mostrar pantalla de llamada activa
     var panelLlamada = document.getElementById('pantallaLlamada');
     if (panelLlamada) panelLlamada.style.display = 'flex';
     
@@ -32,7 +31,6 @@ async function iniciarLlamadaWebRTC(pinDestinatario, conVideo) {
       txtNombre.innerText = window.obtenerNombreContacto(pinDestinatario);
     }
 
-    // 2. Adquirir hardware multimedia local
     localStream = await navigator.mediaDevices.getUserMedia({
       audio: true,
       video: conVideo
@@ -44,7 +42,6 @@ async function iniciarLlamadaWebRTC(pinDestinatario, conVideo) {
       videoLocal.style.display = conVideo ? 'block' : 'none';
     }
 
-    // 3. Crear conexión P2P
     peerConnection = new RTCPeerConnection(rtcConfig);
 
     localStream.getTracks().forEach(function(track) {
@@ -68,7 +65,6 @@ async function iniciarLlamadaWebRTC(pinDestinatario, conVideo) {
       }
     };
 
-    // 4. Crear Oferta SDP y enviarla por Realtime Broadcast sin persistencia
     var offer = await peerConnection.createOffer();
     await peerConnection.setLocalDescription(offer);
 
@@ -94,7 +90,6 @@ async function procesarOfertaLlamada(payload) {
   llamanteActualPin = payload.de;
   llamadaConVideo = payload.video;
 
-  // Mostrar modal de llamada entrante en UI
   var modal = document.getElementById('modalLlamadaEntrante');
   var txtNombre = document.getElementById('llamadaEntranteNombre');
   var txtTipo = document.getElementById('llamadaEntranteTipo');
@@ -109,7 +104,6 @@ async function procesarOfertaLlamada(payload) {
     modal.classList.add('active');
   }
 
-  // Guardar la sesión SDP remota inicialmente
   peerConnection = new RTCPeerConnection(rtcConfig);
   await peerConnection.setRemoteDescription(new RTCSessionDescription(payload.sdp));
 }
@@ -119,7 +113,6 @@ async function aceptarLlamadaEntrante() {
   if (modal) modal.classList.remove('active');
 
   try {
-    // 1. Mostrar pantalla activa de llamada
     var panelLlamada = document.getElementById('pantallaLlamada');
     if (panelLlamada) panelLlamada.style.display = 'flex';
     var txtNombre = document.getElementById('llamadaContactoNombre');
@@ -127,7 +120,6 @@ async function aceptarLlamadaEntrante() {
       txtNombre.innerText = window.obtenerNombreContacto(llamanteActualPin);
     }
 
-    // 2. Capturar Hardware local del receptor
     localStream = await navigator.mediaDevices.getUserMedia({
       audio: true,
       video: llamadaConVideo
@@ -139,7 +131,6 @@ async function aceptarLlamadaEntrante() {
       videoLocal.style.display = llamadaConVideo ? 'block' : 'none';
     }
 
-    // 3. Vincular flujos locales
     localStream.getTracks().forEach(function(track) {
       peerConnection.addTrack(track, localStream);
     });
@@ -161,7 +152,6 @@ async function aceptarLlamadaEntrante() {
       }
     };
 
-    // 4. Crear Respuesta SDP y enviarla de regreso
     var answer = await peerConnection.createAnswer();
     await peerConnection.setLocalDescription(answer);
 
@@ -195,14 +185,11 @@ async function procesarIceCandidate(payload) {
   if (peerConnection && payload.candidate) {
     try {
       await peerConnection.addIceCandidate(new RTCIceCandidate(payload.candidate));
-    } catch (e) {
-      console.warn('Error agregando candidato ICE:', e);
-    }
+    } catch (e) { console.warn(e); }
   }
 }
 
 function colgarLlamada() {
-  console.log('🔇 Terminando comunicación WebRTC.');
   if (localStream) {
     localStream.getTracks().forEach(function(track) { track.stop(); });
     localStream = null;
@@ -218,9 +205,6 @@ function colgarLlamada() {
   if (modal) modal.classList.remove('active');
 }
 
-// ============================================
-// VINCULACIÓN DIRECTA DE ACCIONES MULTIMEDIA
-// ============================================
 window.addEventListener('DOMContentLoaded', function() {
   var btnAceptar = document.getElementById('btnAceptarLlamada');
   if (btnAceptar) btnAceptar.addEventListener('click', aceptarLlamadaEntrante);
@@ -232,11 +216,8 @@ window.addEventListener('DOMContentLoaded', function() {
   if (btnColgar) btnColgar.addEventListener('click', colgarLlamada);
 });
 
-// Exposición Global
 window.iniciarLlamadaWebRTC = iniciarLlamadaWebRTC;
 window.procesarOfertaLlamada = procesarOfertaLlamada;
 window.procesarRespuestaLlamada = procesarRespuestaLlamada;
 window.procesarIceCandidate = procesarIceCandidate;
 window.colgarLlamada = colgarLlamada;
-
-console.log('📡 Módulo WebRTC (webrtc.js) completamente conectado via P2P Realtime.');
