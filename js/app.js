@@ -220,24 +220,24 @@ function renderizarContactos() {
       var div = document.createElement('div');
       div.className = 'chat-item';
       div.style.position = 'relative';
+      div.style.display = 'flex';
+      div.style.alignItems = 'center';
       
-      // SOLUCIÓN VISUAL: Estructura limpia y compacta. Se añade botón para cambiar identificación (✏️) y eliminar (✕) alineados correctamente.
       div.innerHTML = 
-        '<div class="chat-avatar" style="background:#075e54;">' + (obj.alias ? obj.alias.charAt(0).toUpperCase() : obj.pin.charAt(0)) + '</div>' +
-        '<div class="chat-info" style="flex: 1; padding-right: 70px;">' +
-          '<div class="chat-nombre">' + (obj.alias || obj.pin) + '</div>' +
-          '<div class="chat-ultimo" style="font-family: monospace; color:#8696a0;">PIN: ' + obj.pin + '</div>' +
+        '<div class="chat-avatar" style="background:#075e54; flex-shrink: 0;">' + (obj.alias ? obj.alias.charAt(0).toUpperCase() : obj.pin.charAt(0)) + '</div>' +
+        '<div class="chat-info" style="flex-grow: 1; margin-left: 10px; padding-right: 80px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;">' +
+          '<div class="chat-nombre" style="font-weight: bold;">' + (obj.alias || obj.pin) + '</div>' +
+          '<div class="chat-ultimo" style="font-family: monospace; color:#8696a0; font-size: 12px;">PIN: ' + obj.pin + '</div>' +
         '</div>' +
-        '<div style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); display: flex; gap: 8px;">' +
-          '<button style="background:none; border:none; color:#00a884; font-size:16px; cursor:pointer; padding: 5px;" id="edit_'+obj.pin+'" title="Asignar Nombre">✏️</button>' +
-          '<button style="background:none; border:none; color:#ef4444; font-size:18px; cursor:pointer; padding: 5px;" id="del_'+obj.pin+'" title="Eliminar Contacto">✕</button>' +
+        '<div style="position: absolute; right: 12px; display: flex; gap: 10px; align-items: center; justify-content: center;">' +
+          '<button style="background:none; border:none; color:#00a884; font-size:16px; cursor:pointer; padding: 4px;" id="edit_'+obj.pin+'" title="Asignar Nombre o Identificación">✏️</button>' +
+          '<button style="background:none; border:none; color:#ef4444; font-size:18px; cursor:pointer; padding: 4px;" id="del_'+obj.pin+'" title="Eliminar Contacto">✕</button>' +
         '</div>';
       
-      // Lógica para asignar o cambiar identificación a un contacto guardado
       div.querySelector('#edit_' + obj.pin).addEventListener('click', (function(p, currentAlias) {
         return async function(e) {
           e.stopPropagation();
-          var nuevoAlias = await customPrompt('👤 Asignar Identificación', 'Escribe el nombre o alias para el contacto (' + p + '):', currentAlias);
+          var nuevoAlias = await customPrompt('👤 Identificación de Contacto', 'Asigna o cambia el nombre para el contacto (' + p + '):', currentAlias);
           if (nuevoAlias !== null) {
             guardarContactoLocal(p, nuevoAlias.trim());
             renderizarContactos();
@@ -246,7 +246,6 @@ function renderizarContactos() {
         };
       })(obj.pin, obj.alias || ""));
 
-      // Lógica para eliminar contacto
       div.querySelector('#del_' + obj.pin).addEventListener('click', (function(p) {
         return async function(e) {
           e.stopPropagation();
@@ -280,7 +279,6 @@ function guardarContactoLocal(pin, alias) {
   localStorage.setItem('contacto_' + pin, JSON.stringify(obj));
 }
 
-// SOLUCIÓN: Permite asignar una identificación opcional al guardar un PIN por primera vez
 async function agregarContacto() {
   var inputPin = document.getElementById('nuevoContactoPin');
   if (!inputPin) return;
@@ -292,9 +290,8 @@ async function agregarContacto() {
   }
   if (pin === miPIN) { customAlert('No puedes agregarte a ti mismo.'); return; }
 
-  // Preguntar interactivamente por la identificación al guardar
-  var alias = await customPrompt('👤 Nueva Identificación', 'Asigna un nombre o alias para guardar este PIN (Dejar vacío para usar el PIN como nombre):', 'Ej: Jean Franco');
-  if (alias === null) return; // Cancelado por el usuario
+  var alias = await customPrompt('👤 Nueva Identificación', 'Asigna un nombre o alias para guardar este PIN (Si lo dejas vacío se mostrará solo el PIN):', '');
+  if (alias === null) return; 
 
   guardarContactoLocal(pin, alias.trim());
   renderizarListaChats();
@@ -346,7 +343,7 @@ async function exportarConfiguracion() {
 }
 
 // ============================================
-// ENVÍO, RECEPCIÓN Y PERSISTENCIA REAL E2EE
+// ENVÍO, RECEPCIÓN Y RENDERING EN TIEMPO REAL
 // ============================================
 function appendMessageToUI(pinRemitente, texto, enviado) {
   var zona = document.getElementById('zonaMensajes');
@@ -402,6 +399,7 @@ async function enviarMensaje() {
   renderizarListaChats();
 }
 
+// CORREGIDO: Procesa e inyecta el mensaje directamente en pantalla y suma pendientes de forma reactiva
 async function procesarMensajeEntrante(payload) {
   var de = payload.pin_remitente;
   var para = payload.pin_destinatario;
@@ -419,17 +417,21 @@ async function procesarMensajeEntrante(payload) {
     } catch (e) { textoClaro = '[No se pudo descifrar E2EE]'; }
   }
 
+  // Persistir en caché el último preview del chat
   localStorage.setItem('last_msg_' + de, textoClaro);
 
+  // Si tienes la conversación abierta con esa persona en este momento, inyéctala
   if (contactoActual === de) {
     appendMessageToUI(de, textoClaro, false);
   } else {
+    // Si estás en otra pantalla, súmalo como mensaje pendiente de leer
     mensajesNoLeidos[de] = (mensajesNoLeidos[de] || 0) + 1;
     actualizarBadgeChats();
     if (typeof window.dispararNotificacionVisual === 'function') {
       window.dispararNotificacionVisual(de, textoClaro);
     }
   }
+  // Refrescar la barra de previsualizaciones laterales instantáneamente
   renderizarListaChats();
 }
 
