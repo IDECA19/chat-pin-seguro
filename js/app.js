@@ -9,15 +9,12 @@ var DEBUG = false;
 
 var miPIN = '';
 var contactoActual = '';
+var canalRealtime = null;
 var archivoSeleccionado = null;
 var miClavePrivada = null;
 var miClavePublica = null;
 var mensajesNoLeidos = {};
-var modoPrivado = false;
-var modoSeleccion = false;
-var mensajesSeleccionados = [];
 var tabActual = 'chats';
-var cacheArchivosDescifrados = {};
 
 var prefs = {
   autoEliminarMin: 0,
@@ -142,7 +139,7 @@ function cerrarChat() {
 }
 
 // ============================================
-// NAVEGACIÓN DE VISTAS (TABS)
+// NAVEGACIÓN DE VISTAS (TABS PRINCIPALES)
 // ============================================
 function cambiarTab(tab) {
   tabActual = tab;
@@ -296,49 +293,8 @@ async function agregarContacto() {
   renderizarListaChats();
   renderizarContactos();
 
-  if (typeof SupabaseUsuarios !== 'undefined') {
-    SupabaseUsuarios.obtenerUsuario(pin).then(function(u){
-      if (u && u.clave_publica) localStorage.setItem('clave_pub_' + pin, u.clave_publica);
-    }).catch(function(e){ console.warn(e); });
-  }
-
   inputPin.value = '';
   cerrarModalAgregar();
-}
-
-async function exportarConfiguracion() {
-  var pass = await customPrompt('📦 Generar Backup Cifrado', 'Establece una contraseña para proteger tu archivo de respaldo (.json):', '', 'password');
-  if (!pass) return;
-
-  var backupObj = { 
-    miPIN: miPIN,
-    contactos: {}, 
-    historialPreviews: {},
-    prefs: prefs, 
-    prefsNotificaciones: prefsNotificaciones 
-  };
-
-  for (var i = 0; i < localStorage.length; i++) {
-    var k = localStorage.key(i);
-    if (k) {
-      if (k.startsWith('contacto_') || k.startsWith('clave_privada_') || k.startsWith('pin_hash_') || k.startsWith('codigo_recuperacion_hash_')) {
-        backupObj.contactos[k] = localStorage.getItem(k);
-      }
-      if (k.startsWith('last_msg_')) {
-        backupObj.historialPreviews[k] = localStorage.getItem(k);
-      }
-    }
-  }
-
-  var blob = new Blob([JSON.stringify(backupObj, null, 2)], { type: 'application/json' });
-  var url = URL.createObjectURL(blob);
-  var a = document.createElement('a');
-  a.href = url;
-  a.download = 'backup_kerix_' + miPIN + '.json';
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  await customAlert('✅ Respaldo exportado correctamente.', '📦');
 }
 
 // ============================================
@@ -398,6 +354,7 @@ async function enviarMensaje() {
   renderizarListaChats();
 }
 
+// SOLUCIÓN DEFINITIVA: Inyecta el mensaje de inmediato sin requerir recargar la página
 async function procesarMensajeEntrante(payload) {
   var de = payload.pin_remitente;
   var para = payload.pin_destinatario;
@@ -498,7 +455,7 @@ async function copiarPIN() {
   } catch (e) { await customAlert('No se pudo copiar al portapapeles.'); }
 }
 
-// SOLUCIÓN: El WebSocket se levanta exactamente después de asegurar que la app calculó e inicializó el PIN del dispositivo.
+// Inicialización de módulos respetando la asincronía del PIN
 window.addEventListener('DOMContentLoaded', function() {
   generarPIN();
   cambiarTab('chats');
@@ -521,7 +478,6 @@ window.customConfirm = customConfirm;
 window.customPrompt = customPrompt;
 window.generarPIN = generarPIN;
 window.copiarPIN = copiarPIN;
-window.exportarConfiguracion = exportarConfiguracion;
 window.renderizarListaChats = renderizarListaChats;
 window.renderizarContactos = renderizarContactos;
 window.procesarMensajeEntrante = procesarMensajeEntrante;
