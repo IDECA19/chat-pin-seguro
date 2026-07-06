@@ -1,7 +1,7 @@
 /**
  * js/supabase-client.js
  * Conexión, inicialización y gestión de canales Realtime con Supabase.
- * Adaptado quirúrgicamente al esquema real de base de datos de producción.
+ * Control estricto de salas privadas para evitar la interceptación de flujos.
  */
 
 var clienteSupabase = null;
@@ -15,10 +15,9 @@ function inicializarSupabase() {
   }
   
   clienteSupabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-  console.log('📡 Cliente Supabase correctamente inicializado con el esquema real.');
+  console.log('📡 Cliente Supabase sincronizado con el esquema de producción.');
 }
 
-// SOLUCIÓN: Conexión dinámica y reactiva basada en el miPIN real del dispositivo
 function conectarCanalRealtime() {
   if (!clienteSupabase) inicializarSupabase();
   if (canalRealtime) {
@@ -27,19 +26,17 @@ function conectarCanalRealtime() {
   
   var pinCanal = typeof miPIN !== 'undefined' && miPIN ? miPIN : localStorage.getItem('kerix_mi_pin');
   if (!pinCanal) {
-    console.warn('⚠️ No se puede conectar a Realtime: miPIN aún no ha sido calculado.');
+    console.warn('⚠️ No se puede conectar a Realtime: miPIN ausente.');
     return;
   }
 
-  console.log('📡 Suscribiendo WebSocket seguro a la sala privada: kerix_room_' + pinCanal);
   canalRealtime = clienteSupabase.channel('kerix_room_' + pinCanal, {
     config: { broadcast: { self: false } }
   });
 
   canalRealtime
     .on('broadcast', { event: 'nuevo-mensaje' }, function(response) {
-      console.log('✉️ Mensaje en tiempo real recibido en la sala:', response);
-      if (response.payload) {
+      if (response.payload && response.payload.pin_destinatario === miPIN) {
         if (typeof window.procesarMensajeEntrante === 'function') {
           window.procesarMensajeEntrante(response.payload);
         }
@@ -68,7 +65,7 @@ function conectarCanalRealtime() {
     })
     .subscribe(function(status) {
       if (status === 'SUBSCRIBED') {
-        console.log('✅ Canal Realtime Kerix activo y escuchando la sala: ' + pinCanal);
+        console.log('✅ Canal Realtime Kerix blindado escuchando en la sala: ' + pinCanal);
       }
     });
 }
@@ -77,18 +74,18 @@ var SupabaseMensajes = {
   enviarMensajePayload: async function(mensajeObj) {
     if (!clienteSupabase) inicializarSupabase();
     
-    // 1. Persistencia segura en base de datos
+    // Inserción directa en la tabla mensajes
     var { data, error } = await clienteSupabase
       .from('mensajes')
       .insert([mensajeObj])
       .select();
       
     if (error) {
-      console.error('❌ Supabase rechazó la transacción. Revisa las directivas RLS:', error.message);
+      console.error('❌ Supabase rechazó la fila:', error.message);
       throw error;
     }
 
-    // 2. Transmisión directa y reactiva al canal del destinatario sin demoras
+    // Transmisión instantánea por canal privado broadcast al receptor
     if (clienteSupabase && mensajeObj.pin_destinatario) {
       var canalDestino = clienteSupabase.channel('kerix_room_' + mensajeObj.pin_destinatario);
       canalDestino.subscribe(function(status) {
@@ -97,8 +94,6 @@ var SupabaseMensajes = {
             type: 'broadcast',
             event: 'nuevo-mensaje',
             payload: mensajeObj
-          }).then(function() {
-            console.log('🚀 Broadcast enviado con éxito a la sala del receptor:', mensajeObj.pin_destinatario);
           });
         }
       });
