@@ -68,11 +68,11 @@ function customConfirm(texto, icono) {
     btnCancel.parentNode.replaceChild(newCancel, btnCancel);
     
     newOk.addEventListener('click', function() {
-      modal.classList.add('active');
+      modal.classList.remove('active');
       resolve(true);
     });
     newCancel.addEventListener('click', function() {
-      modal.classList.add('active');
+      modal.classList.remove('active');
       resolve(false);
     });
   });
@@ -305,7 +305,7 @@ async function agregarContacto() {
   cerrarModalAgregar();
 }
 
-// CORREGIDO: Mapeo exacto basado en las columnas reales de la tabla 'usuarios'
+// CORREGIDO: Mapeo estricto basado al 100% en las columnas de tu esquema usuarios_rows.sql
 async function asegurarLlavesYRegistro() {
   var priv = localStorage.getItem("clave_privada_" + miPIN);
   var pub = localStorage.getItem("clave_pub_propia_" + miPIN);
@@ -346,7 +346,7 @@ async function asegurarLlavesYRegistro() {
     }
   }
 
-  // SOLUCIÓN AL ERROR 400: Se envían únicamente campos que existen de forma nativa en la tabla de Supabase
+  // SOLUCIÓN AL ERROR 400: Se remueve 'ultima_conexion'. Se envían únicamente campos nativos validados de la DB
   if (typeof clienteSupabase !== 'undefined' && clienteSupabase) {
     try {
       var { error } = await clienteSupabase.from('usuarios').upsert([{ 
