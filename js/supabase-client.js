@@ -1,7 +1,7 @@
 /**
  * js/supabase-client.js
  * Conexión, inicialización y gestión de canales Realtime con Supabase.
- * Control estricto de salas privadas para evitar la interceptación de flujos.
+ * Mapeo nativo adaptado al formato original del historial de producción.
  */
 
 var clienteSupabase = null;
@@ -42,27 +42,6 @@ function conectarCanalRealtime() {
         }
       }
     })
-    .on('broadcast', { event: 'llamada-oferta' }, function(response) {
-      if (response.payload && response.payload.para === miPIN) {
-        if (typeof window.procesarOfertaLlamada === 'function') {
-          window.procesarOfertaLlamada(response.payload);
-        }
-      }
-    })
-    .on('broadcast', { event: 'llamada-respuesta' }, function(response) {
-      if (response.payload && response.payload.para === miPIN) {
-        if (typeof window.procesarRespuestaLlamada === 'function') {
-          window.procesarRespuestaLlamada(response.payload);
-        }
-      }
-    })
-    .on('broadcast', { event: 'ice-candidate' }, function(response) {
-      if (response.payload && response.payload.para === miPIN) {
-        if (typeof window.procesarIceCandidate === 'function') {
-          window.procesarIceCandidate(response.payload);
-        }
-      }
-    })
     .subscribe(function(status) {
       if (status === 'SUBSCRIBED') {
         console.log('✅ Canal Realtime Kerix blindado escuchando en la sala: ' + pinCanal);
@@ -74,7 +53,6 @@ var SupabaseMensajes = {
   enviarMensajePayload: async function(mensajeObj) {
     if (!clienteSupabase) inicializarSupabase();
     
-    // Inserción directa en la tabla mensajes
     var { data, error } = await clienteSupabase
       .from('mensajes')
       .insert([mensajeObj])
@@ -85,7 +63,6 @@ var SupabaseMensajes = {
       throw error;
     }
 
-    // Transmisión instantánea por canal privado broadcast al receptor
     if (clienteSupabase && mensajeObj.pin_destinatario) {
       var canalDestino = clienteSupabase.channel('kerix_room_' + mensajeObj.pin_destinatario);
       canalDestino.subscribe(function(status) {
