@@ -1,6 +1,7 @@
 /**
  * js/app.js
  * Orquestador principal: UI, navegación, mensajes, contactos, inicialización e integraciones.
+ * Seguridad E2EE Blindada: Prohibición estricta de fugas de texto plano hacia Supabase.
  */
 
 var SUPABASE_URL = 'https://dksmoteiidjpymextrgj.supabase.co';
@@ -138,9 +139,6 @@ function cerrarChat() {
   if (panel) panel.classList.remove('active');
 }
 
-// ============================================
-// NAVEGACIÓN DE VISTAS (TABS PRINCIPALES)
-// ============================================
 function cambiarTab(tab) {
   tabActual = tab;
   document.querySelectorAll('.tab').forEach(function(el) {
@@ -286,13 +284,24 @@ async function agregarContacto() {
   }
   if (pin === miPIN) { customAlert('No puedes agregarte a ti mismo.'); return; }
 
-  var alias = await customPrompt('👤 Nueva Identificación', 'Asigna un nombre o alias para guardar este PIN (Si lo dejas vacío se mostrará solo el PIN):', '');
+  var alias = await customPrompt('👤 Nueva Identificación', 'Asigna un nombre o alias para guardar este PIN:', '');
   if (alias === null) return; 
 
   guardarContactoLocal(pin, alias.trim());
+
+  if (typeof SupabaseUsuarios !== 'undefined') {
+    try {
+      var u = await SupabaseUsuarios.obtenerUsuario(pin);
+      if (u && u.clave_publica) {
+        localStorage.setItem('clave_pub_' + pin, u.clave_publica);
+      } else {
+        console.warn('⚠️ El usuario no tiene llaves públicas en Supabase aún.');
+      }
+    } catch (e) { console.error('Error sincronizando llaves:', e); }
+  }
+
   renderizarListaChats();
   renderizarContactos();
-
   inputPin.value = '';
   cerrarModalAgregar();
 }
@@ -305,7 +314,8 @@ function appendMessageToUI(pinRemitente, texto, enviado) {
   if (!zona) return;
   var m = document.createElement('div');
   m.className = 'mensaje ' + (enviado ? 'mensaje-enviado' : 'mensaje-recibido');
-  m.innerHTML = '<div class="mensaje-texto">' + texto + '</div><div class="mensaje-meta">' + (new Date()).toLocaleTimeString() + '</div>';
+  m.innerHTML = '<div class="mensaje-texto"></div><div class="mensaje-meta">' + (new Date()).toLocaleTimeString() + '</div>';
+  m.querySelector('.mensaje-texto').innerText = texto; // Protección XSS Nativa
   zona.appendChild(m);
   zona.scrollTop = zona.scrollHeight;
 }
@@ -317,20 +327,36 @@ async function enviarMensaje() {
   if (!texto) return;
   if (!contactoActual) { await customAlert('Selecciona un contacto primero.'); return; }
 
-  localStorage.setItem('last_msg_' + contactoActual, texto);
-
   var clavePub = localStorage.getItem('clave_pub_' + contactoActual);
-  var mensajeCifradoString = texto; 
-  var nonceString = "";
-  var tipoMsg = 'texto';
-
-  if (clavePub && typeof window.cifrarMensajeE2EE === 'function') {
+  
+  // SOLUCIÓN DE SEGURIDAD CRÍTICA: Si no hay clave pública, forzar la descarga en caliente desde Supabase
+  if (!clavePub && typeof SupabaseUsuarios !== 'undefined') {
     try {
-      var cif = await window.cifrarMensajeE2EE(texto, clavePub);
-      mensajeCifradoString = cif.ciphertext || texto;
-      nonceString = cif.iv || "";
-      tipoMsg = 'e2ee';
-    } catch (e) { console.error(e); }
+      var u = await SupabaseUsuarios.obtenerUsuario(contactoActual);
+      if (u && u.clave_publica) {
+        clavePub = u.clave_publica;
+        localStorage.setItem('clave_pub_' + contactoActual, clavePub);
+      }
+    } catch(err) { console.error(err); }
+  }
+
+  // BLINDAJE INCONDICIONAL: Si no hay llaves criptográficas válidas del receptor, ABORTAR para no fugar texto plano
+  if (!clavePub || typeof window.cifrarMensajeE2EE !== 'function') {
+    await customAlert('❌ Error Crítico de Seguridad: No se pudo obtener la llave pública del receptor. Envío cancelado para prevenir fugas de texto plano.', '🛡️');
+    return;
+  }
+
+  var mensajeCifradoString = "";
+  var nonceString = "";
+
+  try {
+    var cif = await window.cifrarMensajeE2EE(texto, clavePub);
+    mensajeCifradoString = cif.ciphertext;
+    nonceString = cif.iv;
+  } catch (e) { 
+    console.error('Fallo en el motor criptográfico:', e);
+    await customAlert('❌ Error interno al cifrar el paquete multimedia.', '🛡️');
+    return;
   }
 
   var mensajeDB = {
@@ -340,21 +366,24 @@ async function enviarMensaje() {
     nonce: nonceString,
     enviado_en: new Date().toISOString(),
     leido: false,
-    tipo_mensaje: tipoMsg
+    tipo_mensaje: 'e2ee'
   };
 
   if (typeof SupabaseMensajes !== 'undefined') {
     try { 
       await SupabaseMensajes.enviarMensajePayload(mensajeDB); 
-    } catch (e) { console.error('Error enviando a Supabase:', e); }
+    } catch (e) { 
+      console.error('Error enviando a Supabase:', e);
+      return;
+    }
   }
 
+  localStorage.setItem('last_msg_' + contactoActual, texto);
   appendMessageToUI(miPIN, texto, true);
   input.value = '';
   renderizarListaChats();
 }
 
-// SOLUCIÓN DEFINITIVA: Inyecta el mensaje de inmediato sin requerir recargar la página
 async function procesarMensajeEntrante(payload) {
   var de = payload.pin_remitente;
   var para = payload.pin_destinatario;
@@ -363,13 +392,16 @@ async function procesarMensajeEntrante(payload) {
 
   var cipherText = payload.mensaje_cifrado;
   var nonce = payload.nonce;
-  var textoClaro = cipherText;
+  var textoClaro = '[Contenido Cifrado E2EE]';
 
   if (payload.tipo_mensaje === 'e2ee' && typeof window.descifrarMensajeE2EE === 'function') {
     try {
       var fullCif = { ciphertext: cipherText, iv: nonce };
       textoClaro = await window.descifrarMensajeE2EE(fullCif, false);
-    } catch (e) { textoClaro = '[No se pudo descifrar E2EE]'; }
+    } catch (e) { textoClaro = '❌ Decryption Error: Llave asimétrica no emparejada.'; }
+  } else {
+    // Rechazar payloads que vengan en texto plano o tipos inválidos por el canal de señalización
+    return;
   }
 
   localStorage.setItem('last_msg_' + de, textoClaro);
@@ -396,13 +428,13 @@ async function cargarHistorial(contactoPin) {
     for (var i = 0; i < mensajes.length; i++) {
       var m = mensajes[i];
       var soyRemitente = (m.pin_remitente === miPIN);
-      var textoFinal = m.mensaje_cifrado;
+      var textoFinal = '[Cifrado Inaccesible]';
 
       if (m.tipo_mensaje === 'e2ee' && typeof window.descifrarMensajeE2EE === 'function') {
         try {
           var fullCif = { ciphertext: m.mensaje_cifrado, iv: m.nonce };
           textoFinal = await window.descifrarMensajeE2EE(fullCif, soyRemitente);
-        } catch(e) { textoFinal = '[Error descifrado]'; }
+        } catch(e) { textoFinal = '❌ [Error al descifrar historial local]'; }
       }
       appendMessageToUI(m.pin_remitente, textoFinal, soyRemitente);
     }
@@ -455,7 +487,6 @@ async function copiarPIN() {
   } catch (e) { await customAlert('No se pudo copiar al portapapeles.'); }
 }
 
-// Inicialización de módulos respetando la asincronía del PIN
 window.addEventListener('DOMContentLoaded', function() {
   generarPIN();
   cambiarTab('chats');
