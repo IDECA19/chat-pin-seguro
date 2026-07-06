@@ -551,6 +551,7 @@ async function procesarMensajeEntrante(payload) {
   renderizarListaChats();
 }
 
+// CORREGIDO: Bloque Try/Catch interno para aislar OperationError en cargas asíncronas
 async function cargarHistorial(contactoPin) {
   if (typeof SupabaseMensajes === 'undefined') return;
   try {
@@ -572,7 +573,8 @@ async function cargarHistorial(contactoPin) {
             textoFinal = '🔒 [Mensaje legacy incompatible]';
           }
         } catch(e) { 
-          textoFinal = '🔒 [Mensaje anterior con llaves anteriores]'; 
+          // Solución de tolerancia: Se pinta el mensaje sin romper la interfaz del chat entero
+          textoFinal = '🔒 [Mensaje anterior cifrado con llaves anteriores]'; 
         }
       }
       appendMessageToUI(m.pin_remitente, textoFinal, (m.pin_remitente === miPIN), m.id);
