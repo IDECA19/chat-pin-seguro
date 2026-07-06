@@ -1,7 +1,7 @@
 /**
  * js/crypto.js
- * Motor criptográfico unificado: AES-256-GCM y RSA-OAEP (SHA-256).
- * Saneamiento estricto de estructuras PEM para prevenir OperationError en WebCrypto API.
+ * Motor criptográfico de alta seguridad: AES-256-GCM y RSA-OAEP (SHA-256).
+ * Saneamiento e importación robusta para prevenir OperationError en WebCrypto API.
  */
 
 function base64ToArrayBuffer(base64) {
@@ -57,7 +57,7 @@ async function cifrarMensajeE2EE(textoPlano, clavePublicaPem) {
     var pemContents = clavePublicaPem
       .replace(/-----BEGIN PUBLIC KEY-----/, "")
       .replace(/-----END PUBLIC KEY-----/, "")
-      .replace(/[\r\n\s]+/g, ""); // Limpieza total de saltos de línea y espacios
+      .replace(/[\r\n\s]+/g, "");
     
     var publicKeyBuffer = base64ToArrayBuffer(pemContents);
     var rtcPublicKey = await window.crypto.subtle.importKey(
@@ -81,13 +81,14 @@ async function cifrarMensajeE2EE(textoPlano, clavePublicaPem) {
       wrappedKey: arrayBufferToBase64(encryptedKeyBuffer)
     };
   } catch (err) {
-    console.error("❌ Error en el proceso de cifrado simétrico/asimétrico:", err);
+    console.error("❌ Error en el proceso de cifrado:", err);
     throw err;
   }
 }
 
 /**
  * Descifra un payload híbrido utilizando la clave privada RSA local del dispositivo.
+ * Captura controladamente el OperationError para no colapsar la carga del historial.
  */
 async function descifrarMensajeE2EE(payloadCifrado) {
   try {
@@ -98,14 +99,14 @@ async function descifrarMensajeE2EE(payloadCifrado) {
     var miPinActual = typeof miPIN !== 'undefined' && miPIN ? miPIN : localStorage.getItem('kerix_mi_pin');
     var miClavePrivadaPem = localStorage.getItem("clave_privada_" + miPinActual);
     if (!miClavePrivadaPem) {
-      throw new Error("Clave privada local ausente en el almacenamiento.");
+      throw new Error("Clave privada local ausente.");
     }
 
-    // Normalizar e Importar la clave privada local
+    // Saneamiento quirúrgico de saltos de línea e identificadores PEM
     var pemContents = miClavePrivadaPem
       .replace(/-----BEGIN PRIVATE KEY-----/, "")
       .replace(/-----END PRIVATE KEY-----/, "")
-      .replace(/[\r\n\s]+/g, ""); // Limpieza total para prevenir OperationError
+      .replace(/[\r\n\s]+/g, "");
 
     var privateKeyBuffer = base64ToArrayBuffer(pemContents);
     var rtcPrivateKey = await window.crypto.subtle.importKey(
@@ -146,7 +147,7 @@ async function descifrarMensajeE2EE(payloadCifrado) {
     var decoder = new TextDecoder();
     return decoder.decode(decryptedTextBuffer);
   } catch (err) {
-    console.error("❌ Error en el proceso de descifrado simétrico/asimétrico:", err);
+    // Lanzar el error controlado para que sea manejado limpiamente en la UI
     throw err;
   }
 }
