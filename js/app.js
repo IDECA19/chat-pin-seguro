@@ -1,7 +1,7 @@
 /**
  * js/app.js
  * Orquestador principal: UI, navegación, mensajes, contactos, inicialización e integraciones.
- * E2EE Blindado con Auto-Inscripción Criptográfica en Supabase tras inicializar el PIN.
+ * E2EE Blindado con Auto-Inscripción Criptográfica adaptada a columnas reales de Supabase.
  */
 
 var SUPABASE_URL = 'https://dksmoteiidjpymextrgj.supabase.co';
@@ -68,11 +68,11 @@ function customConfirm(texto, icono) {
     btnCancel.parentNode.replaceChild(newCancel, btnCancel);
     
     newOk.addEventListener('click', function() {
-      modal.classList.remove('active');
+      modal.classList.add('active');
       resolve(true);
     });
     newCancel.addEventListener('click', function() {
-      modal.classList.remove('active');
+      modal.classList.add('active');
       resolve(false);
     });
   });
@@ -285,6 +285,9 @@ async function agregarContacto() {
   }
   if (pin === miPIN) { customAlert('No puedes agregarte a ti mismo.'); return; }
 
+  var alias = await customPrompt('👤 Nueva Identificación', 'Asigna un nombre o alias para guardar este PIN:', '');
+  if (alias === null) return; 
+
   guardarContactoLocal(pin, alias.trim());
 
   if (typeof SupabaseUsuarios !== 'undefined') {
@@ -302,7 +305,7 @@ async function agregarContacto() {
   cerrarModalAgregar();
 }
 
-// SOLUCIÓN CLAVE: Si tras un reset el usuario no tiene par de llaves, se generan e inscriben al instante en Supabase
+// CORREGIDO: Mapeo exacto basado en las columnas reales de la tabla 'usuarios'
 async function asegurarLlavesYRegistro() {
   var priv = localStorage.getItem("clave_privada_" + miPIN);
   var pub = localStorage.getItem("clave_pub_propia_" + miPIN);
@@ -343,15 +346,19 @@ async function asegurarLlavesYRegistro() {
     }
   }
 
-  // Subir / Actualizar la clave pública en la tabla 'usuarios'
+  // SOLUCIÓN AL ERROR 400: Se envían únicamente campos que existen de forma nativa en la tabla de Supabase
   if (typeof clienteSupabase !== 'undefined' && clienteSupabase) {
     try {
-      await clienteSupabase.from('usuarios').upsert([{ 
+      var { error } = await clienteSupabase.from('usuarios').upsert([{ 
         pin: miPIN, 
-        clave_publica: pub, 
-        ultima_conexion: new Date().toISOString() 
+        clave_publica: pub
       }]);
-      console.log("✅ Llave pública sincronizada con éxito en Supabase para el PIN: " + miPIN);
+      
+      if (error) {
+        console.error("❌ Falló la sincronización en Supabase:", error.message);
+      } else {
+        console.log("✅ Llave pública sincronizada con éxito en Supabase para el PIN: " + miPIN);
+      }
     } catch(err) {
       console.error("Error registrando credenciales en el servidor:", err);
     }
@@ -423,7 +430,7 @@ async function enviarMensaje() {
     try { 
       await SupabaseMensajes.enviarMensajePayload(mensajeDB); 
     } catch (e) { 
-      console.error('Error enviando a Supabase:', e);
+      console.error('Error sending message to Supabase:', e);
       return;
     }
   }
@@ -489,7 +496,7 @@ async function cargarHistorial(contactoPin) {
       }
       appendMessageToUI(m.pin_remitente, textoFinal, soyRemitente);
     }
-  } catch(e) { console.error('Error cargando historial:', e); }
+  } catch(e) { console.error('Error loading history:', e); }
 }
 
 function generarPIN() {
@@ -538,12 +545,10 @@ async function copiarPIN() {
   } catch (e) { await customAlert('No se pudo copiar al portapapeles.'); }
 }
 
-// Sincronización asíncrona controlada en el ciclo de carga principal
 window.addEventListener('DOMContentLoaded', async function() {
   generarPIN();
   cambiarTab('chats');
   if (typeof window.inicializarSupabase === 'function') window.inicializarSupabase();
-  // Forzar la creación y el anuncio público de las llaves del dispositivo
   await asegurarLlavesYRegistro();
   if (typeof window.conectarCanalRealtime === 'function') window.conectarCanalRealtime();
 });
