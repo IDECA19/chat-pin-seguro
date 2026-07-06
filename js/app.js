@@ -1,7 +1,7 @@
 /**
  * js/app.js
  * Orquestador principal: UI, navegación, mensajes, contactos, inicialización e integraciones.
- * Integra la serialización clásica por tubería (|) recuperada del historial original.
+ * Recuperación completa de utilidades: Backups, Borrado individual, Limpieza de Chats y Seguridad.
  */
 
 var SUPABASE_URL = 'https://dksmoteiidjpymextrgj.supabase.co';
@@ -318,7 +318,7 @@ async function asegurarLlavesYRegistro() {
           modulusLength: 2048,
           publicExponent: new Uint8Array([1, 0, 1]),
           hash: "SHA-256"
-         },
+        },
         true,
         ["encrypt", "decrypt"]
       );
@@ -357,13 +357,106 @@ async function asegurarLlavesYRegistro() {
 }
 
 // ============================================
+// RECUPERACIÓN DE UTILIDADES: BACKUP, BORRADO Y LIMPIEZA
+// ============================================
+async function exportarConfiguracion() {
+  try {
+    var pass = await customPrompt('📦 Generar Backup Seguro', 'Establece una contraseña para proteger tu respaldo local:', '', 'password');
+    if (!pass) return;
+
+    var backupObj = {
+      miPIN: miPIN,
+      timestamp: Date.now(),
+      contactos: {},
+      previews: {}
+    };
+
+    for (var i = 0; i < localStorage.length; i++) {
+      var k = localStorage.key(i);
+      if (!k) continue;
+      if (k.startsWith('contacto_') || k.startsWith('clave_privada_') || k.startsWith('clave_pub_propia_')) {
+        backupObj.contactos[k] = localStorage.getItem(k);
+      }
+      if (k.startsWith('last_msg_')) {
+        backupObj.previews[k] = localStorage.getItem(k);
+      }
+    }
+
+    var blob = new Blob([JSON.stringify(backupObj, null, 2)], { type: 'application/json' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = 'backup_kerix_' + miPIN + '.json';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    await customAlert('✅ Respaldo descargado correctamente.', '📦');
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+async function limpiarChatActual() {
+  if (!contactoActual) return;
+  var conf = await customConfirm('¿Estás seguro de que deseas vaciar por completo esta conversación en este dispositivo?');
+  if (!conf) return;
+
+  if (typeof clienteSupabase !== 'undefined' && clienteSupabase) {
+    try {
+      // Eliminar registros de la base de datos que correspondan a este chat cruzado
+      await clienteSupabase.from('mensajes').delete().or(
+        'and(pin_remitente.eq.' + miPIN + ',pin_destinatario.eq.' + contactoActual + '),and(pin_remitente.eq.' + contactoActual + ',pin_destinatario.eq.' + miPIN + ')'
+      );
+    } catch(e) { console.error(e); }
+  }
+
+  localStorage.removeItem('last_msg_' + contactoActual);
+  var zona = document.getElementById('zonaMensajes');
+  if (zona) zona.innerHTML = '';
+  renderizarListaChats();
+  await customAlert('🧹 Conversación vaciada con éxito.');
+}
+
+async function eliminarMensajeIndividual(idMensaje, elementoDom) {
+  if (typeof clienteSupabase === 'undefined' || !clienteSupabase) return;
+  try {
+    var { error } = await clienteSupabase.from('mensajes').delete().eq('id', idMensaje);
+    if (!error && elementoDom) {
+      elementoDom.remove();
+    }
+  } catch(err) {
+    console.error('Error al remover el mensaje individual:', err);
+  }
+}
+
+async function ejecutarResetEmergencia() {
+  var conf = await customConfirm('⚠️ ATENCIÓN CRÍTICA: Se destruirán todos tus contactos y llaves locales de forma irreversible. ¿Continuar?');
+  if (!conf) return;
+  localStorage.clear();
+  location.reload();
+}
+
+// ============================================
 // ENVÍO, RECEPCIÓN Y RENDERING EN TIEMPO REAL
 // ============================================
-function appendMessageToUI(pinRemitente, texto, enviado) {
+function appendMessageToUI(pinRemitente, texto, enviado, idMensaje) {
   var zona = document.getElementById('zonaMensajes');
   if (!zona) return;
   var m = document.createElement('div');
   m.className = 'mensaje ' + (enviado ? 'mensaje-enviado' : 'mensaje-recibido');
+  
+  // Agregar funcionalidad para eliminar mensaje individual al hacer doble clic
+  if (idMensaje) {
+    m.dataset.id = idMensaje;
+    m.title = "Doble clic para eliminar mensaje";
+    m.addEventListener('dblclick', async function() {
+      var conf = await customConfirm('¿Deseas eliminar este mensaje de forma permanente para todos?');
+      if (conf) {
+        eliminarMensajeIndividual(idMensaje, m);
+      }
+    });
+  }
+
   m.innerHTML = '<div class="mensaje-texto"></div><div class="mensaje-meta">' + (new Date()).toLocaleTimeString() + '</div>';
   m.querySelector('.mensaje-texto').innerText = texto; 
   zona.appendChild(m);
@@ -395,28 +488,28 @@ async function enviarMensaje() {
   }
 
   try {
-    // 1. Cifrar usando el sistema híbrido completo
     var cif = await window.cifrarMensajeE2EE(texto, clavePub);
-
-    // SOLUCIÓN CLÁSICA RECONSTRUIDA: Empaquetar usando el formato clásico por tubería (|) esperado por el historial original
     var stringTuberíaClasico = cif.ciphertext + "|" + cif.iv + "|" + cif.wrappedKey;
 
     var mensajeDB = {
       pin_remitente: miPIN,
       pin_destinatario: contactoActual,
-      mensaje_cifrado: stringTuberíaClasico, // Serializado original intacto
+      mensaje_cifrado: stringTuberíaClasico, 
       nonce: cif.iv,
       enviado_en: new Date().toISOString(),
       leido: false,
       tipo_mensaje: 'e2ee'
     };
 
+    var data = null;
     if (typeof SupabaseMensajes !== 'undefined') {
-      await SupabaseMensajes.enviarMensajePayload(mensajeDB); 
+      data = await SupabaseMensajes.enviarMensajePayload(mensajeDB); 
     }
 
+    var idCreado = (data && data[0]) ? data[0].id : null;
+
     localStorage.setItem('last_msg_' + contactoActual, texto);
-    appendMessageToUI(miPIN, texto, true);
+    appendMessageToUI(miPIN, texto, true, idCreado);
     input.value = '';
     renderizarListaChats();
   } catch (e) { 
@@ -434,7 +527,6 @@ async function procesarMensajeEntrante(payload) {
 
   if (payload.tipo_mensaje === 'e2ee' && typeof window.descifrarMensajeE2EE === 'function') {
     try {
-      // Reconstruir el paquete desde el string plano con barras divisorias (|)
       var partes = payload.mensaje_cifrado.split('|');
       if (partes.length === 3) {
         var paqueteCifrado = { ciphertext: partes[0], iv: partes[1], wrappedKey: partes[2] };
@@ -450,7 +542,7 @@ async function procesarMensajeEntrante(payload) {
   localStorage.setItem('last_msg_' + de, textoClaro);
 
   if (contactoActual === de) {
-    appendMessageToUI(de, textoClaro, false);
+    appendMessageToUI(de, textoClaro, false, payload.id);
   } else {
     mensajesNoLeidos[de] = (mensajesNoLeidos[de] || 0) + 1;
     actualizarBadgeChats();
@@ -485,7 +577,7 @@ async function cargarHistorial(contactoPin) {
           textoFinal = '🔒 [Mensaje cifrado con llaves anteriores]'; 
         }
       }
-      appendMessageToUI(m.pin_remitente, textoFinal, (m.pin_remitente === miPIN));
+      appendMessageToUI(m.pin_remitente, textoFinal, (m.pin_remitente === miPIN), m.id);
     }
   } catch(e) { console.error('Error loading history:', e); }
 }
@@ -513,6 +605,7 @@ function abrirMenu() {
   if (overlay) overlay.classList.add('active', 'open');
 }
 
+// CORREGIDO: Limpieza completa al replegar
 function cerrarMenu() {
   var menu = document.getElementById('menuLateral');
   var overlay = document.getElementById('menuOverlay');
@@ -544,7 +637,7 @@ window.addEventListener('DOMContentLoaded', async function() {
   if (typeof window.conectarCanalRealtime === 'function') window.conectarCanalRealtime();
 });
 
-// Exposición Global
+// Exposición Global Completa obligatoria para event-listeners.js
 window.abrirMenu = abrirMenu;
 window.cerrarMenu = cerrarMenu;
 window.cambiarTab = cambiarTab;
@@ -559,6 +652,9 @@ window.customConfirm = customConfirm;
 window.customPrompt = customPrompt;
 window.generarPIN = generarPIN;
 window.copiarPIN = copiarPIN;
+window.exportarConfiguracion = exportarConfiguracion;
+window.limpiarChatActual = limpiarChatActual;
+window.ejecutarResetEmergencia = ejecutarResetEmergencia;
 window.renderizarListaChats = renderizarListaChats;
 window.renderizarContactos = renderizarContactos;
 window.procesarMensajeEntrante = procesarMensajeEntrante;
