@@ -1,7 +1,7 @@
 /**
  * js/app.js
  * Orquestador principal: UI, navegación, mensajes, contactos, inicialización e integraciones.
- * Recuperación completa de utilidades: Backups, Borrado individual, Limpieza de Chats y Seguridad.
+ * Recuperación completa de utilidades y mantenimiento de chats clásicos de Kerix.
  */
 
 var SUPABASE_URL = 'https://dksmoteiidjpymextrgj.supabase.co';
@@ -357,11 +357,11 @@ async function asegurarLlavesYRegistro() {
 }
 
 // ============================================
-// RECUPERACIÓN DE UTILIDADES: BACKUP, BORRADO Y LIMPIEZA
+// RECUPERACIÓN DE UTILIDADES SOBERANAS (BACKUP, BORRADO, LIMPIEZA)
 // ============================================
 async function exportarConfiguracion() {
   try {
-    var pass = await customPrompt('📦 Generar Backup Seguro', 'Establece una contraseña para proteger tu respaldo local:', '', 'password');
+    var pass = await customPrompt('📦 Generar Backup Seguro', 'Establece una contraseña para proteger tu respaldo (.json):', '', 'password');
     if (!pass) return;
 
     var backupObj = {
@@ -398,12 +398,11 @@ async function exportarConfiguracion() {
 
 async function limpiarChatActual() {
   if (!contactoActual) return;
-  var conf = await customConfirm('¿Estás seguro de que deseas vaciar por completo esta conversación en este dispositivo?');
+  var conf = await customConfirm('¿Estás seguro de que deseas vaciar por completo esta conversación para siempre?');
   if (!conf) return;
 
   if (typeof clienteSupabase !== 'undefined' && clienteSupabase) {
     try {
-      // Eliminar registros de la base de datos que correspondan a este chat cruzado
       await clienteSupabase.from('mensajes').delete().or(
         'and(pin_remitente.eq.' + miPIN + ',pin_destinatario.eq.' + contactoActual + '),and(pin_remitente.eq.' + contactoActual + ',pin_destinatario.eq.' + miPIN + ')'
       );
@@ -445,12 +444,11 @@ function appendMessageToUI(pinRemitente, texto, enviado, idMensaje) {
   var m = document.createElement('div');
   m.className = 'mensaje ' + (enviado ? 'mensaje-enviado' : 'mensaje-recibido');
   
-  // Agregar funcionalidad para eliminar mensaje individual al hacer doble clic
   if (idMensaje) {
     m.dataset.id = idMensaje;
-    m.title = "Doble clic para eliminar mensaje";
+    m.title = "Doble clic para eliminar este mensaje";
     m.addEventListener('dblclick', async function() {
-      var conf = await customConfirm('¿Deseas eliminar este mensaje de forma permanente para todos?');
+      var conf = await customConfirm('¿Deseas eliminar este mensaje para todos?');
       if (conf) {
         eliminarMensajeIndividual(idMensaje, m);
       }
@@ -574,7 +572,7 @@ async function cargarHistorial(contactoPin) {
             textoFinal = '🔒 [Mensaje legacy incompatible]';
           }
         } catch(e) { 
-          textoFinal = '🔒 [Mensaje cifrado con llaves anteriores]'; 
+          textoFinal = '🔒 [Mensaje anterior con llaves anteriores]'; 
         }
       }
       appendMessageToUI(m.pin_remitente, textoFinal, (m.pin_remitente === miPIN), m.id);
@@ -605,7 +603,6 @@ function abrirMenu() {
   if (overlay) overlay.classList.add('active', 'open');
 }
 
-// CORREGIDO: Limpieza completa al replegar
 function cerrarMenu() {
   var menu = document.getElementById('menuLateral');
   var overlay = document.getElementById('menuOverlay');
@@ -637,7 +634,7 @@ window.addEventListener('DOMContentLoaded', async function() {
   if (typeof window.conectarCanalRealtime === 'function') window.conectarCanalRealtime();
 });
 
-// Exposición Global Completa obligatoria para event-listeners.js
+// Exposición Global Unificada
 window.abrirMenu = abrirMenu;
 window.cerrarMenu = cerrarMenu;
 window.cambiarTab = cambiarTab;
