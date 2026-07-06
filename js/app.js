@@ -1,7 +1,7 @@
 /**
  * js/app.js
  * Orquestador principal: UI, navegación, mensajes, contactos, inicialización e integraciones.
- * E2EE Blindado con Auto-Inscripción Criptográfica adaptada a columnas reales de Supabase.
+ * Integra la serialización clásica por tubería (|) recuperada del historial original.
  */
 
 var SUPABASE_URL = 'https://dksmoteiidjpymextrgj.supabase.co';
@@ -305,7 +305,6 @@ async function agregarContacto() {
   cerrarModalAgregar();
 }
 
-// CORREGIDO: Mapeo estricto basado al 100% en las columnas de tu esquema usuarios_rows.sql
 async function asegurarLlavesYRegistro() {
   var priv = localStorage.getItem("clave_privada_" + miPIN);
   var pub = localStorage.getItem("clave_pub_propia_" + miPIN);
@@ -319,7 +318,7 @@ async function asegurarLlavesYRegistro() {
           modulusLength: 2048,
           publicExponent: new Uint8Array([1, 0, 1]),
           hash: "SHA-256"
-        },
+         },
         true,
         ["encrypt", "decrypt"]
       );
@@ -346,22 +345,14 @@ async function asegurarLlavesYRegistro() {
     }
   }
 
-  // SOLUCIÓN AL ERROR 400: Se remueve 'ultima_conexion'. Se envían únicamente campos nativos validados de la DB
   if (typeof clienteSupabase !== 'undefined' && clienteSupabase) {
     try {
       var { error } = await clienteSupabase.from('usuarios').upsert([{ 
         pin: miPIN, 
         clave_publica: pub
       }]);
-      
-      if (error) {
-        console.error("❌ Falló la sincronización en Supabase:", error.message);
-      } else {
-        console.log("✅ Llave pública sincronizada con éxito en Supabase para el PIN: " + miPIN);
-      }
-    } catch(err) {
-      console.error("Error registrando credenciales en el servidor:", err);
-    }
+      if (error) console.error("❌ Falló la sincronización en Supabase:", error.message);
+    } catch(err) { console.error("Error registrando credenciales:", err); }
   }
 }
 
@@ -403,42 +394,34 @@ async function enviarMensaje() {
     return;
   }
 
-  var mensajeCifradoString = "";
-  var nonceString = "";
-
   try {
+    // 1. Cifrar usando el sistema híbrido completo
     var cif = await window.cifrarMensajeE2EE(texto, clavePub);
-    mensajeCifradoString = cif.ciphertext;
-    nonceString = cif.iv;
-  } catch (e) { 
-    console.error('Fallo en el cifrado:', e);
-    await customAlert('❌ Error interno del motor criptográfico al empaquetar el mensaje.', '🛡️');
-    return;
-  }
 
-  var mensajeDB = {
-    pin_remitente: miPIN,
-    pin_destinatario: contactoActual,
-    mensaje_cifrado: mensajeCifradoString,
-    nonce: nonceString,
-    enviado_en: new Date().toISOString(),
-    leido: false,
-    tipo_mensaje: 'e2ee'
-  };
+    // SOLUCIÓN CLÁSICA RECONSTRUIDA: Empaquetar usando el formato clásico por tubería (|) esperado por el historial original
+    var stringTuberíaClasico = cif.ciphertext + "|" + cif.iv + "|" + cif.wrappedKey;
 
-  if (typeof SupabaseMensajes !== 'undefined') {
-    try { 
+    var mensajeDB = {
+      pin_remitente: miPIN,
+      pin_destinatario: contactoActual,
+      mensaje_cifrado: stringTuberíaClasico, // Serializado original intacto
+      nonce: cif.iv,
+      enviado_en: new Date().toISOString(),
+      leido: false,
+      tipo_mensaje: 'e2ee'
+    };
+
+    if (typeof SupabaseMensajes !== 'undefined') {
       await SupabaseMensajes.enviarMensajePayload(mensajeDB); 
-    } catch (e) { 
-      console.error('Error sending message to Supabase:', e);
-      return;
     }
-  }
 
-  localStorage.setItem('last_msg_' + contactoActual, texto);
-  appendMessageToUI(miPIN, texto, true);
-  input.value = '';
-  renderizarListaChats();
+    localStorage.setItem('last_msg_' + contactoActual, texto);
+    appendMessageToUI(miPIN, texto, true);
+    input.value = '';
+    renderizarListaChats();
+  } catch (e) { 
+    console.error('Fallo en el flujo de envío seguro:', e);
+  }
 }
 
 async function procesarMensajeEntrante(payload) {
@@ -447,14 +430,18 @@ async function procesarMensajeEntrante(payload) {
   
   if (para !== miPIN) return;
 
-  var cipherText = payload.mensaje_cifrado;
-  var nonce = payload.nonce;
   var textoClaro = '[Contenido Cifrado E2EE]';
 
   if (payload.tipo_mensaje === 'e2ee' && typeof window.descifrarMensajeE2EE === 'function') {
     try {
-      var fullCif = { ciphertext: cipherText, iv: nonce };
-      textoClaro = await window.descifrarMensajeE2EE(fullCif, false);
+      // Reconstruir el paquete desde el string plano con barras divisorias (|)
+      var partes = payload.mensaje_cifrado.split('|');
+      if (partes.length === 3) {
+        var paqueteCifrado = { ciphertext: partes[0], iv: partes[1], wrappedKey: partes[2] };
+        textoClaro = await window.descifrarMensajeE2EE(paqueteCifrado);
+      } else {
+        textoClaro = '❌ Mensaje con formato inválido.';
+      }
     } catch (e) { textoClaro = '❌ Mensaje inaccesible (Llaves no emparejadas)'; }
   } else {
     return; 
@@ -483,18 +470,22 @@ async function cargarHistorial(contactoPin) {
     
     for (var i = 0; i < mensajes.length; i++) {
       var m = mensajes[i];
-      var soyRemitente = (m.pin_remitente === miPIN);
-      var textoFinal = '[Contenido Cifrado Corrupto]';
+      var textoFinal = '[Contenido Cifrado]';
 
       if (m.tipo_mensaje === 'e2ee' && typeof window.descifrarMensajeE2EE === 'function') {
         try {
-          var fullCif = { ciphertext: m.mensaje_cifrado, iv: m.nonce };
-          textoFinal = await window.descifrarMensajeE2EE(fullCif, soyRemitente);
+          var partes = m.mensaje_cifrado.split('|');
+          if (partes.length === 3) {
+            var paqueteCifrado = { ciphertext: partes[0], iv: partes[1], wrappedKey: partes[2] };
+            textoFinal = await window.descifrarMensajeE2EE(paqueteCifrado);
+          } else {
+            textoFinal = '🔒 [Mensaje legacy incompatible]';
+          }
         } catch(e) { 
-          textoFinal = '🔒 [Mensaje anterior cifrado con llaves anteriores]'; 
+          textoFinal = '🔒 [Mensaje cifrado con llaves anteriores]'; 
         }
       }
-      appendMessageToUI(m.pin_remitente, textoFinal, soyRemitente);
+      appendMessageToUI(m.pin_remitente, textoFinal, (m.pin_remitente === miPIN));
     }
   } catch(e) { console.error('Error loading history:', e); }
 }
