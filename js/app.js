@@ -1,7 +1,7 @@
 /**
  * js/app.js
  * Orquestador principal: UI, navegación, mensajes, contactos, inicialización e integraciones.
- * Recuperación completa de utilidades y mantenimiento de chats clásicos de Kerix.
+ * E2EE Blindado con Persistencia Local de Mensajes Enviados para evitar Incompatibilidad Asimétrica RSA.
  */
 
 var SUPABASE_URL = 'https://dksmoteiidjpymextrgj.supabase.co';
@@ -374,7 +374,7 @@ async function exportarConfiguracion() {
     for (var i = 0; i < localStorage.length; i++) {
       var k = localStorage.key(i);
       if (!k) continue;
-      if (k.startsWith('contacto_') || k.startsWith('clave_privada_') || k.startsWith('clave_pub_propia_')) {
+      if (k.startsWith('contacto_') || k.startsWith('clave_privada_') || k.startsWith('clave_pub_propia_') || k.startsWith('msg_local_')) {
         backupObj.contactos[k] = localStorage.getItem(k);
       }
       if (k.startsWith('last_msg_')) {
@@ -409,6 +409,14 @@ async function limpiarChatActual() {
     } catch(e) { console.error(e); }
   }
 
+  // Limpiar también los clones locales para no dejar residuos
+  for (var i = localStorage.length - 1; i >= 0; i--) {
+    var key = localStorage.key(i);
+    if (key && key.startsWith('msg_local_' + contactoActual + '_')) {
+      localStorage.removeItem(key);
+    }
+  }
+
   localStorage.removeItem('last_msg_' + contactoActual);
   var zona = document.getElementById('zonaMensajes');
   if (zona) zona.innerHTML = '';
@@ -420,8 +428,12 @@ async function eliminarMensajeIndividual(idMensaje, elementoDom) {
   if (typeof clienteSupabase === 'undefined' || !clienteSupabase) return;
   try {
     var { error } = await clienteSupabase.from('mensajes').delete().eq('id', idMensaje);
-    if (!error && elementoDom) {
-      elementoDom.remove();
+    if (!error) {
+      if (elementoDom) elementoDom.remove();
+      // Remover de la caché local si existe
+      if (idMensaje) {
+        localStorage.removeItem('msg_local_' + contactoActual + '_' + idMensaje);
+      }
     }
   } catch(err) {
     console.error('Error al remover el mensaje individual:', err);
@@ -504,7 +516,10 @@ async function enviarMensaje() {
       data = await SupabaseMensajes.enviarMensajePayload(mensajeDB); 
     }
 
-    var idCreado = (data && data[0]) ? data[0].id : null;
+    var idCreado = (data && data[0]) ? data[0].id : "temp_" + Date.now();
+
+    // SOLUCIÓN AL CANDADO: Guardamos de forma inmediata una copia local descifrada para tus propios envíos
+    localStorage.setItem('msg_local_' + contactoActual + '_' + idCreado, texto);
 
     localStorage.setItem('last_msg_' + contactoActual, texto);
     appendMessageToUI(miPIN, texto, true, idCreado);
@@ -551,7 +566,7 @@ async function procesarMensajeEntrante(payload) {
   renderizarListaChats();
 }
 
-// CORREGIDO: Bloque Try/Catch interno para aislar OperationError en cargas asíncronas
+// CORREGIDO: Comprobar si es un mensaje enviado por mí, y priorizar la lectura del clon de texto plano local
 async function cargarHistorial(contactoPin) {
   if (typeof SupabaseMensajes === 'undefined') return;
   try {
@@ -561,23 +576,34 @@ async function cargarHistorial(contactoPin) {
     
     for (var i = 0; i < mensajes.length; i++) {
       var m = mensajes[i];
+      var soyRemitente = (m.pin_remitente === miPIN);
       var textoFinal = '[Contenido Cifrado]';
 
-      if (m.tipo_mensaje === 'e2ee' && typeof window.descifrarMensajeE2EE === 'function') {
-        try {
-          var partes = m.mensaje_cifrado.split('|');
-          if (partes.length === 3) {
-            var paqueteCifrado = { ciphertext: partes[0], iv: partes[1], wrappedKey: partes[2] };
-            textoFinal = await window.descifrarMensajeE2EE(paqueteCifrado);
-          } else {
-            textoFinal = '🔒 [Mensaje legacy incompatible]';
+      if (soyRemitente) {
+        // Buscar el clon guardado localmente de mi propio mensaje enviado
+        var clonLocal = localStorage.getItem('msg_local_' + contactoPin + '_' + m.id);
+        if (clonLocal) {
+          textoFinal = clonLocal;
+        } else {
+          textoFinal = '🔒 [Mensaje enviado desde otro dispositivo]';
+        }
+      } else {
+        // Si el mensaje es recibido, descifrarlo de forma normal asimétrica usando tu clave privada
+        if (m.tipo_mensaje === 'e2ee' && typeof window.descifrarMensajeE2EE === 'function') {
+          try {
+            var partes = m.mensaje_cifrado.split('|');
+            if (partes.length === 3) {
+              var paqueteCifrado = { ciphertext: partes[0], iv: partes[1], wrappedKey: partes[2] };
+              textoFinal = await window.crypto.subtle ? await window.descifrarMensajeE2EE(paqueteCifrado) : '[Cifrado]';
+            } else {
+              textoFinal = '🔒 [Mensaje legacy incompatible]';
+            }
+          } catch(e) { 
+            textoFinal = '🔒 [Mensaje anterior con llaves anteriores]'; 
           }
-        } catch(e) { 
-          // Solución de tolerancia: Se pinta el mensaje sin romper la interfaz del chat entero
-          textoFinal = '🔒 [Mensaje anterior cifrado con llaves anteriores]'; 
         }
       }
-      appendMessageToUI(m.pin_remitente, textoFinal, (m.pin_remitente === miPIN), m.id);
+      appendMessageToUI(m.pin_remitente, textoFinal, soyRemitente, m.id);
     }
   } catch(e) { console.error('Error loading history:', e); }
 }
