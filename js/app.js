@@ -1,7 +1,7 @@
 /**
  * js/app.js
  * Orquestador principal: UI, navegación, mensajes, contactos, inicialización e integraciones.
- * E2EE Estricto con Recuperación Activa de Claves y Tolerancia a Fallos de Historial.
+ * E2EE Blindado con Auto-Inscripción Criptográfica en Supabase tras inicializar el PIN.
  */
 
 var SUPABASE_URL = 'https://dksmoteiidjpymextrgj.supabase.co';
@@ -285,9 +285,6 @@ async function agregarContacto() {
   }
   if (pin === miPIN) { customAlert('No puedes agregarte a ti mismo.'); return; }
 
-  var alias = await customPrompt('👤 Nueva Identificación', 'Asigna un nombre o alias para guardar este PIN:', '');
-  if (alias === null) return; 
-
   guardarContactoLocal(pin, alias.trim());
 
   if (typeof SupabaseUsuarios !== 'undefined') {
@@ -303,6 +300,62 @@ async function agregarContacto() {
   renderizarContactos();
   inputPin.value = '';
   cerrarModalAgregar();
+}
+
+// SOLUCIÓN CLAVE: Si tras un reset el usuario no tiene par de llaves, se generan e inscriben al instante en Supabase
+async function asegurarLlavesYRegistro() {
+  var priv = localStorage.getItem("clave_privada_" + miPIN);
+  var pub = localStorage.getItem("clave_pub_propia_" + miPIN);
+
+  if (!priv || !pub) {
+    console.log("🛡️ Generando nuevo juego de llaves criptográficas RSA de producción...");
+    try {
+      var kp = await window.crypto.subtle.generateKey(
+        {
+          name: "RSA-OAEP",
+          modulusLength: 2048,
+          publicExponent: new Uint8Array([1, 0, 1]),
+          hash: "SHA-256"
+        },
+        true,
+        ["encrypt", "decrypt"]
+      );
+
+      var exportedPub = await window.crypto.subtle.exportKey("spki", kp.publicKey);
+      var exportedPriv = await window.crypto.subtle.exportKey("pkcs8", kp.privateKey);
+
+      function bufToPem(buf, isPriv) {
+        var b64 = btoa(String.fromCharCode.apply(null, new Uint8Array(buf)));
+        var header = isPriv ? "-----BEGIN PRIVATE KEY-----\n" : "-----BEGIN PUBLIC KEY-----\n";
+        var footer = isPriv ? "\n-----END PRIVATE KEY-----" : "\n-----END PUBLIC KEY-----";
+        return header + b64 + footer;
+      }
+
+      var pubPem = bufToPem(exportedPub, false);
+      var privPem = bufToPem(exportedPriv, true);
+
+      localStorage.setItem("clave_privada_" + miPIN, privPem);
+      localStorage.setItem("clave_pub_propia_" + miPIN, pubPem);
+      pub = pubPem;
+    } catch(err) {
+      console.error("Error generando llaves locales:", err);
+      return;
+    }
+  }
+
+  // Subir / Actualizar la clave pública en la tabla 'usuarios'
+  if (typeof clienteSupabase !== 'undefined' && clienteSupabase) {
+    try {
+      await clienteSupabase.from('usuarios').upsert([{ 
+        pin: miPIN, 
+        clave_publica: pub, 
+        ultima_conexion: new Date().toISOString() 
+      }]);
+      console.log("✅ Llave pública sincronizada con éxito en Supabase para el PIN: " + miPIN);
+    } catch(err) {
+      console.error("Error registrando credenciales en el servidor:", err);
+    }
+  }
 }
 
 // ============================================
@@ -328,7 +381,6 @@ async function enviarMensaje() {
 
   var clavePub = localStorage.getItem('clave_pub_' + contactoActual);
   
-  // CORREGIDO: Si la llave pública no está local, se descarga dinámicamente de Supabase inmediatamente
   if (!clavePub && typeof SupabaseUsuarios !== 'undefined') {
     try {
       var u = await SupabaseUsuarios.obtenerUsuario(contactoActual);
@@ -336,7 +388,7 @@ async function enviarMensaje() {
         clavePub = u.clave_publica;
         localStorage.setItem('clave_pub_' + contactoActual, clavePub);
       }
-    } catch(err) { console.error('Error descargando llave pública en caliente:', err); }
+    } catch(err) { console.error('Error descargando llave pública:', err); }
   }
 
   if (!clavePub || typeof window.cifrarMensajeE2EE !== 'function') {
@@ -398,7 +450,7 @@ async function procesarMensajeEntrante(payload) {
       textoClaro = await window.descifrarMensajeE2EE(fullCif, false);
     } catch (e) { textoClaro = '❌ Mensaje inaccesible (Llaves no emparejadas)'; }
   } else {
-    return; // Ignorar texto plano por completo
+    return; 
   }
 
   localStorage.setItem('last_msg_' + de, textoClaro);
@@ -432,7 +484,6 @@ async function cargarHistorial(contactoPin) {
           var fullCif = { ciphertext: m.mensaje_cifrado, iv: m.nonce };
           textoFinal = await window.descifrarMensajeE2EE(fullCif, soyRemitente);
         } catch(e) { 
-          // CORREGIDO: Si un mensaje viejo no se puede descifrar, se muestra el aviso pero NO congela la app
           textoFinal = '🔒 [Mensaje anterior cifrado con llaves anteriores]'; 
         }
       }
@@ -487,10 +538,13 @@ async function copiarPIN() {
   } catch (e) { await customAlert('No se pudo copiar al portapapeles.'); }
 }
 
-window.addEventListener('DOMContentLoaded', function() {
+// Sincronización asíncrona controlada en el ciclo de carga principal
+window.addEventListener('DOMContentLoaded', async function() {
   generarPIN();
   cambiarTab('chats');
   if (typeof window.inicializarSupabase === 'function') window.inicializarSupabase();
+  // Forzar la creación y el anuncio público de las llaves del dispositivo
+  await asegurarLlavesYRegistro();
   if (typeof window.conectarCanalRealtime === 'function') window.conectarCanalRealtime();
 });
 
