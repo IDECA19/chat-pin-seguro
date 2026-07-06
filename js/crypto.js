@@ -1,10 +1,9 @@
 /**
  * js/crypto.js
- * Motor criptográfico de alto rendimiento: AES-256-GCM y RSA-OAEP.
- * Corregido para evitar excepciones fatales en flujos asíncronos.
+ * Motor criptográfico de alto rendimiento: AES-256-GCM y RSA-OAEP (SHA-256).
+ * Alineado estrictamente con el sistema híbrido E2EE original antes de la división.
  */
 
-// Función auxiliar para convertir Base64 a ArrayBuffer
 function base64ToArrayBuffer(base64) {
   var binaryString = window.atob(base64);
   var len = binaryString.length;
@@ -15,7 +14,6 @@ function base64ToArrayBuffer(base64) {
   return bytes.buffer;
 }
 
-// Función auxiliar para convertir ArrayBuffer a Base64
 function arrayBufferToBase64(buffer) {
   var binary = '';
   var bytes = new Uint8Array(buffer);
@@ -27,7 +25,8 @@ function arrayBufferToBase64(buffer) {
 }
 
 /**
- * Cifra un texto plano utilizando la clave pública RSA del destinatario.
+ * Cifra un texto plano utilizando un sistema híbrido: AES-GCM para el contenido,
+ * y envuelve la clave AES resultante usando la clave pública RSA del receptor.
  */
 async function cifrarMensajeE2EE(textoPlano, clavePublicaPem) {
   try {
@@ -41,7 +40,7 @@ async function cifrarMensajeE2EE(textoPlano, clavePublicaPem) {
       ["encrypt", "decrypt"]
     );
 
-    // 2. Generar un Vector de Inicialización (IV) único de 12 bits
+    // 2. Generar un Vector de Inicialización (IV) único de 12 bytes
     var iv = window.crypto.getRandomValues(new Uint8Array(12));
 
     // 3. Cifrar el texto plano con AES-GCM
@@ -54,7 +53,7 @@ async function cifrarMensajeE2EE(textoPlano, clavePublicaPem) {
     // 4. Exportar la clave AES para poder envolverla asimétricamente
     var rawAesKey = await window.crypto.subtle.exportKey("raw", aesKey);
 
-    // 5. Importar la clave pública RSA del receptor limpiando cabeceras Pem
+    // 5. Importar la clave pública RSA del receptor limpiando cabeceras PEM
     var pemContents = clavePublicaPem
       .replace(/-----BEGIN PUBLIC KEY-----/, "")
       .replace(/-----END PUBLIC KEY-----/, "")
@@ -76,7 +75,7 @@ async function cifrarMensajeE2EE(textoPlano, clavePublicaPem) {
       rawAesKey
     );
 
-    // Formatear paquete empaquetado para la base de datos real
+    // Formatear el paquete empaquetado final compatible con la base de datos
     return {
       ciphertext: arrayBufferToBase64(ciphertextBuffer),
       iv: arrayBufferToBase64(iv),
@@ -89,12 +88,12 @@ async function cifrarMensajeE2EE(textoPlano, clavePublicaPem) {
 }
 
 /**
- * Descifra un payload empaquetado utilizando las llaves locales del dispositivo.
+ * Descifra un payload híbrido utilizando la clave privada RSA del dispositivo.
  */
-async function descifrarMensajeE2EE(payloadCifrado, esMio) {
+async function descifrarMensajeE2EE(payloadCifrado) {
   try {
-    if (!payloadCifrado || !payloadCifrado.ciphertext || !payloadCifrado.iv) {
-      return payloadCifrado.plaintext || "";
+    if (!payloadCifrado || !payloadCifrado.ciphertext || !payloadCifrado.iv || !payloadCifrado.wrappedKey) {
+      return "";
     }
 
     // Recuperar la clave privada local del localStorage
@@ -137,7 +136,7 @@ async function descifrarMensajeE2EE(payloadCifrado, esMio) {
     var ivBuffer = base64ToArrayBuffer(payloadCifrado.iv);
     var ciphertextBuffer = base64ToArrayBuffer(payloadCifrado.ciphertext);
 
-    // Descifrar el texto final
+    // Descifrar el texto final con AES-GCM
     var decryptedTextBuffer = await window.crypto.subtle.decrypt(
       { name: "AES-GCM", iv: ivBuffer },
       aesKey,
@@ -147,11 +146,11 @@ async function descifrarMensajeE2EE(payloadCifrado, esMio) {
     var decoder = new TextDecoder();
     return decoder.decode(decryptedTextBuffer);
   } catch (err) {
-    // Retornar error controlado para no romper los bucles de renderizado
+    console.error("❌ Error en el proceso de descifrado simétrico/asimétrico:", err);
     throw err;
   }
 }
 
-console.log("🔑 Módulo criptográfico (crypto.js) saneado y acoplado globalmente con blindaje.");
+console.log("🔑 Módulo criptográfico (crypto.js) unificado y acoplado globalmente con blindaje híbrido.");
 window.cifrarMensajeE2EE = cifrarMensajeE2EE;
 window.descifrarMensajeE2EE = descifrarMensajeE2EE;
