@@ -1,7 +1,7 @@
 /**
  * js/supabase-client.js
  * Conexión, inicialización y gestión de canales Realtime con Supabase.
- * Mapeo nativo adaptado al formato original del historial de producción.
+ * Alineado estrictamente con tus esquemas de producción reales.
  */
 
 var clienteSupabase = null;
@@ -13,22 +13,16 @@ function inicializarSupabase() {
     console.error('❌ La librería global de Supabase no está cargada.');
     return;
   }
-  
   clienteSupabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
   console.log('📡 Cliente Supabase sincronizado con el esquema de producción.');
 }
 
 function conectarCanalRealtime() {
   if (!clienteSupabase) inicializarSupabase();
-  if (canalRealtime) {
-    canalRealtime.unsubscribe();
-  }
+  if (canalRealtime) canalRealtime.unsubscribe();
   
   var pinCanal = typeof miPIN !== 'undefined' && miPIN ? miPIN : localStorage.getItem('kerix_mi_pin');
-  if (!pinCanal) {
-    console.warn('⚠️ No se puede conectar a Realtime: miPIN ausente.');
-    return;
-  }
+  if (!pinCanal) return;
 
   canalRealtime = clienteSupabase.channel('kerix_room_' + pinCanal, {
     config: { broadcast: { self: false } }
@@ -44,7 +38,7 @@ function conectarCanalRealtime() {
     })
     .subscribe(function(status) {
       if (status === 'SUBSCRIBED') {
-        console.log('✅ Canal Realtime Kerix blindado escuchando en la sala: ' + pinCanal);
+        console.log('✅ Canal Realtime Kerix blindado escuchando la sala: ' + pinCanal);
       }
     });
 }
@@ -52,26 +46,14 @@ function conectarCanalRealtime() {
 var SupabaseMensajes = {
   enviarMensajePayload: async function(mensajeObj) {
     if (!clienteSupabase) inicializarSupabase();
-    
-    var { data, error } = await clienteSupabase
-      .from('mensajes')
-      .insert([mensajeObj])
-      .select();
-      
-    if (error) {
-      console.error('❌ Supabase rechazó la fila:', error.message);
-      throw error;
-    }
+    var { data, error } = await clienteSupabase.from('mensajes').insert([mensajeObj]).select();
+    if (error) throw error;
 
     if (clienteSupabase && mensajeObj.pin_destinatario) {
       var canalDestino = clienteSupabase.channel('kerix_room_' + mensajeObj.pin_destinatario);
       canalDestino.subscribe(function(status) {
         if (status === 'SUBSCRIBED') {
-          canalDestino.send({
-            type: 'broadcast',
-            event: 'nuevo-mensaje',
-            payload: mensajeObj
-          });
+          canalDestino.send({ type: 'broadcast', event: 'nuevo-mensaje', payload: mensajeObj });
         }
       });
     }
@@ -80,7 +62,6 @@ var SupabaseMensajes = {
 
   descargarHistorial: async function(miPin, contactoPin) {
     if (!clienteSupabase) inicializarSupabase();
-    
     var { data, error } = await clienteSupabase
       .from('mensajes')
       .select('*')
@@ -95,12 +76,7 @@ var SupabaseMensajes = {
 var SupabaseUsuarios = {
   obtenerUsuario: async function(pin) {
     if (!clienteSupabase) inicializarSupabase();
-    var { data, error } = await clienteSupabase
-      .from('usuarios')
-      .select('*')
-      .eq('pin', pin)
-      .maybeSingle();
-
+    var { data, error } = await clienteSupabase.from('usuarios').select('*').eq('pin', pin).maybeSingle();
     if (error) throw error;
     return data;
   }
